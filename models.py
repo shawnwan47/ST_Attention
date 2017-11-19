@@ -230,7 +230,7 @@ class GAN(nn.Module):
         self.tanh = nn.Tanh()
         self.pred = nn.Linear(config['nfc'], config['class-number'])
         self.dictionary = config['dictionary']
-#        self.init_weights()
+        self.init_weights()
 
     def init_weights(self, init_range=0.1):
         self.fc.weight.data.uniform_(-init_range, init_range)
@@ -243,8 +243,6 @@ class GAN(nn.Module):
         outp = outp.view(outp.size(0), -1)
         fc = self.tanh(self.fc(self.drop(outp)))
         pred = self.pred(self.drop(fc))
-        if type(self.encoder) == BiLSTM:
-            attention = None
         return pred, attention
 
     def init_hidden(self, bsz):

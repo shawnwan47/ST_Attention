@@ -68,55 +68,17 @@ class GraphConvolution(Module):
             + str(self.out_features) + ')'
 
 
-class BiLSTM(Module):
-
-    def __init__(self, config):
-        super(BiLSTM, self).__init__()
-        self.drop = nn.Dropout(config['dropout'])
-        self.encoder = nn.Embedding(config['ntoken'], config['ninp'])
-        self.bilstm = nn.LSTM(config['ninp'], config['nhid'], config['nlayers'], dropout=config['dropout'],
-                              bidirectional=True)
-        self.nlayers = config['nlayers']
-        self.nhid = config['nhid']
-        self.pooling = config['pooling']
-        self.dictionary = config['dictionary']
-        self.init_weights()
-
-    def init_weights(self, init_range=0.1):
-        self.encoder.weight.data.uniform_(-init_range, init_range)
-
-    def forward(self, inp, hidden):
-        emb = self.drop(self.encoder(inp))
-        outp = self.bilstm(emb, hidden)[0]
-        if self.pooling == 'mean':
-            outp = torch.mean(outp, 0).squeeze()
-        elif self.pooling == 'max':
-            outp = torch.max(outp, 0)[0].squeeze()
-        elif self.pooling == 'all' or self.pooling == 'all-word':
-            outp = torch.transpose(outp, 0, 1).contiguous()
-        return outp, emb
-
-    def init_hidden(self, bsz):
-        weight = next(self.parameters()).data
-        return (Variable(weight.new(self.nlayers * 2, bsz, self.nhid).zero_()),
-                Variable(weight.new(self.nlayers * 2, bsz, self.nhid).zero_()))
-
-
 class SelfAttentiveEncoder(nn.Module):
 
-    def __init__(self, config):
+    def __init__(self, ninp, nhid, nlayers, att_unit, att_hops):
         super(SelfAttentiveEncoder, self).__init__()
-        self.lstm = nn.LSTM(config['ninp'],
-                            config['nhid'],
-                            config['nlayers'],
-                            dropout=config['dropout'])
-        self.drop = nn.Dropout(config['dropout'])
-        self.ws1 = nn.Linear(config['nhid'], config['attention-unit'], bias=False)
-        self.ws2 = nn.Linear(config['attention-unit'], config['attention-hops'], bias=False)
+        self.lstm = nn.LSTM(ninp, nhid, nlayers, dropout=0.5)
+        self.drop = nn.Dropout(0.5)
+        self.ws1 = nn.Linear(nhid, att_unit, bias=False)
+        self.ws2 = nn.Linear(att_unit, att_hops, bias=False)
         self.tanh = nn.Tanh()
         self.softmax = nn.Softmax()
-        self.dictionary = config['dictionary']
-        self.attention_hops = config['attention-hops']
+        self.att_hops = att_hops
         self.init_weights()
 
     def init_weights(self, init_range=0.1):
@@ -124,23 +86,88 @@ class SelfAttentiveEncoder(nn.Module):
         self.ws2.weight.data.uniform_(-init_range, init_range)
 
     def forward(self, inp, hidden):
-        outp = self.lstm.forward(inp, hidden)[0]
+        outp = self.lstm(inp, hidden)[0]
         size = outp.size()  # [bsz, len, nhid]
-        compressed_embeddings = outp.view(-1, size[2])  # [bsz*len, nhid]
-        transformed_inp = torch.transpose(inp, 0, 1).contiguous()  # [bsz, len]
-        transformed_inp = transformed_inp.view(size[0], 1, size[1])  # [bsz, 1, len]
-        concatenated_inp = [transformed_inp for i in range(self.attention_hops)]
-        concatenated_inp = torch.cat(concatenated_inp, 1)  # [bsz, hop, len]
+        embeddings = outp.view(-1, size[2])  # [bsz*len, nhid]
+        inp = torch.transpose(inp, 0, 1).contiguous()  # [bsz, len]
+        inp = inp.view(size[0], 1, size[1])  # [bsz, 1, len]
+        inp = [inp for i in range(self.att_hops)]
+        inp = torch.cat(inp, 1)  # [bsz, hop, len]
 
-        hbar = self.tanh(self.ws1(self.drop(compressed_embeddings)))  # [bsz*len, attention-unit]
+        hbar = self.tanh(self.ws1(self.drop(embeddings)))
         alphas = self.ws2(hbar).view(size[0], size[1], -1)  # [bsz, len, hop]
         alphas = torch.transpose(alphas, 1, 2).contiguous()  # [bsz, hop, len]
-        penalized_alphas = alphas + (
-            -10000 * (concatenated_inp == self.dictionary.word2idx['<pad>']).float())
-            # [bsz, hop, len] + [bsz, hop, len]
-        alphas = self.softmax(penalized_alphas.view(-1, size[1]))  # [bsz*hop, len]
-        alphas = alphas.view(size[0], self.attention_hops, size[1])  # [bsz, hop, len]
+        alphas = self.softmax(alphas.view(-1, size[1]))  # [bsz*hop, len]
+        alphas = alphas.view(size[0], self.att_hops, size[1])  # [bsz, hop, len]
         return torch.bmm(alphas, outp), alphas
 
-    def init_hidden(self, bsz):
-        return self.bilstm.init_hidden(bsz)
+
+class GraphAttention(nn.Module):
+
+    def __init__(self, ninp, nfeat, att_heads, att_heads_reduction='concat'):
+        super(GraphAttention, self).__init__()
+        self.ninp = ninp
+        self.nfeat = nfeat
+        self.att_heads = att_heads
+        self.att_heads_reduction = att_heads_reduction
+        self.relu = nn.ReLU()
+
+        self.kernels = []
+        self.att_kernels = []
+
+        for head in range(att_heads):
+            self.kernels.append(nn.Linear(ninp, nfeat))
+            self.att_kernels.append(nn.Linear(2 * nfeat, 1))
+
+        if att_heads_reduction == 'concat':
+            self.output_dim = self.nfeat * self.att_heads
+        else:
+            self.output_dim = self.nfeat
+
+    def forward(self, X, G, A):
+        B = X.size()[0]  # Get batch size at runtime
+        N = G.size()[0]  # Get number of nodes in the graph at runtime
+
+        outputs = []
+        for head in range(self.att_heads):
+            kernel = self.kernels[head]
+            att_kernel = self.att_kernels[head]
+
+            # Compute inputs to attention network
+            linear_transf_X = kernel(X)  # B x F'
+            linear_transf_G = kernel(G, kernel)  # N x F'
+
+            # Repeat feature vectors of input: [[1], [2]] becomes [[1], [1], [2], [2]]
+            repeated = K.reshape(K.tile(linear_transf_X, [1, N]), (B * N, self.nfeat))  # (BN x F')
+            # Tile feature vectors of full graph: [[1], [2]] becomes [[1], [2], [1], [2]]
+            tiled = K.tile(linear_transf_G, [B, 1])  # (BN x F')
+            # Build combinations
+            combinations = K.concatenate([repeated, tiled])  # (BN x 2F')
+            combination_slices = K.reshape(combinations, (B, -1, 2 * self.nfeat))  # (B x N x 2F')
+
+            # Attention head
+            dense = K.squeeze(K.dot(combination_slices, att_kernel), -1)  # a(Wh_i, Wh_j) in the paper (B x N x 1)
+            masked = dense - A  # Masking technique by Vaswani et al., section 2.2 of paper (B x N)
+            softmax = K.softmax(masked)  # (B x N)
+            dropout = Dropout(0.5)(softmax)  # Apply dropout to normalized attention coefficients (B x N)
+
+            # Linear combination with neighbors' features
+            node_features = K.dot(dropout, linear_transf_G)  # (B x F')
+
+            # In the case of concatenation, we compute the activation here (Equation 5)
+            if self.att_heads_reduction == 'concat' and self.activation is not None:
+                node_features = self.activation(node_features)
+
+            # Add output of attention head to final output
+            outputs.append(node_features)
+
+        # Reduce the attention heads output according to the reduction method
+        if self.att_heads_reduction == 'concat':
+            output = K.concatenate(outputs)  # (B x KF')
+        else:
+            output = K.mean(K.stack(outputs), axis=0) # (B x F')
+            if self.activation is not None:
+                # In the case of mean reduction, we compute the activation now
+                output = self.activation(output)
+
+        return output
