@@ -3,7 +3,7 @@ import os
 import pandas as pd
 import numpy as np
 
-from consts import *
+from Constants import *
 
 
 def load_adj_spatial():
@@ -17,63 +17,62 @@ def load_adj_od(od_name=DATA_PATH + 'od_al.csv'):
     return ret
 
 
-def load_flow_data(affix, freq=15):
+def load_flow_data(affix='D', minutes=15):
     filepath = DATA_PATH + affix + '.csv'
     if os.path.exists(filepath):
-        data = pd.read_csv(filepath, index_col=0, parse_dates=True)
+        flow = pd.read_csv(filepath, index_col=0, parse_dates=True)
     else:
         data_files = sorted(os.listdir(DATA_PATH))
         data_files = list(filter(
             lambda x: x.startswith(affix + '_'), data_files))
-        data = pd.concat([
+        flow = pd.concat([
             pd.read_csv(DATA_PATH + x, index_col=0, parse_dates=True)
             for x in data_files])
-        data.to_csv(filepath, index=True)
-    data.columns = list(map(int, data.columns))
+        flow.to_csv(filepath, index=True)
 
-    return data.resample(str(freq) + 'T').sum()
+    flow = flow.as_matrix()
+
+    steps = minutes // 5
+    # sum up steps interval
+    flow = flow.reshape((DAYS, -1, flow.shape[-1]))
+    for day in range(DAYS):
+        for i in range(flow.shape[0] - steps):
+            flow[day, i, :] = flow[day, i:i + steps, :].sum(axis=0)
+    flow = flow.reshape((-1, flow.shape[-1]))
+
+    # trim the tail
+    tail = flow.shape[0] % steps
+    return flow if tail == 0 else flow[:-tail]
 
 
 # data for model
-def load_flow(freq):
-    flow_o = load_flow_data('O', freq)
-    flow_d = load_flow_data('D', freq)
-    flow = pd.concat((flow_o, flow_d), axis=1)
-    mean, std = flow.mean(), flow.std()
-    flow = (flow - mean) / std
-    flow.fillna(0, inplace=True)
-    # flow[flow != flow] = 0
-    # flow.dropna(axis=1, inplace=True)
-    # mean, std = mean[mean != 0], std[std != 0]
-    # flow = torch.FloatTensor(flow.as_matrix().tolist())
-    # flow = flow.view(DAYS, -1, flow.size(-1))
-    # mean, std = torch.FloatTensor(mean), torch.FloatTensor(std)
-    return flow, mean, std
+def load_flow(minutes=15, history=24, future=8):
+    o, d = load_flow_data('O', minutes), load_flow_data('D', minutes)
+    flow = np.hstack((o, d))
 
+    cols = flow.shape[-1]
+    slices = minutes // 5
 
-def load_flow_seqs(freq):
-    flow, mean, std = load_flow(freq, True)
-    seqs = flow[:, :-1]
-    vals = flow[:, 1:]
-    return split_dataset(seqs), split_dataset(vals), mean, std
+    # normalization
+    flow_mean, flow_std = flow.mean(axis=0), flow.std(axis=0)
+    flow = (flow - flow_mean) / (flow_std + EPS)
 
+    # slice flow
+    flow = flow.reshape((DAYS, -1, cols))
+    flows = [flow[:, i::slices, :] for i in range(slices)]
 
-def load_flow_images(freq, nprev):
-    flow, mean, std = load_flow(freq)
-    flows = [flow[:, i:-nprev + i] for i in range(nprev)]
-    images = torch.cat(flows, -1)
-    images = images.view(-1, 1, nprev, flow.size(-1))
-    labels = flow[:, nprev:]  # predict flow
-    labels = labels.contiguous().view(images.size(0), 1, -1)
-    return split_dataset(images), split_dataset(labels), mean, std
-
-
-def load_daystime(freq):
-    data = load_flow_data('O', freq)
-    days = np.array(data.index.dayofweek).reshape(DAYS, -1)
-    time = np.arange(data.shape[0]).reshape(DAYS, -1)
-    time %= data.shape[0] // DAYS
-    return split_dataset(days), split_dataset(time)
+    features, labels, days, times = [], [], [], []
+    for day in range(DAYS):
+        weekday = (day - WEEKDAY) % 7
+        for flow in flows:
+            for time in range(history, flow.shape[1] - future):
+                features.append(flow[day, time - history:time, :])
+                labels.append(flow[day, time:time + future, :])
+                days.append(weekday)
+                times.append(time - history)
+    features, labels = np.asarray(features), np.asarray(labels)
+    days, times = np.asarray(days), np.asarray(times)
+    return features, labels, days, times, flow_mean, flow_std
 
 
 def split_dataset(data):
@@ -85,12 +84,5 @@ def split_dataset(data):
 
 
 if __name__ == '__main__':
-    flow, mean, std = load_flow(15)
-    # flow_d = load_flow_data('D')
-    # od = load_flow_data('OD')
-    # do = load_flow_data('DO')
-    # flow = load_flow(15)
-    # seqs, vals = load_flow_seqs(15)
-    # images, labels, mean, std = load_flow_images(15, 8)
-    # days_img, time_img = load_daystime(15, 4)
+    features, labels, days, times, flow_mean, flow_std = load_flow()
     pass
