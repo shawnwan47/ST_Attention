@@ -1,4 +1,6 @@
 import os
+import time
+import math
 
 import pandas as pd
 import numpy as np
@@ -59,17 +61,17 @@ def load_flow(minutes=15, history=24, future=8):
 
     # slice flow
     flow = flow.reshape((DAYS, -1, cols))
-    flows = [flow[:, i::slices, :] for i in range(slices)]
+    flow = [flow[:, i::slices, :] for i in range(slices)]
 
     features, labels, days, times = [], [], [], []
     for day in range(DAYS):
         weekday = (day - WEEKDAY) % 7
-        for flow in flows:
-            for time in range(history, flow.shape[1] - future):
-                features.append(flow[day, time - history:time, :])
-                labels.append(flow[day, time:time + future, :])
+        for f in flow:
+            for t in range(history, f.shape[1] - future):
+                features.append(f[day, t - history:t, :])
+                labels.append(f[day, t:t + future, :])
                 days.append(weekday)
-                times.append(time - history)
+                times.append(t - history)
     features, labels = np.asarray(features), np.asarray(labels)
     days, times = np.asarray(days), np.asarray(times)
     return features, labels, days, times, flow_mean, flow_std
@@ -81,6 +83,18 @@ def split_dataset(data):
     data_valid = data[unit * DAYS_TRAIN:unit * -DAYS_TEST]
     data_test = data[unit * -DAYS_TEST:]
     return data_train, data_valid, data_test
+
+
+def timeSince(since, percent):
+    def asMinutes(s):
+        m = math.floor(s / 60)
+        s -= m * 60
+        return '%dm %ds' % (m, s)
+    now = time.time()
+    s = now - since
+    es = s / (percent)
+    rs = es - s
+    return '%s (- %s)' % (asMinutes(s), asMinutes(rs))
 
 
 if __name__ == '__main__':
