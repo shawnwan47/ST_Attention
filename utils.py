@@ -5,6 +5,9 @@ import math
 import pandas as pd
 import numpy as np
 
+import torch
+from torch.autograd import Variable
+
 from Constants import *
 
 
@@ -95,6 +98,20 @@ def timeSince(since, percent):
     es = s / (percent)
     rs = es - s
     return '%s (- %s)' % (asMinutes(s), asMinutes(rs))
+
+
+def get_batch(features, labels, bsz):
+    idx = np.random.randint(0, features.shape[0], bsz)
+    var_features = np2torch(features[idx])
+    var_labels = np2torch(labels[idx])
+    return var_features, var_labels
+
+
+def np2torch(flow):
+    var_flow = Variable(torch.FloatTensor(flow))
+    if USE_CUDA:
+        var_flow = var_flow.cuda()
+    return var_flow.transpose(0, 1)
 
 
 if __name__ == '__main__':

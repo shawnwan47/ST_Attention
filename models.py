@@ -38,12 +38,12 @@ class RNN(nn.Module):
         self.nlay = nlay
         if rnn_type in ['LSTM', 'GRU']:
             self.rnn = getattr(nn, rnn_type)(
-                ndim, nhid, nlay, dropout=0.5, batch_first=True)
+                ndim, nhid, nlay, dropout=0.5)
         else:
             nonlinearity = {'RNN_TANH': 'tanh', 'RNN_RELU': 'relu'}[rnn_type]
             self.rnn = nn.RNN(
                 ndim, nhid, nlay,
-                nonlinearity=nonlinearity, dropout=0.5, batch_first=True)
+                nonlinearity=nonlinearity, dropout=0.5)
         self.decoder = nn.Linear(nhid, ndim)
 
     def forward(self, x):
@@ -106,94 +106,75 @@ class GAN(nn.Module):
 
 
 class EncoderRNN(nn.Module):
-    def __init__(self, nin, nhid, nlay=1):
+    def __init__(self, ndim, nhid, nlay=1, pdrop=0.1):
         super(EncoderRNN, self).__init__()
-        self.nlay = nlay
         self.nhid = nhid
+        self.gru = nn.GRU(ndim, nhid, nlay, dropout=pdrop)
 
-        self.embedding = nn.Embedding(nin, nhid)
-        self.gru = nn.GRU(nhid, nhid)
+    def forward(self, inp, hid):
+        return self.gru(inp, hid)
 
-    def forward(self, input, hidden):
-        embedded = self.embedding(input).view(1, 1, -1)
-        output = embedded
-        for i in range(self.nlay):
-            output, hidden = self.gru(output, hidden)
-        return output, hidden
-
-    def initHidden(self):
-        result = Variable(torch.zeros(1, 1, self.nhid))
+    def initHidden(self, bsz):
+        ret = Variable(torch.zeros(1, bsz, self.nhid))
         if USE_CUDA:
-            return result.cuda()
+            return ret.cuda()
         else:
-            return result
+            return ret
 
 
 class DecoderRNN(nn.Module):
-    def __init__(self, nhid, nout, nlay=1):
+    def __init__(self, ndim, nhid, nlay=1, pdrop=0.1):
         super(DecoderRNN, self).__init__()
-        self.nlay = nlay
         self.nhid = nhid
+        self.gru = nn.GRU(ndim, nhid, nlay, dropout=pdrop)
+        self.out = nn.Linear(nhid, ndim)
 
-        self.embedding = nn.Embedding(nout, nhid)
-        self.gru = nn.GRU(nhid, nhid)
-        self.out = nn.Linear(nhid, nout)
-        self.softmax = nn.LogSoftmax()
+    def forward(self, inp, hid):
+        out, hid = self.gru(inp, hid)
+        out = self.out(out)
+        return out, hid
 
-    def forward(self, input, hidden):
-        output = self.embedding(input).view(1, 1, -1)
-        for i in range(self.nlay):
-            output = F.relu(output)
-            output, hidden = self.gru(output, hidden)
-        output = self.softmax(self.out(output[0]))
-        return output, hidden
-
-    def initHidden(self):
-        result = Variable(torch.zeros(1, 1, self.nhid))
+    def initHidden(self, bsz):
+        ret = Variable(torch.zeros(1, bsz, self.nhid))
         if USE_CUDA:
-            return result.cuda()
+            return ret.cuda()
         else:
-            return result
+            return ret
 
 
 class AttnDecoderRNN(nn.Module):
-    def __init__(self, nhid, nout, nlay=1, dropout=0.1, max_len=24):
+    def __init__(self, ndim, nhid, nlay=1, pdrop=0.1, max_len=24):
         super(AttnDecoderRNN, self).__init__()
+        self.ndim = ndim
         self.nhid = nhid
-        self.nout = nout
-        self.nlay = nlay
-        self.dropout = dropout
-        self.max_len = max_len
 
-        self.embedding = nn.Embedding(self.nout, self.nhid)
-        self.attn = nn.Linear(self.nhid * 2, self.max_len)
-        self.attn_combine = nn.Linear(self.nhid * 2, self.nhid)
-        self.dropout = nn.Dropout(self.dropout)
-        self.gru = nn.GRU(self.nhid, self.nhid)
-        self.out = nn.Linear(self.nhid, self.nout)
+        self.fc = nn.Linear(ndim, nhid)
+        self.attn = nn.Linear(nhid * 2, max_len)
+        self.attn_combine = nn.Linear(nhid * 2, nhid)
+        self.dropout = nn.Dropout(pdrop)
+        self.gru = nn.GRU(nhid, nhid, nlay, dropout=pdrop)
+        self.out = nn.Linear(nhid, ndim)
 
-    def forward(self, input, hidden, encoder_output, encoder_outputs):
-        embedded = self.embedding(input).view(1, 1, -1)
-        embedded = self.dropout(embedded)
+    def forward(self, inp, hid, encoder_outputs):
+        out = self.fc(inp)
+        out = self.dropout(out)
 
-        attn_weights = F.softmax(
-            self.attn(torch.cat((embedded[0], hidden[0]), 1)))
-        attn_applied = torch.bmm(attn_weights.unsqueeze(0),
-                                 encoder_outputs.unsqueeze(0))
+        attn_weights = F.softmax(self.attn(torch.cat((out, hid), -1)), -1)
+        print(attn_weights)
+        attn_weights = attn_weights.transpose(0, 1)
+        encoder_outputs = encoder_outputs.transpose(0, 1)
+        attn_applied = torch.bmm(attn_weights, encoder_outputs).transpose(0, 1)
 
-        output = torch.cat((embedded[0], attn_applied[0]), 1)
-        output = self.attn_combine(output).unsqueeze(0)
+        out = torch.cat((out, attn_applied), -1)
+        out = self.attn_combine(out)
 
-        for i in range(self.nlay):
-            output = F.relu(output)
-            output, hidden = self.gru(output, hidden)
+        out, hid = self.gru(out, hid)
+        out = self.out(out)  # ResNet
+        return out, hid, attn_weights
 
-        output = F.log_softmax(self.out(output[0]))
-        return output, hidden, attn_weights
-
-    def initHidden(self):
-        result = Variable(torch.zeros(1, 1, self.nhid))
+    def initHidden(self, bsz):
+        ret = Variable(torch.zeros(1, bsz, self.nhid))
         if USE_CUDA:
-            return result.cuda()
+            return ret.cuda()
         else:
-            return result
+            return ret
