@@ -148,28 +148,27 @@ class AttnDecoderRNN(nn.Module):
         self.ndim = ndim
         self.nhid = nhid
 
-        self.fc = nn.Linear(ndim, nhid)
-        self.attn = nn.Linear(nhid * 2, max_len)
-        self.attn_combine = nn.Linear(nhid * 2, nhid)
+        self.fc_in = nn.Linear(ndim, nhid)
+        self.attn_general = nn.Linear(nhid, nhid)
+        self.attn_softmax = nn.Softmax()
+        self.attn_comb = nn.Linear(nhid * 2, nhid)
         self.dropout = nn.Dropout(pdrop)
         self.gru = nn.GRU(nhid, nhid, nlay, dropout=pdrop)
-        self.out = nn.Linear(nhid, ndim)
+        self.fc_out = nn.Linear(nhid, ndim)
 
-    def forward(self, inp, hid, encoder_outputs):
-        out = self.fc(inp)
+    def forward(self, inp, hid, enc_hids):
+        out = self.fc_in(inp)
         out = self.dropout(out)
 
-        attn_weights = F.softmax(self.attn(torch.cat((out, hid), -1)), -1)
-        print(attn_weights)
-        attn_weights = attn_weights.transpose(0, 1)
-        encoder_outputs = encoder_outputs.transpose(0, 1)
-        attn_applied = torch.bmm(attn_weights, encoder_outputs).transpose(0, 1)
-
-        out = torch.cat((out, attn_applied), -1)
-        out = self.attn_combine(out)
+        out = out.transpose(0, 1)
+        enc_hids = enc_hids.transpose(0, 1).transpose(1, 2)
+        attn_score = torch.bmm(self.attn_general(out), enc_hids)
+        attn_weights = self.attn_softmax(attn_score)
+        context = torch.bmm(attn_weights, enc_hids.transpose(1, 2))
+        out = self.attn_comb(torch.cat((out, context), -1).transpose(0, 1))
 
         out, hid = self.gru(out, hid)
-        out = self.out(out)  # ResNet
+        out = inp + self.fc_out(out)  # ResNet
         return out, hid, attn_weights
 
     def initHidden(self, bsz):

@@ -1,8 +1,11 @@
 from collections import Counter
+import os
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import numpy as np
+
+from Constants import FIG_PATH
 
 
 def showPlot(points):
@@ -43,5 +46,16 @@ def var_prv(flow):
     return loss
 
 
+def show_attns(attns):
+    fig_path = FIG_PATH + 'attns/'
+    if not os.path.exists(fig_path):
+        os.makedirs(fig_path)
+    for i in range(attns.shape[1]):
+        plt.imshow(attns[:, i])
+        plt.savefig(fig_path + int(i) + '.png')
+
+
 if __name__ == '__main__':
+    attns = np.load('attns.npy')
+    plt.imshow(attns)
     pass
