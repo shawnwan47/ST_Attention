@@ -2,6 +2,7 @@ import math
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.nn.parameter import Parameter
 from torch.nn.modules.module import Module
 
@@ -98,18 +99,17 @@ class SelfAttentiveEncoder(nn.Module):
         alphas = self.ws2(hbar).view(size[0], size[1], -1)  # [bsz, len, hop]
         alphas = torch.transpose(alphas, 1, 2).contiguous()  # [bsz, hop, len]
         alphas = self.softmax(alphas.view(-1, size[1]))  # [bsz*hop, len]
-        alphas = alphas.view(size[0], self.att_hops, size[1])  # [bsz, hop, len]
+        alphas = alphas.view(size[0], self.att_hops, size[1])
         return torch.bmm(alphas, outp), alphas
 
 
 class GraphAttention(nn.Module):
-
-    def __init__(self, ninp, nfeat, att_heads, att_heads_reduction='concat'):
+    def __init__(self, ninp, nfeat, att_heads, att_reduct='concat'):
         super(GraphAttention, self).__init__()
         self.ninp = ninp
         self.nfeat = nfeat
         self.att_heads = att_heads
-        self.att_heads_reduction = att_heads_reduction
+        self.att_reduct = att_reduct
         self.relu = nn.ReLU()
 
         self.kernels = []
@@ -119,55 +119,32 @@ class GraphAttention(nn.Module):
             self.kernels.append(nn.Linear(ninp, nfeat))
             self.att_kernels.append(nn.Linear(2 * nfeat, 1))
 
-        if att_heads_reduction == 'concat':
+        if att_reduct == 'concat':
             self.output_dim = self.nfeat * self.att_heads
         else:
             self.output_dim = self.nfeat
 
-    def forward(self, X, G, A):
-        B = X.size()[0]  # Get batch size at runtime
-        N = G.size()[0]  # Get number of nodes in the graph at runtime
-
+    def forward(self, inp, adj):
+        '''
+        inp: bsz x nnode x ninp
+        adj: nnode x nnode
+        out: bsz x nnode x nfeat
+        '''
+        bsz, nnode, ninp = inp.size()
         outputs = []
         for head in range(self.att_heads):
             kernel = self.kernels[head]
             att_kernel = self.att_kernels[head]
+            out = kernel(inp)
 
-            # Compute inputs to attention network
-            linear_transf_X = kernel(X)  # B x F'
-            linear_transf_G = kernel(G, kernel)  # N x F'
-
-            # Repeat feature vectors of input: [[1], [2]] becomes [[1], [1], [2], [2]]
-            repeated = K.reshape(K.tile(linear_transf_X, [1, N]), (B * N, self.nfeat))  # (BN x F')
-            # Tile feature vectors of full graph: [[1], [2]] becomes [[1], [2], [1], [2]]
-            tiled = K.tile(linear_transf_G, [B, 1])  # (BN x F')
-            # Build combinations
-            combinations = K.concatenate([repeated, tiled])  # (BN x 2F')
-            combination_slices = K.reshape(combinations, (B, -1, 2 * self.nfeat))  # (B x N x 2F')
-
-            # Attention head
-            dense = K.squeeze(K.dot(combination_slices, att_kernel), -1)  # a(Wh_i, Wh_j) in the paper (B x N x 1)
-            masked = dense - A  # Masking technique by Vaswani et al., section 2.2 of paper (B x N)
-            softmax = K.softmax(masked)  # (B x N)
-            dropout = Dropout(0.5)(softmax)  # Apply dropout to normalized attention coefficients (B x N)
-
-            # Linear combination with neighbors' features
-            node_features = K.dot(dropout, linear_transf_G)  # (B x F')
-
-            # In the case of concatenation, we compute the activation here (Equation 5)
-            if self.att_heads_reduction == 'concat' and self.activation is not None:
-                node_features = self.activation(node_features)
-
-            # Add output of attention head to final output
-            outputs.append(node_features)
-
-        # Reduce the attention heads output according to the reduction method
-        if self.att_heads_reduction == 'concat':
-            output = K.concatenate(outputs)  # (B x KF')
+            h = [out for _ in range(nnode)]
+            h_i = torch.cat(h, -1).view(bsz, nnode ** 2, -1)
+            h_j = torch.cat(h, 1)
+            att = att_kernel(torch.cat((h_i, h_j), -1)).view(bsz, nnode, -1)
+            att = F.softmax(att[:, adj])
+            outputs.append(torch.bmm(att, out))
+        if self.att_reduct == 'concat':
+            outputs = torch.cat(outputs, -1)
         else:
-            output = K.mean(K.stack(outputs), axis=0) # (B x F')
-            if self.activation is not None:
-                # In the case of mean reduction, we compute the activation now
-                output = self.activation(output)
-
-        return output
+            outputs = torch.mean(torch.stack(outputs), 0)
+        return outputs

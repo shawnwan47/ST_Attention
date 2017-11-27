@@ -52,10 +52,4 @@ def show_attns(attns):
         os.makedirs(fig_path)
     for i in range(attns.shape[1]):
         plt.imshow(attns[:, i])
-        plt.savefig(fig_path + int(i) + '.png')
-
-
-if __name__ == '__main__':
-    attns = np.load('attns.npy')
-    plt.imshow(attns)
-    pass
+        plt.savefig(fig_path + str(i) + '.png')

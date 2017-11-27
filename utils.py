@@ -22,7 +22,7 @@ def load_adj_od(od_name=DATA_PATH + 'od_al.csv'):
     return ret
 
 
-def load_flow_data(affix='D', minutes=15):
+def load_flow_data(affix='D', granularity=15):
     filepath = DATA_PATH + affix + '.csv'
     if os.path.exists(filepath):
         flow = pd.read_csv(filepath, index_col=0, parse_dates=True)
@@ -37,26 +37,28 @@ def load_flow_data(affix='D', minutes=15):
 
     flow = flow.as_matrix()
 
-    steps = minutes // 5
+    steps = granularity // 5
     # sum up steps interval
     flow = flow.reshape((DAYS, -1, flow.shape[-1]))
     for day in range(DAYS):
         for i in range(flow.shape[0] - steps):
-            flow[day, i, :] = flow[day, i:i + steps, :].sum(axis=0)
-    flow = flow.reshape((-1, flow.shape[-1]))
+            flow[day, i, :] = flow[day, i:i + steps, :].sum(axis=1)
+    flow = flow[:, :-steps]
 
     # trim the tail
-    tail = flow.shape[0] % steps
-    return flow if tail == 0 else flow[:-tail]
+    tail = flow.shape[1] % steps
+    if tail:
+        flow = flow[:, :-tail]
+    return flow.reshape((-1, flow.shape[-1]))
 
 
 # data for model
-def load_flow(minutes=15, history=24, future=8):
-    o, d = load_flow_data('O', minutes), load_flow_data('D', minutes)
+def load_flow(granularity=15, history=24, future=8):
+    o, d = load_flow_data('O', granularity), load_flow_data('D', granularity)
     flow = np.hstack((o, d))
 
     cols = flow.shape[-1]
-    slices = minutes // 5
+    slices = granularity // 5
 
     # normalization
     flow_mean, flow_std = flow.mean(axis=0), flow.std(axis=0)
@@ -67,11 +69,18 @@ def load_flow(minutes=15, history=24, future=8):
     flow = [flow[:, i::slices, :] for i in range(slices)]
 
     features, labels, days, times = [], [], [], []
+    start6 = 360 / granularity  # start at 6
     for day in range(DAYS):
         weekday = (day - WEEKDAY) % 7
         for f in flow:
-            for t in range(history, f.shape[1] - future):
-                features.append(f[day, t - history:t, :])
+            for t in range(start6, f.shape[1] - future):
+                if t < history:
+                    # pad zeros as history
+                    padding = np.zeros((history - t, cols))
+                    feature = np.vstack((padding, f[day, :t]))
+                else:
+                    feature = f[day, t - history:t]
+                features.append(feature)
                 labels.append(f[day, t:t + future, :])
                 days.append(weekday)
                 times.append(t - history)
@@ -112,6 +121,12 @@ def np2torch(flow):
     if USE_CUDA:
         var_flow = var_flow.cuda()
     return var_flow.transpose(0, 1)
+
+
+def WAPE(flow_real, flow_pred, flow_mean, flow_std):
+    flow_real = torch.bmm(flow_real, flow_std) + flow_mean
+    flow_pred = torch.bmm(flow_pred, flow_std) + flow_mean
+    return torch.abs(flow_pred - flow_real).sum(1).div(flow_real.sum(1))
 
 
 if __name__ == '__main__':

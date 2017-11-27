@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 
-from Layers import GraphConvolution, SelfAttentiveEncoder
+import Layers
 from Constants import USE_CUDA
 
 
@@ -73,38 +73,6 @@ class GCN(nn.Module):
         return F.log_softmax(x)
 
 
-class GAN(nn.Module):
-
-    def __init__(self, config):
-        super(GAN, self).__init__()
-        self.encoder = SelfAttentiveEncoder(config)
-        self.fc = nn.Linear(config['nhid'] * config['attention-hops'], config['nfc'])
-        self.drop = nn.Dropout(config['dropout'])
-        self.tanh = nn.Tanh()
-        self.pred = nn.Linear(config['nfc'], config['class-number'])
-        self.dictionary = config['dictionary']
-        self.init_weights()
-
-    def init_weights(self, init_range=0.1):
-        self.fc.weight.data.uniform_(-init_range, init_range)
-        self.fc.bias.data.fill_(0)
-        self.pred.weight.data.uniform_(-init_range, init_range)
-        self.pred.bias.data.fill_(0)
-
-    def forward(self, inp, hidden):
-        outp, attention = self.encoder.forward(inp, hidden)
-        outp = outp.view(outp.size(0), -1)
-        fc = self.tanh(self.fc(self.drop(outp)))
-        pred = self.pred(self.drop(fc))
-        return pred, attention
-
-    def init_hidden(self, bsz):
-        return self.encoder.init_hidden(bsz)
-
-    def encode(self, inp, hidden):
-        return self.encoder.forward(inp, hidden)[0]
-
-
 class EncoderRNN(nn.Module):
     def __init__(self, ndim, nhid, nlay=1, pdrop=0.1):
         super(EncoderRNN, self).__init__()
@@ -150,7 +118,6 @@ class AttnDecoderRNN(nn.Module):
 
         self.fc_in = nn.Linear(ndim, nhid)
         self.attn_general = nn.Linear(nhid, nhid)
-        self.attn_softmax = nn.Softmax()
         self.attn_comb = nn.Linear(nhid * 2, nhid)
         self.dropout = nn.Dropout(pdrop)
         self.gru = nn.GRU(nhid, nhid, nlay, dropout=pdrop)
@@ -162,8 +129,7 @@ class AttnDecoderRNN(nn.Module):
 
         out = out.transpose(0, 1)
         enc_hids = enc_hids.transpose(0, 1).transpose(1, 2)
-        attn_score = torch.bmm(self.attn_general(out), enc_hids)
-        attn_weights = self.attn_softmax(attn_score)
+        attn_weights = F.softmax(torch.bmm(self.attn_general(out), enc_hids))
         context = torch.bmm(attn_weights, enc_hids.transpose(1, 2))
         out = self.attn_comb(torch.cat((out, context), -1).transpose(0, 1))
 
@@ -177,3 +143,17 @@ class AttnDecoderRNN(nn.Module):
             return ret.cuda()
         else:
             return ret
+
+
+class GAT(nn.Module):
+    def __init__(self, ninp, nout=8, nhid=100, att_heads=[8, 1], att_reduct='concat'):
+        self.ninp = ninp
+        self.nout = nout
+        self.nhid = nhid
+        self.att_heads = att_heads
+        self.att_reduct = att_reduct
+
+        self.gat1 = 
+
+    def forward(self, inp, adj):
+        pass
