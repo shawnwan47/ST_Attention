@@ -27,4 +27,5 @@ var_labels = np2torch(labels[:64])
 
 dec_outs, dec_attns = seq2seq_attn(var_features, enc, dec)
 
+
 np.save('attns', dec_attns.numpy())

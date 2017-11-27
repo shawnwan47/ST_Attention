@@ -109,13 +109,6 @@ def timeSince(since, percent):
     return '%s (- %s)' % (asMinutes(s), asMinutes(rs))
 
 
-def get_batch(features, labels, bsz):
-    idx = np.random.randint(0, features.shape[0], bsz)
-    var_features = np2torch(features[idx])
-    var_labels = np2torch(labels[idx])
-    return var_features, var_labels
-
-
 def np2torch(flow):
     var_flow = Variable(torch.FloatTensor(flow))
     if USE_CUDA:
@@ -123,12 +116,8 @@ def np2torch(flow):
     return var_flow.transpose(0, 1)
 
 
-def WAPE(flow_real, flow_pred, flow_mean, flow_std):
-    flow_real = torch.bmm(flow_real, flow_std) + flow_mean
-    flow_pred = torch.bmm(flow_pred, flow_std) + flow_mean
-    return torch.abs(flow_pred - flow_real).sum(1).div(flow_real.sum(1))
-
-
-if __name__ == '__main__':
-    features, labels, days, times, flow_mean, flow_std = load_flow()
-    pass
+def get_batch(features, labels, bsz):
+    idx = np.random.randint(0, features.shape[0], bsz)
+    var_features = np2torch(features[idx])
+    var_labels = np2torch(labels[idx])
+    return var_features, var_labels

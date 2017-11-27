@@ -111,6 +111,7 @@ class DecoderRNN(nn.Module):
 
 
 class AttnDecoderRNN(nn.Module):
+
     def __init__(self, ndim, nhid, nlay=1, pdrop=0.1, max_len=24):
         super(AttnDecoderRNN, self).__init__()
         self.ndim = ndim
@@ -126,16 +127,17 @@ class AttnDecoderRNN(nn.Module):
     def forward(self, inp, hid, enc_hids):
         out = self.fc_in(inp)
         out = self.dropout(out)
-
+        # bsz x len x ndim
         out = out.transpose(0, 1)
         enc_hids = enc_hids.transpose(0, 1).transpose(1, 2)
-        attn_weights = F.softmax(torch.bmm(self.attn_general(out), enc_hids))
-        context = torch.bmm(attn_weights, enc_hids.transpose(1, 2))
+        attn = torch.bmm(self.attn_general(out), enc_hids)
+        attn = F.softmax(attn.view(-1, self.ndim)).view(attn.size())
+        context = torch.bmm(attn, enc_hids.transpose(1, 2))
         out = self.attn_comb(torch.cat((out, context), -1).transpose(0, 1))
 
         out, hid = self.gru(out, hid)
         out = inp + self.fc_out(out)  # ResNet
-        return out, hid, attn_weights
+        return out, hid, attn
 
     def initHidden(self, bsz):
         ret = Variable(torch.zeros(1, bsz, self.nhid))
@@ -146,14 +148,26 @@ class AttnDecoderRNN(nn.Module):
 
 
 class GAT(nn.Module):
-    def __init__(self, ninp, nout=8, nhid=100, att_heads=[8, 1], att_reduct='concat'):
+    '''
+    A simplified 2-layer GAT
+    '''
+
+    def __init__(self, ninp, nhid, att_heads, nout=8, att_reduct='concat'):
+        super(GAT, self).__init__()
         self.ninp = ninp
         self.nout = nout
         self.nhid = nhid
         self.att_heads = att_heads
         self.att_reduct = att_reduct
 
-        self.gat1 = 
+        self.gat1 = Layers.GraphAttention(ninp, nhid, att_heads, att_reduct)
+        if att_reduct == 'concat':
+            self.nhid_heads = nhid * att_heads
+        else:
+            self.nhid_heads = nhid
+        self.gat2 = Layers.GraphAttention(self.nhid_heads, nout)
 
     def forward(self, inp, adj):
-        pass
+        out = self.gat1(inp, adj)
+        out = self.gat2(out, adj)
+        return out

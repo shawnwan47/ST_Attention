@@ -104,7 +104,7 @@ class SelfAttentiveEncoder(nn.Module):
 
 
 class GraphAttention(nn.Module):
-    def __init__(self, ninp, nfeat, att_heads, att_reduct='concat'):
+    def __init__(self, ninp, nfeat, att_heads=1, att_reduct='concat'):
         super(GraphAttention, self).__init__()
         self.ninp = ninp
         self.nfeat = nfeat
