@@ -42,7 +42,7 @@ def load_flow_data(affix='D', granularity=15):
     flow = flow.reshape((DAYS, -1, flow.shape[-1]))
     for day in range(DAYS):
         for i in range(flow.shape[0] - steps):
-            flow[day, i, :] = flow[day, i:i + steps, :].sum(axis=1)
+            flow[day, i, :] = flow[day, i:i + steps, :].sum(axis=0)
     flow = flow[:, :-steps]
 
     # trim the tail
@@ -69,7 +69,7 @@ def load_flow(granularity=15, history=24, future=8):
     flow = [flow[:, i::slices, :] for i in range(slices)]
 
     features, labels, days, times = [], [], [], []
-    start6 = 360 / granularity  # start at 6
+    start6 = 360 // granularity  # start at 6
     for day in range(DAYS):
         weekday = (day - WEEKDAY) % 7
         for f in flow:

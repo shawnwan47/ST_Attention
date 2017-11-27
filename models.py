@@ -131,8 +131,7 @@ class AttnDecoderRNN(nn.Module):
         out = out.transpose(0, 1)
         enc_hids = enc_hids.transpose(0, 1).transpose(1, 2)
         attn = torch.bmm(self.attn_general(out), enc_hids)
-        print(attn.size())
-        attn = F.softmax(attn.view(-1, self.ndim)).view(attn.size())
+        attn = F.softmax(attn.squeeze(1)).unsqueeze(1)
         context = torch.bmm(attn, enc_hids.transpose(1, 2))
         out = self.attn_comb(torch.cat((out, context), -1).transpose(0, 1))
 

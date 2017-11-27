@@ -1,6 +1,8 @@
 import time
+import argparse
 
 import torch
+from torch import cuda
 import torch.nn as nn
 import torch.optim as optim
 
@@ -8,12 +10,39 @@ from Utils import load_flow, split_dataset, timeSince, get_batch
 from Models import EncoderRNN, AttnDecoderRNN
 from Trainer import train_seq2seq_attn
 from Constants import USE_CUDA
+from Loss import WAPE, MAPE
 
+parser = argparse.ArgumentParser(
+    description='train.py',
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-# CUDA
-torch.manual_seed(47)
-if torch.cuda.is_available() and USE_CUDA:
-    torch.cuda.manual_seed(47)
+# data
+parser.add_argument('--granularity', type=int, default=15)
+parser.add_argument('--history', type=int, default=40)
+parser.add_argument('--future', type=int, default=8)
+# model
+# train
+parser.add_argument('--bsz', type=str, default='CelebA', choices=['CelebA', 'RaFD', 'Both'])
+parser.add_argument('--nepoch', type=int, default=20)
+parser.add_argument('--nepoch_decay', type=int, default=10)
+parser.add_argument('--niter', type=int, default=10000)
+parser.add_argument('--num_iters_decay', type=int, default=100000)
+parser.add_argument('--batch_size', type=int, default=16)
+
+opt = parser.parse_args()
+
+if opt.layers != -1:
+    opt.enc_layers = opt.layers
+    opt.dec_layers = opt.layers
+
+if torch.cuda.is_available() and not opt.gpuid:
+    print("WARNING: You have a CUDA device, should run with -gpuid 0")
+
+if opt.gpuid:
+    cuda.set_device(opt.gpuid[0])
+    if opt.seed > 0:
+        torch.cuda.manual_seed(opt.seed)
+
 
 # data
 features, labels, days, times, flow_mean, flow_std = load_flow()
@@ -39,7 +68,7 @@ lr = 0.01
 
 
 # training
-def trainIters(enc, dec, bsz=bsz, niter=niter, print_every=print_every, lr=lr):
+def trainIters(enc, dec, bsz, niter, print_every, lr=lr):
     start = time.time()
 
     print_loss_all = 0  # Reset every print_every
@@ -62,8 +91,9 @@ def trainIters(enc, dec, bsz=bsz, niter=niter, print_every=print_every, lr=lr):
                                          iteration, iteration / niter * 100,
                                          print_loss_avg))
 
-    torch.save(enc, 'enc.pk')
-    torch.save(dec, 'dec.pk')
 
 
 trainIters(encoder, decoder)
+
+torch.save(enc, 'enc.pk')
+torch.save(dec, 'dec.pk')
