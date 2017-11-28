@@ -2,15 +2,12 @@ import time
 import argparse
 
 import torch
-from torch import cuda
 import torch.nn as nn
 import torch.optim as optim
 
-from Utils import load_flow, split_dataset, timeSince, get_batch
+import Utils
 from Models import EncoderRNN, AttnDecoderRNN
-from Trainer import train_seq2seq_attn
-from Constants import USE_CUDA
-from Loss import WAPE, MAPE
+from Trainer import seq2seq_attn
 
 parser = argparse.ArgumentParser(
     description='train.py',
@@ -18,82 +15,101 @@ parser = argparse.ArgumentParser(
 
 # data
 parser.add_argument('--granularity', type=int, default=15)
-parser.add_argument('--history', type=int, default=40)
+parser.add_argument('--past', type=int, default=40)
 parser.add_argument('--future', type=int, default=8)
 # model
+parser.add_argument('--nhid', type=int, default=512)
+parser.add_argument('--nlay', type=int, default=2)
+parser.add_argument('--attn_type', type=str, default='general',
+                    choices=['dot', 'general', 'concat'])
+parser.add_argument('--loss', type=str, default='MAPE',
+                    choices=['WAPE', 'MAPE'])
 # train
-parser.add_argument('--bsz', type=str, default='CelebA', choices=['CelebA', 'RaFD', 'Both'])
-parser.add_argument('--nepoch', type=int, default=20)
-parser.add_argument('--nepoch_decay', type=int, default=10)
+parser.add_argument('--bsz', type=int, default=100)
 parser.add_argument('--niter', type=int, default=10000)
-parser.add_argument('--num_iters_decay', type=int, default=100000)
-parser.add_argument('--batch_size', type=int, default=16)
+parser.add_argument('--nepoch', type=int, default=10)
+parser.add_argument('--print_every', type=int, default=100)
+parser.add_argument('--lr', type=float, default=0.1)
+parser.add_argument('--lr_min', type=float, default=0.00001)
+parser.add_argument('--lr_decay', type=int, default=5)
+# gpu
+parser.add_argument('--gpuid', type=list, default=[3])
+parser.add_argument('--seed', type=int, default=47)
+# file
+parser.add_argument('--savepath', type=str, default='save.pt')
 
-opt = parser.parse_args()
+args = parser.parse_args()
 
-if opt.layers != -1:
-    opt.enc_layers = opt.layers
-    opt.dec_layers = opt.layers
-
-if torch.cuda.is_available() and not opt.gpuid:
-    print("WARNING: You have a CUDA device, should run with -gpuid 0")
-
-if opt.gpuid:
-    cuda.set_device(opt.gpuid[0])
-    if opt.seed > 0:
-        torch.cuda.manual_seed(opt.seed)
-
+if args.gpuid:
+    torch.cuda.set_device(args.gpuid[0])
+    if args.seed > 0:
+        torch.cuda.manual_seed(args.seed)
 
 # data
-features, labels, days, times, flow_mean, flow_std = load_flow()
-features_train, features_valid, features_test = split_dataset(features)
-labels_train, labels_valid, labels_test = split_dataset(labels)
+features, labels, days, times, flow_mean, flow_std = Utils.load_flow(
+    granularity=args.granularity, past=args.past, future=args.future)
+features_train, features_valid, features_test = Utils.split_dataset(features)
+labels_train, labels_valid, labels_test = Utils.split_dataset(labels)
 
 
 # model
 ndim = features_train.shape[-1]
-nhid = 1024
-encoder = EncoderRNN(ndim, nhid)
-decoder = AttnDecoderRNN(ndim, nhid)
+encoder = EncoderRNN(ndim, args.nhid)
+decoder = AttnDecoderRNN(ndim, args.nhid)
 
-if USE_CUDA:
+if args.gpuid:
     encoder = encoder.cuda()
     decoder = decoder.cuda()
-
-# optimization
-bsz = 100
-niter = 10000
-print_every = 100
-lr = 0.01
+    flow_mean = flow_mean.cuda()
+    flow_std = flow_std.cuda()
 
 
 # training
-def trainIters(enc, dec, bsz, niter, print_every, lr=lr):
+def trainIters(enc, dec, bsz, niter, print_every, lr, lr_min, lr_decay):
     start = time.time()
 
-    print_loss_all = 0  # Reset every print_every
+    loss_all = 0
+    loss_best = 1.
+    stops = 0
 
     opt_enc = optim.SGD(enc.parameters(), lr=lr)
     opt_dec = optim.SGD(dec.parameters(), lr=lr)
     criterion = nn.MSELoss()
 
-    for iteration in range(1, niter + 1):
-        var_inp, var_targ = get_batch(features_train, labels_train, bsz)
+    for i in range(1, niter + 1):
+        opt_enc.zero_grad()
+        opt_dec.zero_grad()
 
-        loss = train_seq2seq_attn(var_inp, var_targ, enc, dec,
-                                  opt_enc, opt_dec, criterion)
-        print_loss_all += loss
+        var_inp, var_targ = Utils.get_batch(features_train, labels_train, bsz)
 
-        if iteration % print_every == 0:
-            print_loss_avg = print_loss_all / print_every
-            print_loss_all = 0
-            print('%s (%d %d%%) %.4f' % (timeSince(start, iteration / niter),
-                                         iteration, iteration / niter * 100,
-                                         print_loss_avg))
+        outs, attns = seq2seq_attn(var_inp, var_targ, encoder, decoder, True)
+        loss = criterion(outs, var_targ)
+        loss.backward()
+        opt_enc.step()
+        opt_dec.step()
+
+        loss_all += loss.data[0] / args.future
+
+        if i % print_every == 0:
+            loss_avg = loss_all / print_every
+            loss_all = 0
+            print('iter: %d time: %s lr: %.5f loss: %.4f' % (
+                i, Utils.timeSince(start, i / niter), lr, loss_avg))
+            # lr decay
+            if loss_avg > loss_best:
+                stops += 1
+                if stops > 3:
+                    if lr <= lr_min:
+                        return
+                    else:
+                        lr /= lr_decay
+                        stops = 0
+            else:
+                loss_best = loss_avg
 
 
+trainIters(encoder, decoder,
+           args.bsz, args.niter, args.print_every,
+           args.lr, args.lr_min, args.lr_decay)
 
-trainIters(encoder, decoder)
-
-torch.save(enc, 'enc.pk')
-torch.save(dec, 'dec.pk')
+torch.save((encoder, decoder), args.savepath)

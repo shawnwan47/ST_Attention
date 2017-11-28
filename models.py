@@ -152,22 +152,17 @@ class GAT(nn.Module):
     A simplified 2-layer GAT
     '''
 
-    def __init__(self, ninp, nhid, att_heads, nout=8, att_reduct='concat'):
+    def __init__(self, ninp, nhid, att_heads, nout):
         super(GAT, self).__init__()
         self.ninp = ninp
         self.nout = nout
         self.nhid = nhid
         self.att_heads = att_heads
-        self.att_reduct = att_reduct
 
-        self.gat1 = Layers.GraphAttention(ninp, nhid, att_heads, att_reduct)
-        if att_reduct == 'concat':
-            self.nhid_heads = nhid * att_heads
-        else:
-            self.nhid_heads = nhid
-        self.gat2 = Layers.GraphAttention(self.nhid_heads, nout)
+        self.gat1 = Layers.GraphAttention(ninp, nhid, att_heads, True)
+        self.gat2 = Layers.GraphAttention(self.gat1.nout, nout)
 
     def forward(self, inp, adj):
-        out = self.gat1(inp, adj)
-        out = self.gat2(out, adj)
-        return out
+        out, att1 = self.gat1(inp, adj)
+        out, att2 = self.gat2(out, adj)
+        return out, att1, att2

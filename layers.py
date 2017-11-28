@@ -104,13 +104,11 @@ class SelfAttentiveEncoder(nn.Module):
 
 
 class GraphAttention(nn.Module):
-    def __init__(self, ninp, nfeat, att_heads=1, att_reduct='concat'):
+    def __init__(self, ninp, nfeat, att_heads=1, nonlinear=False):
         super(GraphAttention, self).__init__()
         self.ninp = ninp
         self.nfeat = nfeat
         self.att_heads = att_heads
-        self.att_reduct = att_reduct
-        self.relu = nn.ReLU()
 
         self.kernels = []
         self.att_kernels = []
@@ -119,10 +117,8 @@ class GraphAttention(nn.Module):
             self.kernels.append(nn.Linear(ninp, nfeat))
             self.att_kernels.append(nn.Linear(2 * nfeat, 1))
 
-        if att_reduct == 'concat':
-            self.output_dim = self.nfeat * self.att_heads
-        else:
-            self.output_dim = self.nfeat
+        self.nout = self.nfeat * self.att_heads
+        self.activation = nn.ELU() if nonlinear else None
 
     def forward(self, inp, adj):
         '''
@@ -131,7 +127,8 @@ class GraphAttention(nn.Module):
         out: bsz x nnode x nfeat
         '''
         bsz, nnode, ninp = inp.size()
-        outputs = []
+        assert adj.size(0) == nnode
+        outs, atts = [], []
         for head in range(self.att_heads):
             kernel = self.kernels[head]
             att_kernel = self.att_kernels[head]
@@ -142,9 +139,9 @@ class GraphAttention(nn.Module):
             h_j = torch.cat(h, 1)
             att = att_kernel(torch.cat((h_i, h_j), -1)).view(bsz, nnode, -1)
             att = F.softmax(att[:, adj])
-            outputs.append(torch.bmm(att, out))
-        if self.att_reduct == 'concat':
-            outputs = torch.cat(outputs, -1)
-        else:
-            outputs = torch.mean(torch.stack(outputs), 0)
-        return outputs
+            outs.append(torch.bmm(att, out))
+            atts.append(att)
+        outs = torch.cat(outs, -1)
+        if self.activation:
+            outs = self.activation(outs)
+        return outs, atts

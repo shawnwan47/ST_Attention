@@ -46,10 +46,35 @@ def var_prv(flow):
     return loss
 
 
-def show_attns(attns):
-    fig_path = FIG_PATH + 'attns/'
+def show_attns(attns, granularity, folderpath='attns/'):
+    fig_path = FIG_PATH + folderpath
     if not os.path.exists(fig_path):
         os.makedirs(fig_path)
-    for i in range(attns.shape[1]):
-        plt.imshow(attns[:, i])
-        plt.savefig(fig_path + str(i) + '.png')
+    ylen, xlen = attns[0].shape
+    assert(60 % granularity == 0)
+    step = 60 // granularity
+
+    for i in range(attns.shape[0]):
+        def int2time(x):
+            return str(int(x)) + ':00'
+        plt.clf()
+        xstart = min(xlen, 6 * step + i) // step  # forget yesterday
+        xticks = np.arange(0, xlen, step)[-xstart:] + 3.5 - i % step
+        yticks = np.arange(0, ylen, step) + 3.5 - i % step
+        xlabels = 6 + (xticks + i - xlen) // step
+        ylabels = 6 + (yticks + i) // step
+        xlabels = list(map(int2time, xlabels))
+        ylabels = list(map(int2time, ylabels))
+        plt.imshow(attns[i], cmap='gray', vmin=0, vmax=1)
+        plt.xticks(xticks, xlabels, rotation=45)
+        plt.yticks(yticks, ylabels)
+        plt.xlabel('Past')
+        plt.ylabel('Future')
+        title = str(6 + i // step) + ' - ' + str(i % step * granularity)
+        plt.title(title)
+        plt.savefig(fig_path + title + '.png')
+
+
+if __name__ == '__main__':
+    attns = np.load('attns.npy')
+    show_attns(attns, 15)

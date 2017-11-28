@@ -5,21 +5,39 @@ import math
 import pandas as pd
 import numpy as np
 
-import torch
-from torch.autograd import Variable
 
 from Constants import *
 
 
 def load_adj_spatial():
-    return np.genfromtxt(DATA_PATH + 'link.txt')
+    spatial = np.genfromtxt(DATA_PATH + 'link.txt', dtype=int)
+    od = load_od()
+    adj = od.copy().astype(int)
+    adj[:] = 0
+    for i in range(spatial.shape[0]):
+        if spatial[i, 0] in od.columns and spatial[i, 1] in od.columns:
+            adj.loc[spatial[i, 0], spatial[i, 1]] = 1
+    return adj
 
 
-def load_adj_od(od_name=DATA_PATH + 'od_al.csv'):
+def load_od(od_name=DATA_PATH + 'od_al.csv'):
     ret = pd.read_csv(od_name, index_col=0)
     ret.columns = list(map(int, ret.columns))
     ret.index.name = ''
     return ret
+
+
+def od2graph(od, contrib=0.05):
+    return od / od.sum(0) >= contrib
+
+
+def load_adj():
+    adj = load_adj_spatial().as_matrix()
+    od = load_od().as_matrix()
+    od = od2graph(od)
+    oood = np.hstack((adj, od))
+    dodd = np.hstack((od.transpose(), adj))
+    return np.vstack((oood, dodd))
 
 
 def load_flow_data(affix='D', granularity=15):
@@ -53,7 +71,7 @@ def load_flow_data(affix='D', granularity=15):
 
 
 # data for model
-def load_flow(granularity=15, history=24, future=8):
+def load_flow(granularity=15, past=24, future=8):
     o, d = load_flow_data('O', granularity), load_flow_data('D', granularity)
     flow = np.hstack((o, d))
 
@@ -74,16 +92,16 @@ def load_flow(granularity=15, history=24, future=8):
         weekday = (day - WEEKDAY) % 7
         for f in flow:
             for t in range(start6, f.shape[1] - future):
-                if t < history:
-                    # pad zeros as history
-                    padding = np.zeros((history - t, cols))
+                if t < past:
+                    # pad zeros as past
+                    padding = np.zeros((past - t, cols))
                     feature = np.vstack((padding, f[day, :t]))
                 else:
-                    feature = f[day, t - history:t]
+                    feature = f[day, t - past:t]
                 features.append(feature)
                 labels.append(f[day, t:t + future, :])
                 days.append(weekday)
-                times.append(t - history)
+                times.append(t - past)
     features, labels = np.asarray(features), np.asarray(labels)
     days, times = np.asarray(days), np.asarray(times)
     return features, labels, days, times, flow_mean, flow_std
@@ -109,15 +127,19 @@ def timeSince(since, percent):
     return '%s (- %s)' % (asMinutes(s), asMinutes(rs))
 
 
-def np2torch(flow):
-    var_flow = Variable(torch.FloatTensor(flow))
-    if USE_CUDA:
-        var_flow = var_flow.cuda()
-    return var_flow.transpose(0, 1)
+# import torch
+# from torch.autograd import Variable
 
 
-def get_batch(features, labels, bsz):
-    idx = np.random.randint(0, features.shape[0], bsz)
-    var_features = np2torch(features[idx])
-    var_labels = np2torch(labels[idx])
-    return var_features, var_labels
+# def np2torch(flow):
+#     var_flow = Variable(torch.FloatTensor(flow))
+#     if USE_CUDA:
+#         var_flow = var_flow.cuda()
+#     return var_flow.transpose(0, 1)
+
+
+# def get_batch(features, labels, bsz):
+#     idx = np.random.randint(0, features.shape[0], bsz)
+#     var_features = np2torch(features[idx])
+#     var_labels = np2torch(labels[idx])
+#     return var_features, var_labels
