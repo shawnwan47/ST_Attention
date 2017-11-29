@@ -1,10 +1,10 @@
+import random
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 
 import Layers
-from Constants import USE_CUDA
 
 
 class LR(nn.Module):
@@ -62,8 +62,8 @@ class GCN(nn.Module):
     def __init__(self, nfeat, nhid, nclass, dropout):
         super(GCN, self).__init__()
 
-        self.gc1 = GraphConvolution(nfeat, nhid)
-        self.gc2 = GraphConvolution(nhid, nclass)
+        self.gc1 = Layers.GraphConvolution(nfeat, nhid)
+        self.gc2 = Layers.GraphConvolution(nhid, nclass)
         self.dropout = dropout
 
     def forward(self, x, adj):
@@ -73,78 +73,55 @@ class GCN(nn.Module):
         return F.log_softmax(x)
 
 
-class EncoderRNN(nn.Module):
-    def __init__(self, ndim, nhid, nlay=1, pdrop=0.1):
-        super(EncoderRNN, self).__init__()
-        self.nhid = nhid
-        self.gru = nn.GRU(ndim, nhid, nlay, dropout=pdrop)
-
-    def forward(self, inp, hid):
-        return self.gru(inp, hid)
-
-    def initHidden(self, bsz):
-        ret = Variable(torch.zeros(1, bsz, self.nhid))
-        if USE_CUDA:
-            return ret.cuda()
-        else:
-            return ret
-
-
-class DecoderRNN(nn.Module):
-    def __init__(self, ndim, nhid, nlay=1, pdrop=0.1):
-        super(DecoderRNN, self).__init__()
-        self.nhid = nhid
-        self.gru = nn.GRU(ndim, nhid, nlay, dropout=pdrop)
-        self.out = nn.Linear(nhid, ndim)
-
-    def forward(self, inp, hid):
-        out, hid = self.gru(inp, hid)
-        out = self.out(out)
-        return out, hid
-
-    def initHidden(self, bsz):
-        ret = Variable(torch.zeros(1, bsz, self.nhid))
-        if USE_CUDA:
-            return ret.cuda()
-        else:
-            return ret
-
-
-class AttnDecoderRNN(nn.Module):
-
-    def __init__(self, ndim, nhid, nlay=1, pdrop=0.1, max_len=24):
-        super(AttnDecoderRNN, self).__init__()
+class seq2seq(nn.Module):
+    def __init__(self, len_in, len_out, ndim, nhid, nlay=1, pdrop=0.1,
+                 attn=False):
+        super(seq2seq, self).__init__()
+        self.len_in = len_in
+        self.len_out = len_out
         self.ndim = ndim
         self.nhid = nhid
-
-        self.fc_in = nn.Linear(ndim, nhid)
-        self.attn_general = nn.Linear(nhid, nhid)
-        self.attn_comb = nn.Linear(nhid * 2, nhid)
+        self.nlay = nlay
         self.dropout = nn.Dropout(pdrop)
-        self.gru = nn.GRU(nhid, nhid, nlay, dropout=pdrop)
-        self.fc_out = nn.Linear(nhid, ndim)
-
-    def forward(self, inp, hid, enc_hids):
-        out = self.fc_in(inp)
-        out = self.dropout(out)
-        # bsz x len x ndim
-        out = out.transpose(0, 1)
-        enc_hids = enc_hids.transpose(0, 1).transpose(1, 2)
-        attn = torch.bmm(self.attn_general(out), enc_hids)
-        attn = F.softmax(attn.squeeze(1)).unsqueeze(1)
-        context = torch.bmm(attn, enc_hids.transpose(1, 2))
-        out = self.attn_comb(torch.cat((out, context), -1).transpose(0, 1))
-
-        out, hid = self.gru(out, hid)
-        out = inp + self.fc_out(out)  # ResNet
-        return out, hid, attn
-
-    def initHidden(self, bsz):
-        ret = Variable(torch.zeros(1, bsz, self.nhid))
-        if USE_CUDA:
-            return ret.cuda()
+        self.attn = attn
+        self.encoder = Layers.EncoderRNN(ndim, nhid, nlay, pdrop)
+        if not attn:
+            self.decoder = Layers.DecoderRNN(ndim, nhid, nlay, pdrop)
         else:
-            return ret
+            self.decoder = Layers.AttnDecoderRNN(ndim, nhid, nlay, pdrop)
+
+    def forward(self, inputs, targets, cuda=True):
+        len_inp = inputs.size(0)
+        bsz = inputs.size(1)
+        len_targ = targets.size(0)
+        # encoding
+        hid = self.initHidden(bsz, cuda)
+        enc_outs = Variable(torch.zeros(len_inp, bsz, self.nhid))
+        enc_outs = enc_outs.cuda() if cuda else enc_outs
+        for ei in range(len_inp):
+            enc_outs[ei], hid = self.encoder(inputs[ei].unsqueeze(0), hid)
+        outs = []
+        attns = []
+        dec_inp = inputs[-1].unsqueeze(0)
+        for di in range(len_targ):
+            if self.attn:
+                dec_out, hid, attn = self.decoder(dec_inp, hid, enc_outs)
+                attns.append(attn)
+            else:
+                dec_out, hid = self.decoder(dec_inp, hid)
+            outs.append(dec_out)
+            if self.teach and random.random() < 0.5:
+                dec_inp = targets[di].unsqueeze(0)
+            else:
+                dec_inp = dec_out
+        if self.attn:
+            attns = torch.cat(attns, 0)
+        outs = torch.cat(outs, 0)
+        return (outs, attns) if self.attn else outs
+
+    def initHidden(self, bsz, cuda):
+        ret = Variable(torch.zeros(1, bsz, self.nhid))
+        return ret.cuda() if cuda else ret
 
 
 class GAT(nn.Module):

@@ -69,38 +69,57 @@ class GraphConvolution(Module):
             + str(self.out_features) + ')'
 
 
-class SelfAttentiveEncoder(nn.Module):
+class EncoderRNN(nn.Module):
+    def __init__(self, ndim, nhid, nlay, pdrop):
+        super(EncoderRNN, self).__init__()
+        self.nhid = nhid
+        self.gru = nn.GRU(ndim, nhid, nlay, dropout=pdrop)
 
-    def __init__(self, ninp, nhid, nlayers, att_unit, att_hops):
-        super(SelfAttentiveEncoder, self).__init__()
-        self.lstm = nn.LSTM(ninp, nhid, nlayers, dropout=0.5)
-        self.drop = nn.Dropout(0.5)
-        self.ws1 = nn.Linear(nhid, att_unit, bias=False)
-        self.ws2 = nn.Linear(att_unit, att_hops, bias=False)
-        self.tanh = nn.Tanh()
-        self.softmax = nn.Softmax()
-        self.att_hops = att_hops
-        self.init_weights()
+    def forward(self, inp, hid):
+        return self.gru(inp, hid)
 
-    def init_weights(self, init_range=0.1):
-        self.ws1.weight.data.uniform_(-init_range, init_range)
-        self.ws2.weight.data.uniform_(-init_range, init_range)
 
-    def forward(self, inp, hidden):
-        outp = self.lstm(inp, hidden)[0]
-        size = outp.size()  # [bsz, len, nhid]
-        embeddings = outp.view(-1, size[2])  # [bsz*len, nhid]
-        inp = torch.transpose(inp, 0, 1).contiguous()  # [bsz, len]
-        inp = inp.view(size[0], 1, size[1])  # [bsz, 1, len]
-        inp = [inp for i in range(self.att_hops)]
-        inp = torch.cat(inp, 1)  # [bsz, hop, len]
+class DecoderRNN(nn.Module):
+    def __init__(self, ndim, nhid, nlay, pdrop):
+        super(DecoderRNN, self).__init__()
+        self.nhid = nhid
+        self.gru = nn.GRU(ndim, nhid, nlay, dropout=pdrop)
+        self.fc = nn.Linear(nhid, ndim)
 
-        hbar = self.tanh(self.ws1(self.drop(embeddings)))
-        alphas = self.ws2(hbar).view(size[0], size[1], -1)  # [bsz, len, hop]
-        alphas = torch.transpose(alphas, 1, 2).contiguous()  # [bsz, hop, len]
-        alphas = self.softmax(alphas.view(-1, size[1]))  # [bsz*hop, len]
-        alphas = alphas.view(size[0], self.att_hops, size[1])
-        return torch.bmm(alphas, outp), alphas
+    def forward(self, inp, hid):
+        out, hid = self.gru(inp, hid)
+        out = inp + self.fc(out)
+        return out, hid
+
+
+class AttnDecoderRNN(nn.Module):
+
+    def __init__(self, ndim, nhid, nlay, pdrop):
+        super(AttnDecoderRNN, self).__init__()
+        self.ndim = ndim
+        self.nhid = nhid
+
+        self.fc_in = nn.Linear(ndim, nhid)
+        self.attn_general = nn.Linear(nhid, nhid)
+        self.attn_comb = nn.Linear(nhid * 2, nhid)
+        self.dropout = nn.Dropout(pdrop)
+        self.gru = nn.GRU(nhid, nhid, nlay, dropout=pdrop)
+        self.fc_out = nn.Linear(nhid, ndim)
+
+    def forward(self, inp, hid, enc_hids):
+        out = self.fc_in(inp)
+        out = self.dropout(out)
+        # bsz x len x ndim
+        out = out.transpose(0, 1)
+        enc_hids = enc_hids.transpose(0, 1).transpose(1, 2)
+        attn = torch.bmm(self.attn_general(out), enc_hids)
+        attn = F.softmax(attn.squeeze(1)).unsqueeze(1)
+        context = torch.bmm(attn, enc_hids.transpose(1, 2))
+        out = self.attn_comb(torch.cat((out, context), -1).transpose(0, 1))
+
+        out, hid = self.gru(out, hid)
+        out = inp + self.fc_out(out)  # ResNet
+        return out, hid, attn
 
 
 class GraphAttention(nn.Module):

@@ -18,7 +18,7 @@ def encodeRNN(var_inp, encoder):
     return enc_hid, enc_outs
 
 
-def seq2seq_attn(var_inp, var_targ, encoder, decoder, teach=True):
+def seq2seq_attn(var_inp, var_targ, encoder, decoder, teach=False):
     bsz = var_inp.size(1)
     len_targ = var_targ.size(0)
     outs = []
