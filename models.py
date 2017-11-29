@@ -90,7 +90,7 @@ class seq2seq(nn.Module):
         else:
             self.decoder = Layers.AttnDecoderRNN(ndim, nhid, nlay, pdrop)
 
-    def forward(self, inputs, targets, cuda=True):
+    def forward(self, inputs, targets, cuda=True, teach=False):
         len_inp = inputs.size(0)
         bsz = inputs.size(1)
         len_targ = targets.size(0)
@@ -110,7 +110,7 @@ class seq2seq(nn.Module):
             else:
                 dec_out, hid = self.decoder(dec_inp, hid)
             outs.append(dec_out)
-            if self.teach and random.random() < 0.5:
+            if teach and random.random() < 0.5:
                 dec_inp = targets[di].unsqueeze(0)
             else:
                 dec_inp = dec_out
@@ -120,7 +120,7 @@ class seq2seq(nn.Module):
         return (outs, attns) if self.attn else outs
 
     def initHidden(self, bsz, cuda):
-        ret = Variable(torch.zeros(1, bsz, self.nhid))
+        ret = Variable(torch.zeros(self.nlay, bsz, self.nhid))
         return ret.cuda() if cuda else ret
 
 

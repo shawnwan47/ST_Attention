@@ -72,7 +72,6 @@ class GraphConvolution(Module):
 class EncoderRNN(nn.Module):
     def __init__(self, ndim, nhid, nlay, pdrop):
         super(EncoderRNN, self).__init__()
-        self.nhid = nhid
         self.gru = nn.GRU(ndim, nhid, nlay, dropout=pdrop)
 
     def forward(self, inp, hid):
