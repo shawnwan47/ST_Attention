@@ -74,8 +74,7 @@ class GCN(nn.Module):
 
 
 class seq2seq(nn.Module):
-    def __init__(self, len_in, len_out, ndim, nhid, nlay=1, pdrop=0.1,
-                 attn=False):
+    def __init__(self, len_in, len_out, ndim, nhid, nlay, pdrop, attn):
         super(seq2seq, self).__init__()
         self.len_in = len_in
         self.len_out = len_out
