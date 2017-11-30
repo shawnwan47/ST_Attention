@@ -3,7 +3,7 @@ import os
 import pandas as pd
 import numpy as np
 
-from Constants import *
+from Consts import *
 
 
 def load_adj_spatial():
@@ -24,16 +24,17 @@ def load_od(od_name=DATA_PATH + 'od_al.csv'):
     return ret
 
 
-def od2graph(od, contrib=0.05):
+def od2graph(od, contrib=0.01):
     return od / od.sum(0) >= contrib
 
 
-def load_adj():
+def load_adj(contrib=0.01):
     adj = load_adj_spatial().as_matrix()
     od = load_od().as_matrix()
-    od = od2graph(od)
+    do = od2graph(od, contrib)
+    od = od2graph(od.transpose(), contrib).transpose()
     oood = np.hstack((adj, od))
-    dodd = np.hstack((od.transpose(), adj))
+    dodd = np.hstack((do, adj))
     return np.vstack((oood, dodd))
 
 
@@ -68,7 +69,7 @@ def load_flow_data(affix='D', gran=15):
 
 
 # data for model
-def load_flow(gran=15, past=24, future=8, raw=False):
+def load_flow(gran=15, past=24, future=8):
     o, d = load_flow_data('O', gran), load_flow_data('D', gran)
     flow = np.hstack((o, d))
 
@@ -77,8 +78,7 @@ def load_flow(gran=15, past=24, future=8, raw=False):
 
     # normalization
     flow_mean, flow_std = flow.mean(axis=0), flow.std(axis=0)
-    if not raw:
-        flow = (flow - flow_mean) / (flow_std + EPS)
+    flow = (flow - flow_mean) / (flow_std + EPS)
 
     # slice flow
     flow = flow.reshape((DAYS, -1, cols))
@@ -105,8 +105,7 @@ def load_flow(gran=15, past=24, future=8, raw=False):
     return features, labels, days, times, flow_mean, flow_std
 
 
-def split_dataset(data):
-    unit = data.shape[0] // DAYS
+def split_dataset(data, unit):
     data_train = data[:unit * DAYS_TRAIN]
     data_valid = data[unit * DAYS_TRAIN:unit * -DAYS_TEST]
     data_test = data[unit * -DAYS_TEST:]
