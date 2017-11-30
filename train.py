@@ -1,12 +1,15 @@
 import argparse
 
+import numpy as np
+
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-from torch.utils.data import TensorDataset, DataLoader
+# from torch.utils.data import TensorDataset, DataLoader
 
 import Data
 import Models
+import Loss
 
 parser = argparse.ArgumentParser(
     description='train.py',
@@ -24,7 +27,7 @@ parser.add_argument('-pdrop', type=float, default=0.1)
 parser.add_argument('-attn', action='store_true')
 parser.add_argument('-attn_type', type=str, default='general',
                     choices=['dot', 'general', 'concat'])
-parser.add_argument('-loss', type=str, default='MAPE',
+parser.add_argument('-loss', type=str, default='MSELoss',
                     choices=['WAPE', 'MAPE'])
 parser.add_argument('-weight_decay', type=float, default=0.00001)
 # train
@@ -57,25 +60,25 @@ else:
     print('Training seq2seq without Attention')
 
 # data
-inputs, targets, days, times, flow_mean, flow_std = Data.load_flow(
+inputs, targets, days, times, data_mean, data_std = Data.load_flow(
     gran=args.gran, past=args.past, future=args.future, raw=args.raw_flow)
 inputs_train, inputs_valid, inputs_test = Data.split_dataset(inputs)
 targets_train, targets_valid, targets_test = Data.split_dataset(targets)
-inputs_train = torch.FloatTensor(inputs_train)
-targets_train = torch.FloatTensor(targets_train)
-inputs_valid = torch.FloatTensor(inputs_valid)
-targets_valid = torch.FloatTensor(targets_valid)
-# inputs_train = Variable(inputs_train).transpose(0, 1)
-# targets_train = Variable(targets_train).transpose(0, 1)
-inputs_valid = Variable(inputs_valid).transpose(0, 1)
-targets_valid = Variable(targets_valid).transpose(0, 1)
+inputs_train = Variable(torch.FloatTensor(inputs_train)).transpose(0, 1)
+targets_train = Variable(torch.FloatTensor(targets_train)).transpose(0, 1)
+inputs_valid = Variable(torch.FloatTensor(inputs_valid)).transpose(0, 1)
+targets_valid = Variable(torch.FloatTensor(targets_valid)).transpose(0, 1)
+data_mean = Variable(torch.FloatTensor(data_mean))
+data_std = Variable(torch.FloatTensor(data_std))
 if args.gpuid:
     inputs_train = inputs_train.cuda()
     targets_train = targets_train.cuda()
     inputs_valid = inputs_valid.cuda()
     targets_valid = targets_valid.cuda()
-dataset = TensorDataset(inputs_train, targets_train)
-dataloader = DataLoader(dataset, batch_size=args.bsz, shuffle=True)
+    data_mean = data_mean.cuda()
+    data_std = data_std.cuda()
+# dataset = TensorDataset(inputs_train, targets_train)
+# dataloader = DataLoader(dataset, batch_size=args.bsz, shuffle=True)
 
 # model
 ndim = inputs_train.size(-1)
@@ -85,12 +88,9 @@ model = Models.seq2seq(args.past, args.future,
 if args.gpuid:
     model = model.cuda()
 
-criterion = nn.MSELoss()
+criterion = Loss.WAPE
 
-# optimizer = torch.optim.Adam(
-#     model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-# scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
-loss_min = 1
+loss_min = float('inf')
 lr_stop = 0
 
 # training
@@ -99,17 +99,12 @@ for epoch in range(args.nepoch):
         model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
     loss_train = []
-    # for inputs, targets in dataloader:
-    inputs, targets = inputs_train, targets_train
     for _ in range(args.niter):
-        inputs, targets = inputs_train, targets_train
-        inputs = Variable(inputs.transpose(0, 1))
-        targets = Variable(targets.transpose(0, 1))
         if args.attn:
-            outputs, attns = model(inputs, targets, args.gpuid, teach=True)
+            outputs, attns = model(inputs_train, targets_train, args.gpuid, True)
         else:
-            outputs = model(inputs, targets, args.gpuid, teach=True)
-        loss = criterion(outputs, targets)
+            outputs = model(inputs_train, targets_train, args.gpuid, True)
+        loss = criterion(outputs, targets_train)
         loss.backward()
         optimizer.step()
         loss_train.append(loss.data[0])
@@ -120,10 +115,12 @@ for epoch in range(args.nepoch):
     else:
         outputs = model(inputs_valid, targets_valid, args.gpuid)
     loss_valid = criterion(outputs, targets_valid).data[0]
-    print('%d lr: %.1e train: %.4f valid: %.4f' % (
-        epoch, args.lr, loss_train, loss_valid))
-
-    # scheduler.step(loss_valid)
+    outputs = outputs * data_std + data_mean
+    targets_valid = targets_valid * data_std + data_mean
+    wape = Loss.WAPE(outputs, targets_valid).data[0]
+    mape = Loss.MAPE(outputs, targets_valid).data[0]
+    print('%d lr: %.e train: %.4f valid: %.4f WAPE: %.4f MAPE: %.4f' % (
+        epoch, args.lr, loss_train, loss_valid, wape, mape))
 
     if loss_valid > loss_min:
         lr_stop += 1
@@ -138,3 +135,26 @@ for epoch in range(args.nepoch):
 
 
 torch.save(model, args.savepath)
+
+# testing
+if args.attn:
+    outputs, attns = model(inputs_test, targets_test, args.gpuid)
+    np.save('attns', attns.numpy())
+else:
+    outputs = model(inputs_test, targets_test, args.gpuid)
+
+loss = criterion(outputs, targets_test)
+outputs = outputs * data_std + data_mean
+targets_test = targets_test * data_std + data_mean
+wape = Loss.WAPE(outputs, targets_test).data[0]
+mape = Loss.MAPE(outputs, targets_test).data[0]
+
+print('MSE: %.4f WAPE: %.4f MAPE: %.4f' % (loss.data[0], wape, mape))
+
+
+# result
+def cuda2np(x):
+    return x.cpu().data.numpy()
+
+
+np.save('test_results', [cuda2np(targets_test), cuda2np(outputs)])

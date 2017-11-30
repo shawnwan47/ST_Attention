@@ -105,15 +105,15 @@ class AttnDecoderRNN(nn.Module):
         self.gru = nn.GRU(nhid, nhid, nlay, dropout=pdrop)
         self.fc_out = nn.Linear(nhid, ndim)
 
-    def forward(self, inp, hid, enc_hids):
+    def forward(self, inp, hid, encoder_outs):
         out = self.fc_in(inp)
         out = self.dropout(out)
         # bsz x len x ndim
         out = out.transpose(0, 1)
-        enc_hids = enc_hids.transpose(0, 1).transpose(1, 2)
-        attn = torch.bmm(self.attn_general(out), enc_hids)
+        encoder_outs = encoder_outs.transpose(0, 1).transpose(1, 2)
+        attn = torch.bmm(self.attn_general(out), encoder_outs)
         attn = F.softmax(attn.squeeze(1)).unsqueeze(1)
-        context = torch.bmm(attn, enc_hids.transpose(1, 2))
+        context = torch.bmm(attn, encoder_outs.transpose(1, 2))
         out = self.attn_comb(torch.cat((out, context), -1).transpose(0, 1))
 
         out, hid = self.gru(out, hid)

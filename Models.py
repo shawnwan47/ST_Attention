@@ -90,33 +90,35 @@ class seq2seq(nn.Module):
             self.decoder = Layers.AttnDecoderRNN(ndim, nhid, nlay, pdrop)
 
     def forward(self, inputs, targets, cuda=True, teach=False):
-        len_inp = inputs.size(0)
         bsz = inputs.size(1)
+        len_inp = inputs.size(0)
         len_targ = targets.size(0)
         # encoding
         hid = self.initHidden(bsz, cuda)
-        enc_outs = Variable(torch.zeros(len_inp, bsz, self.nhid))
-        enc_outs = enc_outs.cuda() if cuda else enc_outs
+        outputs_encoder = Variable(torch.zeros(len_inp, bsz, self.nhid))
+        outputs_encoder = outputs_encoder.cuda() if cuda else outputs_encoder
         for ei in range(len_inp):
-            enc_outs[ei], hid = self.encoder(inputs[ei].unsqueeze(0), hid)
-        outs = []
+            outputs_encoder[ei], hid = self.encoder(inputs[ei].unsqueeze(0), hid)
+
+        # decoding
+        outputs = []
         attns = []
         dec_inp = inputs[-1].unsqueeze(0)
         for di in range(len_targ):
             if self.attn:
-                dec_out, hid, attn = self.decoder(dec_inp, hid, enc_outs)
+                dec_out, hid, attn = self.decoder(dec_inp, hid, outputs_encoder)
                 attns.append(attn)
             else:
                 dec_out, hid = self.decoder(dec_inp, hid)
-            outs.append(dec_out)
+            outputs.append(dec_out)
             if teach and random.random() < 0.5:
                 dec_inp = targets[di].unsqueeze(0)
             else:
                 dec_inp = dec_out
         if self.attn:
             attns = torch.cat(attns, 0)
-        outs = torch.cat(outs, 0)
-        return (outs, attns) if self.attn else outs
+        outputs = torch.cat(outputs, 0)
+        return (outputs, attns) if self.attn else outputs
 
     def initHidden(self, bsz, cuda):
         ret = Variable(torch.zeros(self.nlay, bsz, self.nhid))
