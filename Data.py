@@ -39,6 +39,8 @@ def load_adj(contrib=0.01):
 
 
 def load_flow_data(affix='D', gran=15):
+    assert gran in [5, 10, 15, 20, 30, 60]
+    steps = gran // 5
     filepath = DATA_PATH + affix + '.csv'
     if os.path.exists(filepath):
         flow = pd.read_csv(filepath, index_col=0, parse_dates=True)
@@ -53,36 +55,49 @@ def load_flow_data(affix='D', gran=15):
 
     flow = flow.astype(float).as_matrix()
 
-    steps = gran // 5
     # sum up steps interval
     flow = flow.reshape((DAYS, -1, flow.shape[-1]))
-    for day in range(DAYS):
-        for i in range(flow.shape[0] - steps):
-            flow[day, i, :] = flow[day, i:i + steps, :].sum(axis=0)
+    for i in range(flow.shape[1] - steps):
+        flow[:, i, :] = flow[:, i:i + steps, :].sum(axis=1)
     flow = flow[:, :-steps]
 
+    # trim the head, start at 6
+    head = 360 // gran
+    flow = flow[:, head:, :]
     # trim the tail
     tail = flow.shape[1] % steps
-    if tail:
-        flow = flow[:, :-tail]
-    return flow.reshape((-1, flow.shape[-1]))
+    flow = flow[:, :-tail] if tail else flow
+
+    # normalization
+    flow = flow.reshape((-1, flow.shape[-1]))
+    flow_mean = flow.mean(-1)
+    flow_std = flow.std(-1)
+    flow = (flow - flow_mean) / (flow_std + EPS)
+
+    # slicing flow
+    flow = flow.reshape((DAYS, -1, flow.shape[-1]))
+    flow = [flow[:, i::steps, :] for i in range(steps)]
+
+    # compute days and times
+    nday, ntime, _ = flow.shape
+    days, times = np.zeros((nday, ntime, 1)), np.zeros((nday, ntime))
+    for iday in range(nday):
+        day = (iday % DAYS - WEEKDAY) % 7
+        for itime in range(ntime):
+            pass
+
+    return np.concatenate(flow), flow_mean, flow_std, days, times
 
 
 # data for model
 def load_flow(gran=15, past=24, future=8):
-    o, d = load_flow_data('O', gran), load_flow_data('D', gran)
-    flow = np.hstack((o, d))
+    o, o_mean, o_std = load_flow_data('O', gran)
+    d, d_mean, d_std = load_flow_data('D', gran)
+    flow = np.concatenate((o, d), -1)
+    flow_mean = np.concatenate((o_mean, d_mean))
+    flow_std = np.concatenate((o_std, d_std))
 
-    cols = flow.shape[-1]
-    slices = gran // 5
-
-    # normalization
-    flow_mean, flow_std = flow.mean(axis=0), flow.std(axis=0)
-    flow = (flow - flow_mean) / (flow_std + EPS)
-
-    # slice flow
-    flow = flow.reshape((DAYS, -1, cols))
-    flow = [flow[:, i::slices, :] for i in range(slices)]
+    days, length, stations = flow.shape
 
     features, labels, days, times = [], [], [], []
     start6 = 360 // gran  # start at 6
