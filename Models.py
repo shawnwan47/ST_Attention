@@ -6,56 +6,40 @@ import torch.nn.functional as F
 
 import Layers
 
-
-class LR(nn.Module):
-    def __init__(self, nin, nout):
-        super(LR, self).__init__()
-        self.linear = nn.Linear(nin, nout)
-
-    def forward(self, x):
-        return self.linear(x.view(x.size(0), -1))
+from Attention import GlobalAttention
 
 
-class NN(nn.Module):
-    def __init__(self, nin, nout, nhid):
-        super(NN, self).__init__()
-        self.dropout = nn.Dropout()
-        self.relu = nn.ReLU()
-        self.fc1 = nn.Linear(nin, nhid)
-        self.fc2 = nn.Linear(nhid, nout)
-
-    def forward(self, x):
-        out = self.fc1(x.view(x.size(0), -1))
-        out = self.relu(self.dropout(out))
-        return self.fc2(out)
-
-
-class RNN(nn.Module):
-    def __init__(self, rnn_type, ndim, nhid, nlay):
-        super(RNN, self).__init__()
-        self.rnn_type = rnn_type
+class RNNAttn(nn.Module):
+    def __init__(self, ndim, nhid, nlay, pdrop=0.5, rnn_type='GRU',
+                 attn=False, attn_type='general'):
+        super(RNNAttn, self).__init__()
+        assert rnn_type in ['LSTM', 'GRU']
+        self.ndim = ndim
         self.nhid = nhid
         self.nlay = nlay
-        if rnn_type in ['LSTM', 'GRU']:
-            self.rnn = getattr(nn, rnn_type)(
-                ndim, nhid, nlay, dropout=0.5)
-        else:
-            nonlinearity = {'RNN_TANH': 'tanh', 'RNN_RELU': 'relu'}[rnn_type]
-            self.rnn = nn.RNN(
-                ndim, nhid, nlay,
-                nonlinearity=nonlinearity, dropout=0.5)
-        self.decoder = nn.Linear(nhid, ndim)
+        self.rnn_type = rnn_type
+        self.rnn = getattr(nn, rnn_type)(ndim, nhid, nlay, dropout=pdrop)
+        self.attn = attn
+        self.attention_model = GlobalAttention(ndim, attn_type)
+        self.fc = nn.Linear(nhid, ndim)
 
-    def forward(self, x):
-        weight = next(self.parameters()).data
-        bsz = x.size(0)
-        if self.rnn_type == 'LSTM':
-            hid = (Variable(weight.new(self.nlay, bsz, self.nhid).zero_()),
-                   Variable(weight.new(self.nlay, bsz, self.nhid).zero_()))
+    def forward(self, inputs, hiddens, context=None):
+        outputs, hiddens = self.rnn(inputs, hiddens)
+        if self.attn:
+            assert context is not None
+            outputs, attentions = self.attention_model(outputs, context)
+        outputs = inputs + self.fc(outputs)
+        if self.attn:
+            return outputs, hiddens, attentions
         else:
-            hid = Variable(weight.new(self.nlay, bsz, self.nhid).zero_())
-        out, _ = self.rnn(x, hid)
-        return self.decoder(out.contiguous().view(-1, self.nhid))
+            return outputs, hiddens
+
+    def initHidden(self, bsz):
+        if self.rnn_type is 'LSTM':
+            return (Variable(torch.zeros(self.nlay, bsz, self.nhid)),
+                    Variable(torch.zeros(self.nlay, bsz, self.nhid)))
+        else:
+            return Variable(torch.zeros(self.nlay, bsz, self.nhid))
 
 
 class GCN(nn.Module):

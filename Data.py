@@ -112,10 +112,3 @@ def load_flow_img(gran=15, past=16, future=4):
     inputs, targets = np.asarray(inputs), np.asarray(targets)
     days_img, times_img = np.asarray(days_img), np.asarray(times_img)
     return inputs, targets, days_img, times_img, flow_mean, flow_std
-
-
-def split_dataset(data, unit):
-    data_train = data[:unit * DAYS_TRAIN]
-    data_valid = data[unit * DAYS_TRAIN:unit * -DAYS_TEST]
-    data_test = data[unit * -DAYS_TEST:]
-    return data_train, data_valid, data_test
