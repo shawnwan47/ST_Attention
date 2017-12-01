@@ -38,10 +38,8 @@ def load_adj(contrib=0.01):
     return np.vstack((oood, dodd))
 
 
-def load_flow_data(affix='D', gran=15):
-    assert gran in [5, 10, 15, 20, 30, 60]
-    steps = gran // 5
-    filepath = DATA_PATH + affix + '.csv'
+def load_flow_data(affix='O'):
+    filepath = DATA_PATH + 'O' + '.csv'
     if os.path.exists(filepath):
         flow = pd.read_csv(filepath, index_col=0, parse_dates=True)
     else:
@@ -52,8 +50,15 @@ def load_flow_data(affix='D', gran=15):
             pd.read_csv(DATA_PATH + x, index_col=0, parse_dates=True)
             for x in data_files])
         flow.to_csv(filepath, index=True)
+    return flow
 
-    flow = flow.astype(float).as_matrix()
+
+def load_flow_seq(gran=15):
+    assert gran in [5, 10, 15, 20, 30, 60]
+    steps = gran // 5
+    origin = load_flow_data('O').astype(float).as_matrix()
+    destination = load_flow_data('D').astype(float).as_matrix()
+    flow = np.concatenate((origin, destination), -1)
 
     # sum up steps interval
     flow = flow.reshape((DAYS, -1, flow.shape[-1]))
@@ -61,63 +66,52 @@ def load_flow_data(affix='D', gran=15):
         flow[:, i, :] = flow[:, i:i + steps, :].sum(axis=1)
     flow = flow[:, :-steps]
 
-    # trim the head, start at 6
-    head = 360 // gran
-    flow = flow[:, head:, :]
     # trim the tail
     tail = flow.shape[1] % steps
     flow = flow[:, :-tail] if tail else flow
 
     # normalization
     flow = flow.reshape((-1, flow.shape[-1]))
-    flow_mean = flow.mean(-1)
-    flow_std = flow.std(-1)
+    flow_mean = flow.mean(0)
+    flow_std = flow.std(0)
     flow = (flow - flow_mean) / (flow_std + EPS)
+    flow = flow.reshape((DAYS, -1, flow.shape[-1]))
 
     # slicing flow
-    flow = flow.reshape((DAYS, -1, flow.shape[-1]))
-    flow = [flow[:, i::steps, :] for i in range(steps)]
+    flow = np.concatenate([flow[:, i::steps, :] for i in range(steps)])
 
     # compute days and times
     nday, ntime, _ = flow.shape
-    days, times = np.zeros((nday, ntime, 1)), np.zeros((nday, ntime))
+    days, times = np.zeros((nday, ntime, 1)), np.zeros((nday, ntime, 1))
     for iday in range(nday):
-        day = (iday % DAYS - WEEKDAY) % 7
-        for itime in range(ntime):
-            pass
+        days[iday, :] = (iday % DAYS - WEEKDAY) % 7
+    for itime in range(ntime):
+        times[:, itime] = itime
 
-    return np.concatenate(flow), flow_mean, flow_std, days, times
+    return flow, days, times, flow_mean, flow_std
 
 
-# data for model
-def load_flow(gran=15, past=24, future=8):
-    o, o_mean, o_std = load_flow_data('O', gran)
-    d, d_mean, d_std = load_flow_data('D', gran)
-    flow = np.concatenate((o, d), -1)
-    flow_mean = np.concatenate((o_mean, d_mean))
-    flow_std = np.concatenate((o_std, d_std))
+def load_flow_img(gran=15, past=16, future=4):
+    flow, days, times, flow_mean, flow_std = load_flow_seq(gran)
 
-    days, length, stations = flow.shape
-
-    features, labels, days, times = [], [], [], []
-    start6 = 360 // gran  # start at 6
-    for day in range(DAYS):
-        weekday = (day - WEEKDAY) % 7
-        for f in flow:
-            for t in range(start6, f.shape[1] - future):
-                if t < past:
-                    # pad zeros as past
-                    padding = np.zeros((past - t, cols))
-                    feature = np.vstack((padding, f[day, :t]))
-                else:
-                    feature = f[day, t - past:t]
-                features.append(feature)
-                labels.append(f[day, t:t + future, :])
-                days.append(weekday)
-                times.append(t - past)
-    features, labels = np.asarray(features), np.asarray(labels)
-    days, times = np.asarray(days), np.asarray(times)
-    return features, labels, days, times, flow_mean, flow_std
+    nday, ntime, _ = flow.shape
+    inputs, targets, days_img, times_img = [], [], [], []
+    start6 = 360 // gran
+    for d in range(nday):
+        for t in range(start6, ntime - future):
+            if t < past:
+                # pad zeros as past
+                padding = np.zeros((past - t, cols))
+                feature = np.vstack((padding, flow[d, :t]))
+            else:
+                feature = flow[d, t - past:t]
+            inputs.append(feature)
+            targets.append(flow[d, t:t + future, :])
+            days_img.append(days[d, t])
+            times_img.append(times[d, t])
+    inputs, targets = np.asarray(inputs), np.asarray(targets)
+    days_img, times_img = np.asarray(days_img), np.asarray(times_img)
+    return inputs, targets, days_img, times_img, flow_mean, flow_std
 
 
 def split_dataset(data, unit):

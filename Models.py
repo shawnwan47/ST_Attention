@@ -61,7 +61,6 @@ class RNN(nn.Module):
 class GCN(nn.Module):
     def __init__(self, nfeat, nhid, nclass, dropout):
         super(GCN, self).__init__()
-
         self.gc1 = Layers.GraphConvolution(nfeat, nhid)
         self.gc2 = Layers.GraphConvolution(nhid, nclass)
         self.dropout = dropout
