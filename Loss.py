@@ -1,5 +1,5 @@
 import torch
-from Constants import EPS
+from Consts import EPS
 
 
 def Denormalize(data_norm, data_mean, data_std):

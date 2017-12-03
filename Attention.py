@@ -27,6 +27,11 @@ class GlobalAttention(nn.Module):
         self.softmax = nn.Softmax()
         self.tanh = nn.Tanh()
 
+        self.mask = None
+
+    def applyMask(self, mask):
+        self.mask = mask
+
     def score(self, h_t, h_s):
         src_batch, src_len, src_dim = h_s.size()
         tgt_batch, tgt_len, tgt_dim = h_t.size()
@@ -60,7 +65,7 @@ class GlobalAttention(nn.Module):
     def forward(self, inputs, context):
         """
         inputs (FloatTensor): batch x tgt_len x dim: decoder's rnn's output.
-        context (FloatTensor): batch x src_len x dim: src hidden states
+        context (FloatTensor): batch x src_len x dim: encoder's rnn's outputs.
         """
         # one step inputs
         if inputs.dim() == 2:
@@ -77,6 +82,9 @@ class GlobalAttention(nn.Module):
 
         # compute attention scores, as in Luong et al.
         align = self.score(inputs, context)
+
+        if self.mask is not None:
+            align.data.masked_fill_(self.mask, -float('inf'))
 
         # Weighted average context vector c
         align_vectors = self.softmax(align.view(batch * targetL, sourceL))

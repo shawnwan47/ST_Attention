@@ -1,56 +1,63 @@
-import time
-import math
-
 import torch
 from torch.autograd import Variable
 
 import Data
-import Consts
+from Consts import DAYS, DAYS_TRAIN, DAYS_TEST
 
 
-def split_data(data, unit):
-    data_train = data[:unit * Consts.DAYS_TRAIN]
-    data_valid = data[unit * Consts.DAYS_TRAIN:unit * -Consts.DAYS_TEST]
-    data_test = data[unit * -Consts.DAYS_TEST:]
+def split_data(data, dim):
+    assert dim in [0, 1]
+    oneday = data.size(dim) // DAYS
+    if dim == 0:
+        data_train = data[:oneday * DAYS_TRAIN]
+        data_valid = data[oneday * DAYS_TRAIN:oneday * -DAYS_TEST]
+        data_test = data[oneday * -DAYS_TEST:]
+    elif dim == 1:
+        data_train = data[:, :oneday * DAYS_TRAIN]
+        data_valid = data[:, oneday * DAYS_TRAIN:oneday * -DAYS_TEST]
+        data_test = data[:, oneday * -DAYS_TEST:]
     return data_train, data_valid, data_test
 
 
 def load_data(args):
     if args.data_type == 'seq':
-        flow, days, times, flow_mean, flow_std = Data.load_flow(
+        inputs, targets, daytimes, flow_mean, flow_std = Data.load_flow_seq(
             gran=args.gran)
     else:
-        flow, targets, days, times, flow_mean, flow_std = Data.load_flow(
+        inputs, targets, daytimes, flow_mean, flow_std = Data.load_flow_img(
             gran=args.gran, past=args.past, future=args.future)
-        targets = torch.FloatTensor(targets)
-        targets = targets.cuda() if args.gpuid else targets
-    flow = Variable(torch.FloatTensor(flow))
-    days = Variable(torch.LongTensor(days))
-    times = Variable(torch.LongTensor(times))
+    inputs = Variable(torch.FloatTensor(inputs))
+    targets = Variable(torch.FloatTensor(targets))
+    daytimes = Variable(torch.LongTensor(daytimes))
     flow_mean = Variable(torch.FloatTensor(flow_mean))
     flow_std = Variable(torch.FloatTensor(flow_std))
     if args.gpuid:
-        flow = flow.cuda()
-        days = days.cuda()
-        times = times.cuda()
+        inputs = inputs.cuda()
+        targets = targets.cuda()
+        daytimes = daytimes.cuda()
         flow_mean = flow_mean.cuda()
         flow_std = flow_std.cuda()
-    unit = flow.size(0) // Consts.DAYS
-    flow_train, flow_valid, flow_test = split_data(flow, unit)
-    days_train, days_valid, days_test = split_data(days, unit)
-    times_train, times_valid, times_test = split_data(times, unit)
+    dim = 0
     if args.data_type == 'seq':
-        return (flow_train, flow_valid, flow_test,
-                days_train, days_valid, days_test,
-                times_train, times_valid, times_test,
-                flow_mean, flow_std)
-    else:
-        targets_train, targets_valid, targets_test = split_data(targets, unit)
-        return (flow_train, flow_valid, flow_test,
-                targets_train, targets_valid, targets_test,
-                days_train, days_valid, days_test,
-                times_train, times_valid, times_test,
-                flow_mean, flow_std)
+        dim = 1
+        inputs = inputs.transpose(0, 1)
+        targets = targets.transpose(0, 1)
+        daytimes = daytimes.transpose(0, 1)
+    inputs_train, inputs_valid, inputs_test = split_data(inputs, dim)
+    targets_train, targets_valid, targets_test = split_data(targets, dim)
+    daytimes_train, daytimes_valid, daytimes_test = split_data(daytimes, dim)
+    return (inputs_train, inputs_valid, inputs_test,
+            targets_train, targets_valid, targets_test,
+            daytimes_train, daytimes_valid, daytimes_test,
+            flow_mean, flow_std)
+
+
+def modelname(args):
+    name = args.description
+    name += 'atn' + args.attn_type if args.attn else ''
+    name += 'hid' + args.nhid
+    name += 'lay' + args.nlay
+    return name
 
 
 def tensor2VarRNN(t):

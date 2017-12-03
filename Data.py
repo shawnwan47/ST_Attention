@@ -53,7 +53,7 @@ def load_flow_data(affix='O'):
     return flow
 
 
-def load_flow_seq(gran=15):
+def load_flow(gran=15):
     assert gran in [5, 10, 15, 20, 30, 60]
     steps = gran // 5
     origin = load_flow_data('O').astype(float).as_matrix()
@@ -80,22 +80,30 @@ def load_flow_seq(gran=15):
     # slicing flow
     flow = np.concatenate([flow[:, i::steps, :] for i in range(steps)])
 
-    # compute days and times
+    # compute daytimes
     nday, ntime, _ = flow.shape
-    days, times = np.zeros((nday, ntime, 1)), np.zeros((nday, ntime, 1))
+    daytimes = np.zeros((nday, ntime, 2)).astype(int)
     for iday in range(nday):
-        days[iday, :] = (iday % DAYS - WEEKDAY) % 7
+        daytimes[iday, :, 0] = (iday % DAYS - WEEKDAY) % 7
     for itime in range(ntime):
-        times[:, itime] = itime
+        daytimes[:, itime, 1] = itime
 
-    return flow, days, times, flow_mean, flow_std
+    return flow, daytimes, flow_mean, flow_std
+
+
+def load_flow_seq(gran=15):
+    flow, daytimes, flow_mean, flow_std = load_flow(gran)
+    inputs = flow[:, :-1]
+    targets = flow[:, 1:]
+    daytimes = daytimes[:, :-1]
+    return inputs, targets, daytimes, flow_mean, flow_std
 
 
 def load_flow_img(gran=15, past=16, future=4):
-    flow, days, times, flow_mean, flow_std = load_flow_seq(gran)
+    flow, daytimes, flow_mean, flow_std = load_flow(gran)
 
     nday, ntime, _ = flow.shape
-    inputs, targets, days_img, times_img = [], [], [], []
+    inputs, targets, daytimes_img = [], [], []
     start6 = 360 // gran
     for d in range(nday):
         for t in range(start6, ntime - future):
@@ -107,8 +115,7 @@ def load_flow_img(gran=15, past=16, future=4):
                 feature = flow[d, t - past:t]
             inputs.append(feature)
             targets.append(flow[d, t:t + future, :])
-            days_img.append(days[d, t])
-            times_img.append(times[d, t])
+            daytimes_img.append(daytimes[d, t])
     inputs, targets = np.asarray(inputs), np.asarray(targets)
-    days_img, times_img = np.asarray(days_img), np.asarray(times_img)
-    return inputs, targets, days_img, times_img, flow_mean, flow_std
+    daytimes_img = np.asarray(daytimes_img)
+    return inputs, targets, daytimes_img, flow_mean, flow_std
