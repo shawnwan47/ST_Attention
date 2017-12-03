@@ -2,6 +2,7 @@ import sys
 
 DATA_PATH = './data/'
 FIG_PATH = './fig/'
+MODEL_PATH = './model/'
 
 DAYS = 22
 WEEKDAY = 5  # (day - WEEKDAY) % 7

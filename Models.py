@@ -20,7 +20,7 @@ class RNN(nn.Module):
         self.nlay = args.nlay
         self.rnn = getattr(nn, self.rnn_type)(
             args.ndim, args.nhid, args.nlay,
-            dropout=args.pdrop, bidirectional=args.bi)
+            dropout=args.pdrop, bidirectional=args.bidirectional)
 
     def forward(self, inputs, hiddens):
         return self.rnn(inputs, hiddens)
@@ -50,10 +50,10 @@ class RNNAttn(RNN):
         aeq(ndim, ndim_)
         context = torch.cat((context, context_), 1)
         # mask unseen data
-        mask = torch.zeros(bsz, tgtL, srcL + tgtL)
+        mask = torch.zeros(bsz, tgtL, srcL + tgtL).type(torch.ByteTensor)
         for i in range(tgtL):
             mask[:, i, srcL + i:] = 1
-        mask = mask.cuda() if context.is_cuda() else mask
+        mask = mask.cuda() if context.is_cuda else mask
         self.attention_model.applyMask(mask)
         # compute outputs and attentions
         outputs, attentions = self.attention_model(context_, context)
@@ -62,9 +62,9 @@ class RNNAttn(RNN):
         return outputs, hiddens, context, attentions
 
 
-class Flow2Flow(nn.Module):
+class Seq2Seq(nn.Module):
     def __init__(self, args):
-        super(Flow2Flow, self).__init__()
+        super(Seq2Seq, self).__init__()
         self.attention = args.attention
         if self.attention:
             self.rnn = RNNAttn(args)
@@ -88,18 +88,18 @@ class Flow2Flow(nn.Module):
                 outputs, hiddens = self.rnn(tgt, hiddens)
             outputs = tgt + self.linear_out(self.dropout(outputs))
         else:
-            outputs = tgt.clone().fill_(0)
-            attentions = torch.zeros(tgtL, bsz, srcL)
+            outputs = tgt.clone()
+            attentions = Variable(torch.zeros(tgtL, bsz, srcL + tgtL))
             inp = tgt[0].unsqueeze(0)
             for i in range(tgtL):
                 if self.attention:
-                    outputs[i], hiddens, context, attn = self.rnn(
+                    res, hiddens, context, attn = self.rnn(
                         inp, hiddens, context)
-                    attentions[i, :, :srcL + tgtL] = attn
+                    attentions[i, :, :srcL + i] = attn[0, :, :-1]
                 else:
-                    outputs[i], hiddens = self.rnn(inp, hiddens)
-                outputs[i] = inp + outputs[i]
-                inp = outputs[i].clone()
+                    res, hiddens = self.rnn(inp, hiddens)
+                outputs[i] = inp + self.linear_out(self.dropout(res))
+                inp = outputs[i].clone().unsqueeze(0)
         if self.attention:
             return outputs, hiddens, context, attentions
         else:

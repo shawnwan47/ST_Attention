@@ -2,7 +2,7 @@ import torch
 from torch.autograd import Variable
 
 import Data
-from Consts import DAYS, DAYS_TRAIN, DAYS_TEST
+from Consts import DAYS, DAYS_TRAIN, DAYS_TEST, MODEL_PATH
 
 
 def split_data(data, dim):
@@ -26,11 +26,11 @@ def load_data(args):
     else:
         inputs, targets, daytimes, flow_mean, flow_std = Data.load_flow_img(
             gran=args.gran, past=args.past, future=args.future)
-    inputs = Variable(torch.FloatTensor(inputs))
-    targets = Variable(torch.FloatTensor(targets))
-    daytimes = Variable(torch.LongTensor(daytimes))
-    flow_mean = Variable(torch.FloatTensor(flow_mean))
-    flow_std = Variable(torch.FloatTensor(flow_std))
+    inputs = torch.FloatTensor(inputs)
+    targets = torch.FloatTensor(targets)
+    daytimes = torch.LongTensor(daytimes)
+    flow_mean = torch.FloatTensor(flow_mean)
+    flow_std = torch.FloatTensor(flow_std)
     if args.gpuid:
         inputs = inputs.cuda()
         targets = targets.cuda()
@@ -52,12 +52,12 @@ def load_data(args):
             flow_mean, flow_std)
 
 
-def modelname(args):
-    name = args.description
-    name += 'atn' + args.attn_type if args.attn else ''
-    name += 'hid' + args.nhid
-    name += 'lay' + args.nlay
-    return name
+def modelpath(args):
+    path = MODEL_PATH
+    path += 'atn' + args.attention_type if args.attention else ''
+    path += 'hid' + args.nhid
+    path += 'lay' + args.nlay
+    return path + '.pt'
 
 
 def tensor2VarRNN(t):

@@ -53,7 +53,7 @@ def load_flow_data(affix='O'):
     return flow
 
 
-def load_flow(gran=15):
+def load_flow(gran=15, start_time=6):
     assert gran in [5, 10, 15, 20, 30, 60]
     steps = gran // 5
     origin = load_flow_data('O').astype(float).as_matrix()
@@ -65,6 +65,10 @@ def load_flow(gran=15):
     for i in range(flow.shape[1] - steps):
         flow[:, i, :] = flow[:, i:i + steps, :].sum(axis=1)
     flow = flow[:, :-steps]
+
+    # trim the head
+    head = start_time * 60 // 5
+    flow = flow[:, head:]
 
     # trim the tail
     tail = flow.shape[1] % steps
@@ -91,7 +95,7 @@ def load_flow(gran=15):
     return flow, daytimes, flow_mean, flow_std
 
 
-def load_flow_seq(gran=15):
+def load_flow_seq(gran=15, start_time=6):
     flow, daytimes, flow_mean, flow_std = load_flow(gran)
     inputs = flow[:, :-1]
     targets = flow[:, 1:]
@@ -99,14 +103,13 @@ def load_flow_seq(gran=15):
     return inputs, targets, daytimes, flow_mean, flow_std
 
 
-def load_flow_img(gran=15, past=16, future=4):
+def load_flow_img(gran=15, past=16, future=4, start_time=6):
     flow, daytimes, flow_mean, flow_std = load_flow(gran)
 
     nday, ntime, _ = flow.shape
     inputs, targets, daytimes_img = [], [], []
-    start6 = 360 // gran
     for d in range(nday):
-        for t in range(start6, ntime - future):
+        for t in range(ntime - future):
             if t < past:
                 # pad zeros as past
                 padding = np.zeros((past - t, cols))
