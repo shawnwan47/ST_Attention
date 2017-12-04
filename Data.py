@@ -53,7 +53,7 @@ def load_flow_data(affix='O'):
     return flow
 
 
-def load_flow(gran=15, start_time=6):
+def load_flow(gran=15, start_time=6, end_time=22):
     assert gran in [5, 10, 15, 20, 30, 60]
     steps = gran // 5
     origin = load_flow_data('O').astype(float).as_matrix()
@@ -66,13 +66,14 @@ def load_flow(gran=15, start_time=6):
         flow[:, i, :] = flow[:, i:i + steps, :].sum(axis=1)
     flow = flow[:, :-steps]
 
-    # trim the head
+    # trim the head and tail
     head = start_time * 60 // 5
-    flow = flow[:, head:]
+    tail = end_time * 60 // 5
+    flow = flow[:, head:tail]
 
-    # trim the tail
-    tail = flow.shape[1] % steps
-    flow = flow[:, :-tail] if tail else flow
+    # trim the residual
+    res = flow.shape[1] % steps
+    flow = flow[:, :-res] if res else flow
 
     # normalization
     flow = flow.reshape((-1, flow.shape[-1]))
@@ -95,16 +96,18 @@ def load_flow(gran=15, start_time=6):
     return flow, daytimes, flow_mean, flow_std
 
 
-def load_flow_seq(gran=15, start_time=6):
-    flow, daytimes, flow_mean, flow_std = load_flow(gran)
+def load_flow_seq(args):
+    flow, daytimes, flow_mean, flow_std = load_flow(
+        args.gran, args.start_time, args.end_time)
     inputs = flow[:, :-1]
     targets = flow[:, 1:]
     daytimes = daytimes[:, :-1]
     return inputs, targets, daytimes, flow_mean, flow_std
 
 
-def load_flow_img(gran=15, past=16, future=4, start_time=6):
-    flow, daytimes, flow_mean, flow_std = load_flow(gran)
+def load_flow_img(args):
+    flow, daytimes, flow_mean, flow_std = load_flow(
+        args.gran, args.start_time, args.end_time)
 
     nday, ntime, _ = flow.shape
     inputs, targets, daytimes_img = [], [], []

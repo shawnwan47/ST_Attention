@@ -2,13 +2,8 @@ import torch
 from Consts import EPS
 
 
-def Denormalize(data_norm, data_mean, data_std):
-    return data_norm * data_std + data_mean
-
-
 def WAPE(outputs, targets):
-    loss = torch.abs(targets - outputs)
-    return 2 * loss.sum(1).div((targets + outputs).sum(1) + EPS).mean()
+    return torch.abs(targets - outputs).sum() / targets.sum()
 
 
 def MAPE(outputs, targets):

@@ -27,7 +27,7 @@ class RNN(nn.Module):
 
     def encode(self, inputs, hiddens):
         context, hiddens = self.rnn(inputs, hiddens)
-        return context.transpose(0, 1), hiddens
+        return context.transpose(0, 1).contiguous(), hiddens
 
     def initHidden(self, inputs):
         hiddens = Variable(torch.zeros(self.nlay, inputs.size(1), self.nhid))
@@ -88,6 +88,7 @@ class Seq2Seq(nn.Module):
                 outputs, hiddens = self.rnn(tgt, hiddens)
             outputs = tgt + self.linear_out(self.dropout(outputs))
         else:
+            # inputfeeding prediction
             outputs = tgt.clone()
             attentions = Variable(torch.zeros(tgtL, bsz, srcL + tgtL))
             inp = tgt[0].unsqueeze(0)

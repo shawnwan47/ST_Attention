@@ -20,12 +20,8 @@ def split_data(data, dim):
 
 
 def load_data(args):
-    if args.data_type == 'seq':
-        inputs, targets, daytimes, flow_mean, flow_std = Data.load_flow_seq(
-            gran=args.gran)
-    else:
-        inputs, targets, daytimes, flow_mean, flow_std = Data.load_flow_img(
-            gran=args.gran, past=args.past, future=args.future)
+    data = getattr(Data, 'load_flow_' + args.data_type)(args)
+    inputs, targets, daytimes, flow_mean, flow_std = data
     inputs = torch.FloatTensor(inputs)
     targets = torch.FloatTensor(targets)
     daytimes = torch.LongTensor(daytimes)
@@ -54,10 +50,10 @@ def load_data(args):
 
 def modelpath(args):
     path = MODEL_PATH
-    path += 'atn' + args.attention_type if args.attention else ''
-    path += 'hid' + args.nhid
-    path += 'lay' + args.nlay
-    return path + '.pt'
+    path += 'atn_' + args.attention_type if args.attention else ''
+    path += 'hid' + str(args.nhid)
+    path += 'lay' + str(args.nlay)
+    return path
 
 
 def tensor2VarRNN(t):
