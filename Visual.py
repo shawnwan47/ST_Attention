@@ -1,11 +1,31 @@
-from collections import Counter
 import os
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import numpy as np
 
-from Constants import FIG_PATH
+
+def saveclf(figpath):
+    dirname = os.path.dirname(figpath)
+    if not os.path.exists(dirname):
+        os.makedirs(os.path.dirname(figpath))
+    plt.savefig(figpath + '.png')
+    plt.clf()
+
+
+def plotTimeTicks(args, length, axis='x', offset=True):
+    hour = 60 // args.gran
+    if offset:
+        start_time = args.start_time + args.past // hour
+    else:
+        start_time = args.start_time
+    ticks = np.arange(length // hour + 1).astype(int)
+    labels = list(map(lambda x: str(x) + ':00', ticks + start_time))
+    ticks *= hour
+    if axis is 'x':
+        plt.xticks(ticks, labels, rotation=45)
+    else:
+        plt.yticks(ticks, labels)
 
 
 def showPlot(points):
@@ -17,64 +37,33 @@ def showPlot(points):
     plt.plot(points)
 
 
-def var_avg(flow):
-    # variation to historical average
-    hist_len = flow.shape[0] // 22 * 14
-    flow_hist = flow.iloc[:hist_len]
-    flow_futr = flow.iloc[hist_len:]
-    day = flow_hist.index.dayofweek
-    time = flow_hist.index.time
-    daytime = list(zip(day, time))
-    hist_avg = dict()
-    for dt in Counter(daytime).keys():
-        idx = (day == dt[0]) & (time == dt[1])
-        hist_avg[dt] = flow_hist[idx].mean().tolist()
-    flow_pred = []
-    for dt in list(zip(flow_futr.index.dayofweek, flow_futr.index.time)):
-        flow_pred.append(hist_avg[dt])
-    flow_pred = np.asarray(flow_pred)
-    loss = (flow_futr - flow_pred).abs().sum(1) / flow_futr.sum(1)
-    loss = loss.as_matrix()
-    return loss
+def plot_flow_real(flow, flow_max, args):
+    plt.clf()
+    plt.plot(flow, label='Real', color='k', linewidth=3)
+    length = flow.shape[0]
+    plotTimeTicks(args, length, axis='x', offset=True)
+    plt.ylim(0, num2ceil(flow_max))
 
 
-def var_prv(flow):
-    time = flow.index.time
-    loss = (flow.iloc[1:].as_matrix() - flow.iloc[:-1].as_matrix())
-    loss = np.abs(loss).sum(1) / flow.iloc[1:].sum(1).as_matrix()
-    loss = loss[time[1:] != time[0]]
-    return loss
+def plot_flow_steps(flows):
+    xlen, steps = flows.shape
+    x = np.arange(xlen)
+    for step in range(steps):
+        plt.plot(x + step, flows[:, step], label=str(step) + '-step')
 
 
-def show_attns(attns, granularity, folderpath='attns/'):
-    fig_path = FIG_PATH + folderpath
-    if not os.path.exists(fig_path):
-        os.makedirs(fig_path)
-    ylen, xlen = attns[0].shape
-    assert(60 % granularity == 0)
-    step = 60 // granularity
-
-    for i in range(attns.shape[0]):
-        def int2time(x):
-            return str(int(x)) + ':00'
-        plt.clf()
-        xstart = min(xlen, 6 * step + i) // step  # forget yesterday
-        xticks = np.arange(0, xlen, step)[-xstart:] + 3.5 - i % step
-        yticks = np.arange(0, ylen, step) + 3.5 - i % step
-        xlabels = 6 + (xticks + i - xlen) // step
-        ylabels = 6 + (yticks + i) // step
-        xlabels = list(map(int2time, xlabels))
-        ylabels = list(map(int2time, ylabels))
-        plt.imshow(attns[i], cmap='gray', vmin=0, vmax=1)
-        plt.xticks(xticks, xlabels, rotation=45)
-        plt.yticks(yticks, ylabels)
-        plt.xlabel('Past')
-        plt.ylabel('Future')
-        title = str(6 + i // step) + ' - ' + str(i % step * granularity)
-        plt.title(title)
-        plt.savefig(fig_path + title + '.png')
+def show_attns(attns, args):
+    plt.clf()
+    plt.imshow(attns)
+    ylen, xlen = attns.shape
+    plotTimeTicks(args, xlen, axis='x', offset=False)
+    plotTimeTicks(args, ylen, axis='y', offset=True)
+    plt.xlabel('Past')
+    plt.ylabel('Future')
 
 
-if __name__ == '__main__':
-    attns = np.load('attns.npy')
-    show_attns(attns, 15)
+def num2ceil(num):
+    num = str(int(num))
+    digits = len(num)
+    cap = int(num[0]) + 1
+    return cap * 10 ** (digits - 1)

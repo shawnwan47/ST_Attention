@@ -3,151 +3,123 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn.parameter import Parameter
-from torch.nn.modules.module import Module
+
+import UtilClass
+from MultiHeadedAttn import MultiHeadedAttention
+from Utils import aeq
+from Consts import MAX_SEQ_LEN
 
 
-class SparseMM(torch.autograd.Function):
-    """
-    Sparse x dense matrix multiplication with autograd support.
+class PositionwiseFeedForward(nn.Module):
+    """ A two-layer Feed-Forward-Network."""
 
-    Implementation by Soumith Chintala:
-    https://discuss.pytorch.org/t/
-    does-pytorch-support-autograd-on-sparse-matrix/6156/7
-    """
+    def __init__(self, size, hidden_size=None, dropout=0.1):
+        """
+        Args:
+            size(int): the size of inputs for the first-layer of the FFN.
+            hidden_size(int): the hidden layer size of the second-layer
+                              of the FNN.
+            droput(float): dropout probability(0-1.0).
+        """
+        super(PositionwiseFeedForward, self).__init__()
+        hidden_size = size if hidden_size is None else hidden_size
+        self.w_1 = UtilClass.BottleLinear(size, hidden_size)
+        self.w_2 = UtilClass.BottleLinear(hidden_size, size)
+        self.layer_norm = UtilClass.BottleLayerNorm(size)
+        self.dropout = nn.Dropout(dropout)
+        self.relu = nn.ReLU()
 
-    def forward(self, matrix1, matrix2):
-        self.save_for_backward(matrix1, matrix2)
-        return torch.mm(matrix1, matrix2)
-
-    def backward(self, grad_output):
-        matrix1, matrix2 = self.saved_tensors
-        grad_matrix1 = grad_matrix2 = None
-
-        if self.needs_input_grad[0]:
-            grad_matrix1 = torch.mm(grad_output, matrix2.t())
-
-        if self.needs_input_grad[1]:
-            grad_matrix2 = torch.mm(matrix1.t(), grad_output)
-
-        return grad_matrix1, grad_matrix2
+    def forward(self, inputs):
+        outputs = self.dropout(self.w_2(self.relu(self.w_1(inputs))))
+        return self.layer_norm(outputs + inputs)
 
 
-class GraphConvolution(Module):
+class TransformerLayer(nn.Module):
+    def __init__(self, dim=1024, dropout=0.1, head_count=8):
+        """
+        layer for Transformer in Models.py
+        Args:
+            size(int): the dimension of keys/values/queries in
+                       MultiHeadedAttention, also the inputs size of
+                       the first-layer of the PositionwiseFeedForward.
+            droput(float): dropout probability(0-1.0).
+            head_count(int): the number of head for MultiHeadedAttention.
+            hidden_size(int): the second-layer of the PositionwiseFeedForward.
+        """
+        super(TransformerLayer, self).__init__()
+        self.attn = MultiHeadedAttention(head_count, dim, p=dropout)
+        self.feed_forward = PositionwiseFeedForward(dim, dropout=dropout)
+        # Register self.mask as a buffer in TransformerDecoderLayer, so
+        # it gets TransformerDecoderLayer's cuda behavior automatically.
+        mask = self._get_attn_subsequent_mask(MAX_SEQ_LEN)
+        self.register_buffer('mask', mask)
+
+    def encode(self, inputs, mask=None):
+        outputs, attn = self.attn(inputs, inputs, inputs, mask)
+        outputs = self.feed_forward(outputs)
+        return outputs, attn
+
+    def forward(self, inputs, context, mask_src=None, mask_tgt=None):
+        # Args Checks
+        input_batch, input_len, _ = inputs.size()
+        contxt_batch, contxt_len, _ = context.size()
+        aeq(input_batch, contxt_batch)
+        # END Args Checks
+
+        mask_dec = torch.gt(self.mask[:, :input_len, :input_len], 0)
+        query, attn = self.encode(inputs, mask_dec)
+        mid, attn = self.attn(context, context, query, mask_src)
+        outputs = self.feed_forward(mid)
+
+        return outputs, attn
+
+
+class GraphConvolution(nn.Module):
     """
     Simple GCN layer, similar to https://arxiv.org/abs/1609.02907
     """
 
-    def __init__(self, in_features, out_features, bias=True):
+    def __init__(self, nin, nout, bias=True):
         super(GraphConvolution, self).__init__()
-        self.in_features = in_features
-        self.out_features = out_features
-        self.weight = Parameter(torch.Tensor(in_features, out_features))
-        if bias:
-            self.bias = Parameter(torch.Tensor(out_features))
-        else:
-            self.register_parameter('bias', None)
-        self.reset_parameters()
+        self.nin = nin
+        self.nout = nout
+        self.linear = UtilClass.BottleLinear(nin, nout)
 
-    def reset_parameters(self):
-        stdv = 1. / math.sqrt(self.weight.size(1))
-        self.weight.data.uniform_(-stdv, stdv)
-        if self.bias is not None:
-            self.bias.data.uniform_(-stdv, stdv)
-
-    def forward(self, input, adj):
-        support = torch.mm(input, self.weight)
-        output = SparseMM()(adj, support)
-        if self.bias is not None:
-            return output + self.bias
-        else:
-            return output
+    def forward(self, inputs, adj):
+        '''
+        inputs: batch x node x feature
+        adj: node x node
+        '''
+        pass
 
     def __repr__(self):
         return self.__class__.__name__ + ' (' \
-            + str(self.in_features) + ' -> ' \
-            + str(self.out_features) + ')'
-
-
-class EncoderRNN(nn.Module):
-    def __init__(self, ndim, nhid, nlay, pdrop):
-        super(EncoderRNN, self).__init__()
-        self.gru = nn.GRU(ndim, nhid, nlay, dropout=pdrop)
-
-    def forward(self, inp, hid):
-        return self.gru(inp, hid)
-
-
-class DecoderRNN(nn.Module):
-    def __init__(self, ndim, nhid, nlay, pdrop):
-        super(DecoderRNN, self).__init__()
-        self.nhid = nhid
-        self.gru = nn.GRU(ndim, nhid, nlay, dropout=pdrop)
-        self.fc = nn.Linear(nhid, ndim)
-
-    def forward(self, inp, hid):
-        out, hid = self.gru(inp, hid)
-        out = inp + self.fc(out)
-        return out, hid
-
-
-class AttnDecoderRNN(nn.Module):
-
-    def __init__(self, ndim, nhid, nlay, pdrop):
-        super(AttnDecoderRNN, self).__init__()
-        self.ndim = ndim
-        self.nhid = nhid
-
-        self.fc_in = nn.Linear(ndim, nhid)
-        self.attn_general = nn.Linear(nhid, nhid)
-        self.attn_comb = nn.Linear(nhid * 2, nhid)
-        self.dropout = nn.Dropout(pdrop)
-        self.gru = nn.GRU(nhid, nhid, nlay, dropout=pdrop)
-        self.fc_out = nn.Linear(nhid, ndim)
-
-    def forward(self, inp, hid, encoder_outs):
-        out = self.fc_in(inp)
-        out = self.dropout(out)
-        # bsz x len x ndim
-        out = out.transpose(0, 1)
-        encoder_outs = encoder_outs.transpose(0, 1).transpose(1, 2)
-        attn = torch.bmm(self.attn_general(out), encoder_outs)
-        attn = F.softmax(attn.squeeze(1)).unsqueeze(1)
-        context = torch.bmm(attn, encoder_outs.transpose(1, 2))
-        out = self.attn_comb(torch.cat((out, context), -1).transpose(0, 1))
-
-        out, hid = self.gru(out, hid)
-        out = inp + self.fc_out(out)  # ResNet
-        return out, hid, attn
+            + str(self.nin) + ' -> ' \
+            + str(self.nout) + ')'
 
 
 class GraphAttention(nn.Module):
-    def __init__(self, ninp, nfeat, att_heads=1, nonlinear=False):
+    def __init__(self, nin, nout, nhead, dropout):
         super(GraphAttention, self).__init__()
-        self.ninp = ninp
-        self.nfeat = nfeat
-        self.att_heads = att_heads
+        self.nin = nin
+        self.nout = nout
+        self.linear = UtilClass.BottleLinear(nin, nout)
+        self.nhead = nhead
+        self.self_attn = MultiHeadedAttention(nhead, nout)
 
-        self.kernels = []
-        self.att_kernels = []
-
-        for head in range(att_heads):
-            self.kernels.append(nn.Linear(ninp, nfeat))
-            self.att_kernels.append(nn.Linear(2 * nfeat, 1))
-
-        self.nout = self.nfeat * self.att_heads
-        self.activation = nn.ELU() if nonlinear else None
+        self.nout = self.nout * self.nhead
+        self.activation = nn.Sequential(nn.Dropout(dropout), nn.ReLU())
 
     def forward(self, inp, adj):
         '''
-        inp: bsz x nnode x ninp
+        inp: bsz x nnode x nin
         adj: nnode x nnode
-        out: bsz x nnode x nfeat
+        out: bsz x nnode x nout
         '''
-        bsz, nnode, ninp = inp.size()
+        bsz, nnode, nin = inp.size()
         assert adj.size(0) == nnode
         outs, atts = [], []
-        for head in range(self.att_heads):
+        for head in range(self.nhead):
             kernel = self.kernels[head]
             att_kernel = self.att_kernels[head]
             out = kernel(inp)

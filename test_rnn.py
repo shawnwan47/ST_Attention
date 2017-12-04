@@ -5,7 +5,9 @@ from torch.autograd import Variable
 
 from Config import Config
 import Loss
+import Data
 import Utils
+from Consts import MODEL_PATH
 
 
 # CONFIG
@@ -38,7 +40,8 @@ def denormalize(flow):
 
 
 # MODEL
-model = torch.load(Utils.modelpath(args))
+modelpath = MODEL_PATH + Data.modelname(args)
+model = torch.load(modelpath)
 model = model.cuda() if args.gpuid else model
 
 # prediction and loss
@@ -47,13 +50,13 @@ MAPE = Loss.MAPE
 wape = []
 mape = []
 outputs = []
+targets_test = denormalize(targets_test)
 for t in range(args.past, inputs_test.size(0) - args.future):
     src = inputs_test[:t]
     tgt = targets_test[t:t + args.future]
     inp = inputs_test[t:t + args.future]
     out = model(src, inp, teach=False)
     out = denormalize(out[0])
-    tgt = denormalize(tgt)
 
     outputs.append(out)
     wape.append(WAPE(out, tgt).data[0])
@@ -62,8 +65,8 @@ wape = sum(wape) / len(wape)
 mape = sum(mape) / len(mape)
 print('WAPE: %.4f MAPE: %.4f' % (wape, mape))
 
-np.save(Utils.modelpath(args) + '_tgt', Utils.var2np(targets_test[args.past:]))
-np.save(Utils.modelpath(args) + '_out', Utils.var2np(torch.stack(outputs)))
+np.save(modelpath + '_tgt', Utils.var2np(targets_test[args.past:]))
+np.save(modelpath + '_out', Utils.var2np(torch.stack(outputs)))
 
 # Attentions
 if args.attention:
@@ -71,4 +74,4 @@ if args.attention:
     tgt = targets_test[args.past:]
     inp = inputs_test[args.past:]
     out = model(src, inp, teach=True)
-    np.save(Utils.modelpath(args) + '_att', Utils.var2np(out[-1]))
+    np.save(modelpath + '_att', Utils.var2np(out[-1]))

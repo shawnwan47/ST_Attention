@@ -2,6 +2,10 @@ import torch
 from Consts import EPS
 
 
+def MSE(outputs, targets):
+    return ((outputs - targets).pow(2)).mean()
+
+
 def WAPE(outputs, targets):
     return torch.abs(targets - outputs).sum() / targets.sum()
 

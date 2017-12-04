@@ -1,13 +1,12 @@
-import random
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-import torch.nn.functional as F
 
 import Layers
 
 from Attention import GlobalAttention
 from Utils import aeq
+import UtilClass
 
 
 class RNN(nn.Module):
@@ -39,8 +38,7 @@ class RNNAttn(RNN):
         super(RNNAttn, self).__init__(args)
         self.attention_type = args.attention_type
         self.attention_model = GlobalAttention(args.nhid, self.attention_type)
-        self.dropout = nn.Dropout(args.pdrop)
-        self.linear_out = nn.Linear(args.nhid, args.ndim)
+        self.context_length = args.context_length
 
     def forward(self, inputs, hiddens, context):
         context_, hiddens = self.encode(inputs, hiddens)
@@ -49,16 +47,20 @@ class RNNAttn(RNN):
         aeq(bsz, bsz_)
         aeq(ndim, ndim_)
         context = torch.cat((context, context_), 1)
-        # mask unseen data
+        # mask unseen context
         mask = torch.zeros(bsz, tgtL, srcL + tgtL).type(torch.ByteTensor)
         for i in range(tgtL):
             mask[:, i, srcL + i:] = 1
+        # mask long-term context
+        if self.context_length:
+            for i in range(tgtL):
+                end = srcL + i - self.context_length
+                if end > 0:
+                    mask[:, i, :end] = 1
         mask = mask.cuda() if context.is_cuda else mask
         self.attention_model.applyMask(mask)
         # compute outputs and attentions
         outputs, attentions = self.attention_model(context_, context)
-        # Res connect
-        # outputs = inputs + self.linear_out(self.dropout(outputs))
         return outputs, hiddens, context, attentions
 
 
@@ -107,18 +109,60 @@ class Seq2Seq(nn.Module):
             return outputs, hiddens
 
 
+class Transformer(nn.Module):
+    """
+    The Transformer decoder for Spatial-Temporal Attention Model
+    """
+
+    def __init__(self, ndim, nhid, nlay, pdrop):
+        super(Transformer, self).__init__()
+        self.linear_in = UtilClass.BottleLinear(ndim, nhid)
+        self.linear_out = UtilClass.BottleLinear(nhid, ndim)
+        self.transformer_layers = nn.ModuleList(
+            [Layers.TransformerLayer(nhid, pdrop)
+             for _ in range(nlay)])
+
+    def encode(self, inputs):
+        outputs = self.linear_in(inputs)
+        for layer in self.transformer_layers:
+            outputs, attn = layer.encode(outputs)
+        return outputs, attn
+
+    def forward(self, inputs, context):
+        # CHECKS
+        aeq(inputs.dim(), 3)
+        input_len, input_batch, _ = inputs.size()
+        contxt_len, contxt_batch, _ = context.size()
+        aeq(input_batch, contxt_batch)
+        # END CHECKS
+        outputs = self.linear_in(inputs)
+
+        outputs = outputs.transpose(0, 1).contiguous()
+        context = context.transpose(0, 1).contiguous()
+
+        for layer in self.transformer_layers:
+            outputs, attn = layer(outputs, context)
+
+        # Process the result and update the attentions.
+        outputs = outputs.transpose(0, 1).contiguous()
+        outputs = inputs + self.linear_out(outputs)
+        return outputs, attn
+
+
 class GCN(nn.Module):
-    def __init__(self, nfeat, nhid, nclass, dropout):
+    def __init__(self, args):
         super(GCN, self).__init__()
-        self.gc1 = Layers.GraphConvolution(nfeat, nhid)
-        self.gc2 = Layers.GraphConvolution(nhid, nclass)
-        self.dropout = dropout
+        self.nlay = args.nlay
+        self.gc_in = Layers.GraphConvolution(args.past, args.nhid)
+        self.gc_hid = Layers.GraphConvolution(args.nhid, args.nhid)
+        self.gc_out = Layers.GraphConvolution(args.nhid, args.future)
+        self.activation = nn.Sequential(nn.ReLU(), nn.Dropout(args.pdrop))
 
     def forward(self, x, adj):
-        x = F.relu(self.gc1(x, adj))
-        x = F.dropout(x, self.dropout, training=self.training)
-        x = self.gc2(x, adj)
-        return F.log_softmax(x)
+        x = self.activation(self.gc_in(x, adj))
+        for l in range(self.nlay - 2):
+            x = self.activation(self.gc_hid(x, adj))
+        return self.gc_out(x, adj)
 
 
 class GAT(nn.Module):
