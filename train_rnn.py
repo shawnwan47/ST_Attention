@@ -6,6 +6,8 @@ import Models
 import Optim
 import Loss
 import Utils
+import Data
+from Consts import MODEL_PATH
 
 
 config = Config('Seq2Seq')
@@ -39,7 +41,7 @@ def denormalize(flow):
 
 
 # MODEL
-print("Model: %s" % (Utils.modelpath(args)))
+print("Model: %s" % (Data.modelname(args)))
 model = Models.Seq2Seq(args)
 model = model.cuda() if args.gpuid else model
 
@@ -92,4 +94,4 @@ for epoch in range(args.nepoch):
 
     optimizer.updateLearningRate(loss_valid)
 
-torch.save(model.cpu(), Utils.modelpath(args))
+torch.save(model.cpu(), MODEL_PATH + Data.modelname(args))

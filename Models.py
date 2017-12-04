@@ -10,6 +10,55 @@ from Attention import GlobalAttention
 from Utils import aeq
 
 
+class EncoderBase(nn.Module):
+    """
+    EncoderBase class for sharing code among various encoder.
+    """
+
+    def _check_args(self, input, lengths=None, hidden=None):
+        s_len, n_batch, n_feats = input.size()
+        if lengths is not None:
+            n_batch_, = lengths.size()
+            aeq(n_batch, n_batch_)
+
+    def forward(self, input, lengths=None, hidden=None):
+        """
+        Args:
+            input (LongTensor): len x batch x nfeat.
+            lengths (LongTensor): batch
+            hidden: Initial hidden state.
+        Returns:
+            hidden_t (Variable): Pair of layers x batch x rnn_size - final
+                                    encoder state
+            outputs (FloatTensor):  len x batch x rnn_size -  Memory bank
+        """
+        raise NotImplementedError
+
+
+class DecoderState(object):
+    """
+    DecoderState is a base class for models, used during translation
+    for storing translation states.
+    """
+
+    def detach(self):
+        """
+        Detaches all Variables from the graph
+        that created it, making it a leaf.
+        """
+        for h in self._all:
+            if h is not None:
+                h.detach_()
+
+    def beam_update(self, idx, positions, beam_size):
+        """ Update when beam advances. """
+        for e in self._all:
+            a, br, d = e.size()
+            sentStates = e.view(a, beam_size, br // beam_size, d)[:, :, idx]
+            sentStates.data.copy_(
+                sentStates.data.index_select(1, positions))
+
+
 class RNN(nn.Module):
     def __init__(self, args):
         super(RNN, self).__init__()
@@ -39,8 +88,7 @@ class RNNAttn(RNN):
         super(RNNAttn, self).__init__(args)
         self.attention_type = args.attention_type
         self.attention_model = GlobalAttention(args.nhid, self.attention_type)
-        self.dropout = nn.Dropout(args.pdrop)
-        self.linear_out = nn.Linear(args.nhid, args.ndim)
+        self.context_length = args.context_length
 
     def forward(self, inputs, hiddens, context):
         context_, hiddens = self.encode(inputs, hiddens)
@@ -49,16 +97,20 @@ class RNNAttn(RNN):
         aeq(bsz, bsz_)
         aeq(ndim, ndim_)
         context = torch.cat((context, context_), 1)
-        # mask unseen data
+        # mask unseen context
         mask = torch.zeros(bsz, tgtL, srcL + tgtL).type(torch.ByteTensor)
         for i in range(tgtL):
             mask[:, i, srcL + i:] = 1
+        # mask long-term context
+        if self.context_length:
+            for i in range(tgtL):
+                end = srcL + i - self.context_length
+                if end > 0:
+                    mask[:, i, :end] = 1
         mask = mask.cuda() if context.is_cuda else mask
         self.attention_model.applyMask(mask)
         # compute outputs and attentions
         outputs, attentions = self.attention_model(context_, context)
-        # Res connect
-        # outputs = inputs + self.linear_out(self.dropout(outputs))
         return outputs, hiddens, context, attentions
 
 
@@ -108,17 +160,19 @@ class Seq2Seq(nn.Module):
 
 
 class GCN(nn.Module):
-    def __init__(self, nfeat, nhid, nclass, dropout):
+    def __init__(self, args):
         super(GCN, self).__init__()
-        self.gc1 = Layers.GraphConvolution(nfeat, nhid)
-        self.gc2 = Layers.GraphConvolution(nhid, nclass)
-        self.dropout = dropout
+        self.nlay = args.nlay
+        self.gc_in = Layers.GraphConvolution(args.past, args.nhid)
+        self.gc_hid = Layers.GraphConvolution(args.nhid, args.nhid)
+        self.gc_out = Layers.GraphConvolution(args.nhid, args.future)
+        self.activation = nn.Sequential(nn.ReLU(), nn.Dropout(args.pdrop))
 
     def forward(self, x, adj):
-        x = F.relu(self.gc1(x, adj))
-        x = F.dropout(x, self.dropout, training=self.training)
-        x = self.gc2(x, adj)
-        return F.log_softmax(x)
+        x = self.activation(self.gc_in(x, adj))
+        for l in range(self.nlay - 2):
+            x = self.activation(self.gc_hid(x, adj))
+        return self.gc_out(x, adj)
 
 
 class GAT(nn.Module):

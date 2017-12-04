@@ -16,10 +16,10 @@ class Config(argparse.ArgumentParser):
 
     def add_data(self):
         self.add_argument('-data_type', type=str, default='seq')
-        self.add_argument('-start_time', type=int, default=6)
-        self.add_argument('-end_time', type=int, default=22)
+        self.add_argument('-start_time', type=int, default=5)
+        self.add_argument('-end_time', type=int, default=23)
         self.add_argument('-gran', type=int, default=15)
-        self.add_argument('-past', type=int, default=8)
+        self.add_argument('-past', type=int, default=4)
         self.add_argument('-future', type=int, default=4)
 
     def add_rnn(self):
@@ -35,6 +35,7 @@ class Config(argparse.ArgumentParser):
         self.add_argument('-attention', action='store_true')
         self.add_argument('-attention_type', type=str, default='mlp',
                           choices=['dot', 'general', 'mlp'])
+        self.add_argument('-context_length', type=int, default=0)
 
     def add_optim(self):
         self.add_argument('-optim_method', type=str, default='sgd',
@@ -55,3 +56,6 @@ class Config(argparse.ArgumentParser):
     def add_loss(self):
         self.add_argument('-loss', type=str, default='WAPE',
                           choices=['MSELoss', 'WAPE', 'MAPE'])
+
+    def add_plot(self):
+        self.add_argument('-nstation', type=int, default=4)

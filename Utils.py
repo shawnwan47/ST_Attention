@@ -48,14 +48,6 @@ def load_data(args):
             flow_mean, flow_std)
 
 
-def modelpath(args):
-    path = MODEL_PATH
-    path += 'atn_' + args.attention_type if args.attention else ''
-    path += 'hid' + str(args.nhid)
-    path += 'lay' + str(args.nlay)
-    return path
-
-
 def tensor2VarRNN(t):
     return Variable(t.transpose(0, 1))
 

@@ -125,3 +125,11 @@ def load_flow_img(args):
     inputs, targets = np.asarray(inputs), np.asarray(targets)
     daytimes_img = np.asarray(daytimes_img)
     return inputs, targets, daytimes_img, flow_mean, flow_std
+
+
+def modelname(args):
+    path = 'atn_' + args.attention_type if args.attention else ''
+    path += 'context' + str(args.context_length) if args.context_length else ''
+    path += 'hid' + str(args.nhid)
+    path += 'lay' + str(args.nlay)
+    return path
