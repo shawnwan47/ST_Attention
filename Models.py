@@ -9,6 +9,55 @@ from Utils import aeq
 import UtilClass
 
 
+class EncoderBase(nn.Module):
+    """
+    EncoderBase class for sharing code among various encoder.
+    """
+
+    def _check_args(self, input, lengths=None, hidden=None):
+        s_len, n_batch, n_feats = input.size()
+        if lengths is not None:
+            n_batch_, = lengths.size()
+            aeq(n_batch, n_batch_)
+
+    def forward(self, input, lengths=None, hidden=None):
+        """
+        Args:
+            input (LongTensor): len x batch x nfeat.
+            lengths (LongTensor): batch
+            hidden: Initial hidden state.
+        Returns:
+            hidden_t (Variable): Pair of layers x batch x rnn_size - final
+                                    encoder state
+            outputs (FloatTensor):  len x batch x rnn_size -  Memory bank
+        """
+        raise NotImplementedError
+
+
+class DecoderState(object):
+    """
+    DecoderState is a base class for models, used during translation
+    for storing translation states.
+    """
+
+    def detach(self):
+        """
+        Detaches all Variables from the graph
+        that created it, making it a leaf.
+        """
+        for h in self._all:
+            if h is not None:
+                h.detach_()
+
+    def beam_update(self, idx, positions, beam_size):
+        """ Update when beam advances. """
+        for e in self._all:
+            a, br, d = e.size()
+            sentStates = e.view(a, beam_size, br // beam_size, d)[:, :, idx]
+            sentStates.data.copy_(
+                sentStates.data.index_select(1, positions))
+
+
 class RNN(nn.Module):
     def __init__(self, args):
         super(RNN, self).__init__()

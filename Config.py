@@ -54,9 +54,17 @@ class Config(argparse.ArgumentParser):
         self.add_argument('-niter', type=int, default=10)
 
     def add_loss(self):
+<<<<<<< HEAD
         self.add_argument('-loss', type=str, default='MSE',
                           choices=['MSE', 'WAPE', 'MAPE'])
 
     def add_plot(self):
         self.add_argument('-nstation', type=int, default=4)
         self.add_argument('-istation', type=int, default=0)
+=======
+        self.add_argument('-loss', type=str, default='WAPE',
+                          choices=['MSELoss', 'WAPE', 'MAPE'])
+
+    def add_plot(self):
+        self.add_argument('-nstation', type=int, default=4)
+>>>>>>> 4040e05dbfdeb87d79b41c8070ec3291c5e46673

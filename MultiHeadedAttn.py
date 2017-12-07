@@ -81,11 +81,16 @@ class MultiHeadedAttention(nn.Module):
         bh, l, dim_per_head = scaled.size()
         b = bh // self.head_count
         if mask is not None:
+<<<<<<< HEAD
+=======
+
+>>>>>>> 4040e05dbfdeb87d79b41c8070ec3291c5e46673
             scaled = scaled.view(b, self.head_count, l, dim_per_head)
             mask = mask.unsqueeze(1).expand_as(scaled)
             scaled = scaled.masked_fill(Variable(mask), -float('inf')) \
                            .view(bh, l, dim_per_head)
         attn = self.sm(scaled)
+<<<<<<< HEAD
 
         drop_attn = self.dropout(attn)
         # values : (batch * 8) x qlen x dim
@@ -93,6 +98,21 @@ class MultiHeadedAttention(nn.Module):
         drop_out = self.dropout(out)
         # Residual and layer norm
         ret = self.layer_norm(drop_out + residual)
+=======
+        # Return one attn
+        top_attn = attn \
+            .view(b, self.head_count, l, dim_per_head)[:, 0, :, :] \
+            .contiguous()
+
+        drop_attn = self.dropout(self.sm(scaled))
+
+        # values : (batch * 8) x qlen x dim
+        out = unshape_projection(torch.bmm(drop_attn, value_up), residual)
+
+        # Residual and layer norm
+        res = self.res_dropout(out) + residual
+        ret = self.layer_norm(res)
+>>>>>>> 4040e05dbfdeb87d79b41c8070ec3291c5e46673
 
         # CHECK
         batch_, q_len_, d_ = ret.size()
@@ -100,4 +120,8 @@ class MultiHeadedAttention(nn.Module):
         aeq(batch, batch_)
         aeq(d, d_)
         # END CHECK
+<<<<<<< HEAD
         return ret, attn
+=======
+        return ret, top_attn
+>>>>>>> 4040e05dbfdeb87d79b41c8070ec3291c5e46673

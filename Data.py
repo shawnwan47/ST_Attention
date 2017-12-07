@@ -128,8 +128,12 @@ def load_flow_img(args):
 
 
 def modelname(args):
+<<<<<<< HEAD
     path = args.loss
     path += 'atn_' + args.attention_type if args.attention else ''
+=======
+    path = 'atn_' + args.attention_type if args.attention else ''
+>>>>>>> 4040e05dbfdeb87d79b41c8070ec3291c5e46673
     path += 'context' + str(args.context_length) if args.context_length else ''
     path += 'hid' + str(args.nhid)
     path += 'lay' + str(args.nlay)

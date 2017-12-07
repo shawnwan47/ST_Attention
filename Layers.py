@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import UtilClass
+<<<<<<< HEAD
 from MultiHeadedAttn import MultiHeadedAttention
 from Utils import aeq
 from Consts import MAX_SEQ_LEN
@@ -72,6 +73,8 @@ class TransformerLayer(nn.Module):
         outputs = self.feed_forward(mid)
 
         return outputs, attn
+=======
+>>>>>>> 4040e05dbfdeb87d79b41c8070ec3291c5e46673
 
 
 class GraphConvolution(nn.Module):
@@ -99,6 +102,7 @@ class GraphConvolution(nn.Module):
 
 
 class GraphAttention(nn.Module):
+<<<<<<< HEAD
     def __init__(self, nin, nout, nhead, dropout):
         super(GraphAttention, self).__init__()
         self.nin = nin
@@ -109,6 +113,23 @@ class GraphAttention(nn.Module):
 
         self.nout = self.nout * self.nhead
         self.activation = nn.Sequential(nn.Dropout(dropout), nn.ReLU())
+=======
+    def __init__(self, ninp, nfeat, nheads=1, nonlinear=False):
+        super(GraphAttention, self).__init__()
+        self.ninp = ninp
+        self.nfeat = nfeat
+        self.nheads = nheads
+
+        self.kernels = []
+        self.att_kernels = []
+
+        for head in range(nheads):
+            self.kernels.append(nn.Linear(ninp, nfeat))
+            self.att_kernels.append(nn.Linear(2 * nfeat, 1))
+
+        self.nout = self.nfeat * self.nheads
+        self.activation = nn.ELU() if nonlinear else None
+>>>>>>> 4040e05dbfdeb87d79b41c8070ec3291c5e46673
 
     def forward(self, inp, adj):
         '''
@@ -119,7 +140,11 @@ class GraphAttention(nn.Module):
         bsz, nnode, nin = inp.size()
         assert adj.size(0) == nnode
         outs, atts = [], []
+<<<<<<< HEAD
         for head in range(self.nhead):
+=======
+        for head in range(self.nheads):
+>>>>>>> 4040e05dbfdeb87d79b41c8070ec3291c5e46673
             kernel = self.kernels[head]
             att_kernel = self.att_kernels[head]
             out = kernel(inp)
