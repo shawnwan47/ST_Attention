@@ -10,7 +10,7 @@ from Consts import MODEL_PATH
 
 config = Config.Config('Seq2Seq')
 config.add_optim()
-config.add_rnn()
+config.add_transformer()
 args = config.parse_args()
 if torch.cuda.is_available() and not args.gpuid:
     print("WARNING: You have a CUDA device, should run with -gpuid 0")
@@ -39,7 +39,7 @@ def denormalize(flow):
 
 
 # MODEL
-print("Model: %s" % (Config.rnnname(args)))
+print("Model: %s" % (Config.modelname(args)))
 model = Models.Seq2Seq(args)
 model = model.cuda() if args.gpuid else model
 

@@ -3,14 +3,13 @@ from os import path
 import numpy as np
 from matplotlib import pyplot as plt
 
-from Config import Config
-import Data
+import Config
 import Visual
 from Consts import DAYS_TEST, MODEL_PATH, FIG_PATH
 
 
 # CONFIG
-config = Config('PlotResults')
+config = Config.Config('PlotResults')
 config.add_rnn()
 config.add_attention()
 config.add_plot()
@@ -18,7 +17,7 @@ args = config.parse_args()
 
 ##################################################################
 # LOAD DATA
-targets = np.load(MODEL_PATH + Data.modelname(args) + '_tgt.npy')
+targets = np.load(MODEL_PATH + Config.modelname(args) + '_tgt.npy')
 # select out flow
 station_count = args.ndim // 2
 station_order = np.argsort(-targets[:, :, station_count:].sum(0).sum(0))
@@ -34,7 +33,7 @@ outputs_model = {}
 attentions_model = {}
 # RNN first
 args.attention = False
-model_path = MODEL_PATH + Data.modelname(args)
+model_path = MODEL_PATH + Config.modelname(args)
 outputs_model['RNN'] = np.load(model_path + out_affix)
 attentions_model['RNN'] = None
 args.attention = True
@@ -44,7 +43,7 @@ for attention_type in attention_types[1:]:
     args.attention_type = attention_type
     for context_length in context_lengths:
         args.context_length = context_length
-        model_path = path.join(MODEL_PATH, Data.modelname(args))
+        model_path = path.join(MODEL_PATH, Config.modelname(args))
 
         key = attention_type
         key += str(context_length) if context_length else ''
@@ -67,7 +66,7 @@ for attention_type in attention_types:
     else:
         args.attention = True
         args.attention_type = attention_type
-    path_model = path.join(FIG_PATH, Data.modelname(args))
+    path_model = path.join(FIG_PATH, Config.modelname(args))
 
     outputs = outputs_model[attention_type]
 
@@ -85,7 +84,7 @@ for attention_type in attention_types:
 args.attention = True
 for attention_type in attention_types[1:]:
     args.attention_type = attention_type
-    path_model = path.join(FIG_PATH, Data.modelname(args))
+    path_model = path.join(FIG_PATH, Config.modelname(args))
     for day in range(DAYS_TEST):
         path_day = path.join(path_model, 'Day' + str(day) + '/')
         for length in context_lengths:
