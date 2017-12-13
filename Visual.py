@@ -20,7 +20,8 @@ def plotTimeTicks(args, length, axis='x', offset=True):
     else:
         start_time = args.start_time
     ticks = np.arange(length // hour + 1).astype(int)
-    labels = list(map(lambda x: str(x) + ':00', ticks + start_time))
+    labels = list(map(lambda x: str(x) + ':00',
+                      ticks % (args.end_time - args.start_time) + start_time))
     ticks *= hour
     if axis is 'x':
         plt.xticks(ticks, labels, rotation=45)
@@ -52,10 +53,13 @@ def plot_flow_steps(flows):
         plt.plot(x + step, flows[:, step], label=str(step) + '-step')
 
 
-def show_attns(attns, args):
+def show_attn(attn, args):
     plt.clf()
-    plt.imshow(attns)
-    ylen, xlen = attns.shape
+    h, w = attn.shape
+    mask = np.triu(np.ones_like(attn), w - h) > 0
+    attn[mask] = np.nan
+    plt.imshow(attn)
+    ylen, xlen = attn.shape
     plotTimeTicks(args, xlen, axis='x', offset=False)
     plotTimeTicks(args, ylen, axis='y', offset=True)
     plt.xlabel('Past')
@@ -67,3 +71,13 @@ def num2ceil(num):
     digits = len(num)
     cap = int(num[0]) + 1
     return cap * 10 ** (digits - 1)
+
+
+def plot_errs(errors):
+    for k, l in errors.items():
+        length = len(l)
+        plt.plot(range(1, 1 + length), l, label=k)
+    plt.ylim(0, 1)
+    plt.ylabel('Error')
+    plt.xlabel('Step')
+    plt.legend()

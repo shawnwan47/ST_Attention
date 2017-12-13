@@ -13,17 +13,15 @@ def load_data(args):
     daytime = torch.LongTensor(daytime)
     flow_mean = torch.FloatTensor(flow_mean)
     flow_std = torch.FloatTensor(flow_std)
-    if args.gpuid:
-        flow = flow.cuda()
-        daytime = daytime.cuda()
-        flow_mean = flow_mean.cuda()
-        flow_std = flow_std.cuda()
+    flow = flow.cuda()
+    daytime = daytime.cuda()
+    flow_mean = flow_mean.cuda()
+    flow_std = flow_std.cuda()
 
     slices = flow.size(0) // DAYS
 
     def init_idx(batch):
-        idx = torch.arange(batch).long()
-        return idx.cuda() if args.gpuid else idx
+        return torch.arange(batch).long().cuda()
 
     def generate_idx(idx, batch):
         ret = [idx + i * batch for i in range(slices)]

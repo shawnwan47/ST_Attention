@@ -1,3 +1,5 @@
+from random import random
+
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
@@ -8,10 +10,43 @@ from Utils import aeq
 from UtilClass import BottleLinear
 
 
-class Seq2Seq(nn.Module):
+class DayTime(nn.Module):
     def __init__(self, args):
-        super(Seq2Seq, self).__init__()
+        super(DayTime, self).__init__()
+        times = (args.end_time - args.start_time) * 60 // args.gran
+        self.daytime = args.daytime
+        self.emb_day = nn.Embedding(7, args.day_size)
+        self.emb_time = nn.Embedding(times, args.time_size)
+        self.dropout = nn.Dropout(args.dropout)
+
+    def forward(self, daytime):
+        day = self.dropout(self.emb_day(daytime[:, :, 0]))
+        time = self.dropout(self.emb_time(daytime[:, :, 1]))
+        return torch.cat((day, time), 2)
+
+
+class MLP(nn.Module):
+    def __init__(self, args):
+        super(MLP, self).__init__()
+        self.input_size = args.input_size * args.past
+        self.output_size = args.output_size * args.future
+        self.hidden_size = args.hidden_size * (args.past + args.future)
+        self.linear_in = nn.Linear(self.input_size, self.hidden_size)
+        self.linear_out = nn.Linear(self.hidden_size, self.output_size)
+        self.layernorm = UtilClass.LayerNorm()
+        self.activation = nn.ReLU()
+        self.dropout = nn.Dropout(args.dropout)
+
+    def forward(self, input):
+
+
+
+class RNN(nn.Module):
+    def __init__(self, args):
+        super(RNN, self).__init__()
         self.attn = args.attn
+        self.daytime = args.daytime
+        self.output_size = args.output_size
         if self.attn:
             self.rnn = Layers.RNNAttn(
                 args.rnn_type, args.input_size, args.hidden_size,
@@ -21,40 +56,38 @@ class Seq2Seq(nn.Module):
                 args.rnn_type, args.input_size, args.hidden_size,
                 args.num_layers, args.dropout)
         self.dropout = nn.Dropout(args.dropout)
-        self.linear_out = nn.Linear(args.hidden_size, args.input_size)
+        self.linear_out = nn.Linear(args.hidden_size, args.output_size)
 
-    def forward(self, src, tgt, teach=True):
-        srcL, bsz, ndim = src.size()
-        tgtL, bsz_, ndim_ = tgt.size()
+    def forward(self, src, input, teach=True):
+        src_len, bsz, ndim = src.size()
+        tgt_len, bsz_, ndim_ = input.size()
         aeq(bsz, bsz_)
         aeq(ndim, ndim_)
+        dim = self.output_size
+        if self.daytime:
+            daytime = input[:, :, dim:]
         hidden = self.rnn.initHidden(src)
         context, hidden = self.rnn.encode(src, hidden)
-        if teach:
+        out = input[:, :, :dim].clone()
+        attns = Variable(torch.zeros(tgt_len, bsz, src_len + tgt_len))
+        inp = input[0, :, :dim]
+        for i in range(tgt_len):
+            if teach and random() < 0.5:
+                inp = input[i]
+            elif self.daytime:
+                inp = torch.cat((inp, daytime[i]), -1)
+            inp = inp.unsqueeze(0)
             if self.attn:
-                output, hidden, context, attns = self.rnn(
-                    tgt, hidden, context)
+                dif, hidden, context, attn = self.rnn(inp, hidden, context)
+                attns[i, :, :src_len + i] = attn[0, :, :-1]
             else:
-                output, hidden = self.rnn(tgt, hidden)
-            output = tgt + self.linear_out(self.dropout(output))
-        else:
-            # inputfeeding prediction
-            output = tgt.clone()
-            attns = Variable(torch.zeros(tgtL, bsz, srcL + tgtL))
-            input = tgt[0].unsqueeze(0)
-            for i in range(tgtL):
-                if self.attn:
-                    res, hidden, context, attn = self.rnn(
-                        input, hidden, context)
-                    attns[i, :, :srcL + i] = attn[0, :, :-1]
-                else:
-                    res, hidden = self.rnn(input, hidden)
-                output[i] = input + self.linear_out(self.dropout(res))
-                input = output[i].clone().unsqueeze(0)
+                dif, hidden = self.rnn(inp, hidden)
+            out[i] = inp[:, :dim] + self.linear_out(self.dropout(dif))
+            inp = out[i].clone()
         if self.attn:
-            return output, hidden, attns
+            return out, hidden, attns
         else:
-            return output, hidden
+            return out, hidden
 
 
 class Transformer(nn.Module):
@@ -62,39 +95,51 @@ class Transformer(nn.Module):
     The Transformer decoder for Spatial-Temporal Attention Model
     """
 
-    def __init__(self, input_size, hidden_size, num_layers, dropout):
+    def __init__(self, args):
         super(Transformer, self).__init__()
-        self.linear_in = BottleLinear(input_size, hidden_size)
-        self.linear_out = BottleLinear(hidden_size, input_size)
+        self.daytime = args.daytime
+        self.output_size = args.output_size
+        self.linear_in = BottleLinear(args.input_size, args.hidden_size)
+        self.linear_out = BottleLinear(args.hidden_size, args.output_size)
+        self.dropout = nn.Dropout()
+        self.head = args.head
+        self.mask_src = args.mask_src
         self.transformer_layers = nn.ModuleList(
-            [Layers.TransformerLayer(hidden_size, dropout)
-             for _ in range(num_layers)])
+            [Layers.TransformerLayer(args.hidden_size, args.head, args.dropout)
+             for _ in range(args.num_layers)])
 
     def encode(self, input):
-        output = self.linear_in(input)
         for layer in self.transformer_layers:
-            output, attn = layer.encode(output)
-        return output, attn
+            input, _ = layer.encode(input, self.mask_src)
+        return input
 
-    def forward(self, input, context):
-        # CHECKS
-        aeq(input.dim(), 3)
-        input_len, input_batch, _ = input.size()
-        contxt_len, contxt_batch, _ = context.size()
-        aeq(input_batch, contxt_batch)
-        # END CHECKS
-        output = self.linear_in(input)
+    def forward(self, src, input, teach=True):
+        src_len, src_batch, _ = src.size()
+        inp_len, inp_batch, _ = input.size()
+        aeq(src_batch, inp_batch)
+        dim = self.output_size
+        if self.daytime:
+            daytime = input[:, :, dim:]
 
-        output = output.transpose(0, 1).contiguous()
-        context = context.transpose(0, 1).contiguous()
+        context = self.encode(self.linear_in(src.transpose(0, 1).contiguous()))
+        out = input[:, :, :dim].clone()
+        attn = Variable(torch.zeros(
+            inp_batch, self.head, inp_len, src_len + inp_len))
+        inp = input[0, :, :dim]
 
-        for layer in self.transformer_layers:
-            output, attn = layer(output, context)
-
-        # Process the result and update the attns.
-        output = output.transpose(0, 1).contiguous()
-        output = input + self.linear_out(output)
-        return output, attn
+        for i in range(inp_len):
+            if teach and random() < 0.5:
+                inp = input[i]
+            elif self.daytime:
+                inp = torch.cat((inp, daytime[i]), -1)
+            mid = self.linear_in(inp.unsqueeze(0).transpose(0, 1).contiguous())
+            for layer in self.transformer_layers:
+                mid, attn[:, :, i, :context.size(1) + 1] = layer(mid, context)
+            context = torch.cat((context, mid), 1)
+            out[i] = inp[:, :dim] + self.linear_out(
+                self.dropout(mid)).transpose(0, 1)
+            inp = out[i].clone()
+        return out, attn
 
 
 class GCN(nn.Module):

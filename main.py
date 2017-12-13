@@ -1,279 +1,167 @@
-from imp import reload
 import argparse
 
+import numpy as np
+
 import torch
-import torch.nn as nn
+from torch.nn.utils import clip_grad_norm
 from torch.autograd import Variable
 
-import utils
-import models
+import Args
+import Models
+import Utils
+from Consts import MODEL_PATH
 
 
-parser = argparse.ArgumentParser(description='Traffic Flow Prediction Models')
+args = argparse.ArgumentParser('Traffic Forecasting')
+Args.add_gpu(args)
+Args.add_data(args)
+Args.add_loss(args)
+Args.add_optim(args)
+Args.add_model(args)
+args = args.parse_args()
 
-parser.add_argument('--freq', type=int, default=15,
-                    help='frequency of traffic flow')
-parser.add_argument('--nprev', type=int, default=4,
-                    help='number of previous flow')
+# CUDA
+if args.gpuid:
+    torch.cuda.set_device(args.gpuid[0])
+if args.seed > 0:
+    torch.cuda.manual_seed(args.seed)
 
-parser.add_argument('--nemb_days', type=int, default=16,
-                    help='size of day embeddings')
-parser.add_argument('--nemb_time', type=int, default=16,
-                    help='size of time embeddings')
-
-parser.add_argument('--nhid_nn', type=int, default=256,
-                    help='number of hidden units per layer')
-
-parser.add_argument('--rnn', type=str, default='GRU',
-                    help='RNN: (RNN_TANH, RNN_RELU, LSTM, GRU)')
-parser.add_argument('--nhid_rnn', type=int, default=128,
-                    help='number of hidden units per layer')
-parser.add_argument('--nlayers', type=int, default=1,
-                    help='number of layers')
-
-
-parser.add_argument('--dropout', type=float, default=0.5,
-                    help='dropout applied to layers (0 = no dropout)')
-
-parser.add_argument('--lr', type=float, default=1,
-                    help='initial learning rate')
-parser.add_argument('--lr_min', type=float, default=0.00001,
-                    help='initial learning rate')
-parser.add_argument('--clip', type=float, default=0.1,
-                    help='gradient clipping')
-parser.add_argument('--weight_decay', type=float, default=0.0001,
-                    help='weight decay for optimizers')
-
-parser.add_argument('--batch_size', type=int, default=4, metavar='N',
-                    help='batch size')
-parser.add_argument('--epochs', type=int, default=100,
-                    help='upper epoch limit')
-parser.add_argument('--interval', type=int, default=1, metavar='N',
-                    help='report interval')
-
-parser.add_argument('--seed', type=int, default=47, help='random seed')
-parser.add_argument('--cuda', action='store_true', help='use CUDA')
-
-args = parser.parse_args()
-
-print(args)
-
-# Set the random seed manually for reproducibility.
-torch.manual_seed(args.seed)
-if torch.cuda.is_available():
-    if not args.cuda:
-        print("WARNING: You have CUDA, so you should probably run with --cuda")
-    else:
-        torch.cuda.manual_seed(args.seed)
-
-###############################################################################
 # DATA
-###############################################################################
-reload(utils)
-# images
-images, labels, mean, std = utils.load_flow_images(args.freq, args.nprev)
-days_img, time_img = utils.load_daystime(args.freq, args.nprev)
+(flow_train, flow_valid, flow_test,
+ daytime_train, daytime_valid, daytime_test,
+ flow_mean, flow_std) = Utils.load_data(args)
 
-# seqs
-seqs, vals, mean, std = utils.load_flow_seqs(args.freq)
-days_seq, time_seq = utils.load_daystime(args.freq)
+flow_train = Variable(flow_train)
+flow_valid = Variable(flow_valid, volatile=True)
+flow_test = Variable(flow_test, volatile=True)
+daytime_train = Variable(daytime_train)
+daytime_valid = Variable(daytime_valid, volatile=True)
+daytime_test = Variable(daytime_test, volatile=True)
+flow_mean = Variable(flow_mean, requires_grad=False)
+flow_std = Variable(flow_std, requires_grad=False)
 
-if args.cuda:
-    mean, std = mean.cuda(), std.cuda()
+past, future = args.past, args.future
+if args.yesterday:
+    past += flow_train.size(0) // 2
+if args.daytime:
+    args.input_size += args.day_size + args.time_size
 
 
-###############################################################################
+def denormalize(flow):
+    return flow * flow_std + flow_mean
+
+
 # MODEL
-###############################################################################
-reload(models)
-ndim = images[0].size(-1)
-nin = ndim * args.nprev
-nhid_nn = args.nhid_nn
-nhid_rnn = args.nhid_rnn
-nlayers = args.nlayers
-embed_days = (7, args.nemb_days)
-embed_time = (time_seq[0].max() + 1, args.nemb_time)
+modelpath = MODEL_PATH + Args.modelname(args)
+print('Model: {}'.format(modelpath))
+model = getattr(Models, args.model)(args).cuda()
+daytime = Models.DayTime(args).cuda()
 
-linear_regression = models.LR(nin, ndim)
-neural_network = models.NN(nin, ndim, nhid_nn)
-cnn = models.CNN(ndim, args.nprev, (3, 5), (1, 2))
+# LOSS
+criterion = getattr(torch.nn, args.loss)()
 
-embedding_nn = models.EmbeddingNN(nin, ndim, embed_days, embed_time, nhid_nn)
-embedding_cnn = models.EmbeddingCNN(
-    ndim, args.nprev, (3, 5), (1, 2), embed_days, embed_time)
-
-rnn_tanh = models.RNN('RNN_TANH', ndim, nhid_rnn, nlayers)
-gru = models.RNN('GRU', ndim, nhid_rnn, nlayers)
-lstm = models.RNN('LSTM', ndim, nhid_rnn, nlayers)
-
-embedding_rnn_tanh = models.EmbeddingRNN(
-    'RNN_TANH', ndim, nhid_rnn, nlayers, embed_days, embed_time)
-embedding_gru = models.EmbeddingRNN(
-    'GRU', ndim, nhid_rnn, nlayers, embed_days, embed_time)
-embedding_lstm = models.EmbeddingRNN(
-    'LSTM', ndim, nhid_rnn, nlayers, embed_days, embed_time)
-
-cnn_lstm = models.CRNN('LSTM', ndim, nhid_rnn, nlayers)
-
-if args.cuda:
-    linear_regression.cuda()
-    neural_network.cuda()
-    cnn.cuda()
-
-    embedding_nn.cuda()
-    embedding_cnn.cuda()
-
-    rnn_tanh.cuda()
-    gru.cuda()
-    lstm.cuda()
-
-    embedding_rnn_tanh.cuda()
-    embedding_gru.cuda()
-    embedding_lstm.cuda()
+# OPTIM
+parameters = list(model.parameters()) + list(daytime.parameters())
+optimizer = getattr(torch.optim, args.optim)(
+    parameters, lr=args.lr, weight_decay=args.weight_decay)
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    optimizer, patience=args.patience, verbose=True)
 
 
-###############################################################################
-# TRAIN
-###############################################################################
-mean = Variable(mean)
-std = Variable(std)
+def train_model():
+    loss_train = []
+    for t in range(past, flow_train.size(0) - future - 1):
+        src = flow_train[:t]
+        tgt = flow_train[t + 1:t + future + 1]
+        inp = flow_train[t:t + future]
+        if args.daytime:
+            src = torch.cat((src, daytime(daytime_train[:t])), -1)
+            inp = torch.cat((inp, daytime(daytime_train[t:t + future])), -1)
+        out = model(src, inp, teach=True)
+        out = denormalize(out[0])
+        tgt = denormalize(tgt)
+        loss = criterion(out, tgt)
+        loss.backward()
+        clip_grad_norm(parameters, args.max_grad_norm)
+        optimizer.step()
+        loss_train.append(loss.data[0])
+    return sum(loss_train) / len(loss_train)
 
 
-def normalize(data):
-    ret = data.add(-mean.expand_as(data)).div(std.expand_as(data))
-    ret[ret != ret] = 0
-    return ret
+def valid_model():
+    loss_valid = []
+    for t in range(past, flow_valid.size(0) - future - 1):
+        src = flow_valid[:t]
+        tgt = flow_valid[t + 1:t + future + 1]
+        inp = flow_valid[t:t + future]
+        if args.daytime:
+            src = torch.cat((src, daytime(daytime_valid[:t])), -1)
+            inp = torch.cat((inp, daytime(daytime_valid[t:t + future])), -1)
+        out = model(src, inp, teach=False)
+        out = denormalize(out[0])
+        tgt = denormalize(tgt)
+        loss = criterion(out, tgt)
+        loss_valid.append(loss.data[0])
+    return sum(loss_valid) / len(loss_valid)
 
 
-def denormalize(data):
-    return data.mul(std.expand_as(data)).add(mean.expand_as(data))
+def eval_model():
+    def pe(out, tgt):
+        return criterion(out, tgt).data[0] / tgt.mean()
+
+    times, days = flow_test.size()[:2]
+    end = times - future - 1
+    outs = []
+    tgts = []
+    for t in range(past, end):
+        src = flow_test[:t]
+        tgt = flow_test[t + 1:t + future + 1]
+        inp = flow_test[t:t + future]
+        if args.daytime:
+            src = torch.cat((src, daytime(daytime_test[:t])), -1)
+            inp = torch.cat((inp, daytime(daytime_test[t:t + future])), -1)
+        out = model(src, inp, teach=False)
+        out = denormalize(out[0])
+        tgt = denormalize(tgt)
+        outs.append(out)
+        tgts.append(tgt)
+    outs = torch.stack(outs, 1)
+    tgts = torch.stack(tgts, 1)
+    loss = [pe(outs[i], tgts[i]) for i in range(args.future)]
+    return np.array(list(map(float, loss)))
 
 
-def WAPE(x, y):
-    return (x - y).abs().sum() / y.sum()
+def attn_model():
+    src = flow_test[:past]
+    tgt = flow_test[past:-1]
+    if args.daytime:
+        src = torch.cat((src, daytime(daytime_test[:past])), -1)
+        tgt = torch.cat((tgt, daytime(daytime_test[past:-1])), -1)
+    out = model(src, tgt, teach=True)
+    attn = out[-1].data.numpy()
+    return attn
 
 
-criterion = nn.L1Loss()
-criterion = WAPE
-epochs = args.epochs
-interval = args.interval
+# TRAINING
+if not args.test:
+    for epoch in range(args.nepoch):
+        loss_train = train_model()
+        loss_valid = valid_model()
 
+        print('Epoch: %d train: %.4f valid: %.4f' % (
+            epoch, loss_train, loss_valid))
 
-def training(model, data_type, savepath, embedding=False):
-    savepath += '_' + str(args.freq) + '.pt'
-    if data_type == 'images':
-        data_train, data_valid, data_test = images
-        target_train, target_valid, target_test = labels
-        days_train, days_valid, days_test = days_img
-        time_train, time_valid, time_test = time_img
-    else:
-        data_train, data_valid, data_test = seqs
-        target_train, target_valid, target_test = vals
-        days_train, days_valid, days_test = days_seq
-        time_train, time_valid, time_test = time_seq
+        scheduler.step(loss_valid)
 
-    def predict(data, target, days, time):
-        if args.cuda:
-            data = data.cuda()
-            target = target.cuda()
-            days = days.cuda()
-            time = time.cuda()
-        if embedding:
-            outputs = model(data, days, time)
-        else:
-            outputs = model(data)
-        if data_type == 'images':
-            outputs += data[:, 0, -1]
-        else:
-            outputs += data
-            outputs = denormalize(outputs)
-            target = denormalize(target)
-        return criterion(outputs, target)
+    torch.save(model.cpu(), modelpath + '.pt')
 
-    print(89 * '=')
-    print(savepath.upper())
-    lr = args.lr
-    if data_type == 'images':
-        bsz = args.batch_size
-        batches = data_train.size(0) // bsz
-    else:
-        bsz = 1
-        batches = data_train.size(0)
-    loss_best = None
-    for epoch in range(epochs):
-        model.train()
-        optimizer = torch.optim.Adam(
-            model.parameters(), lr=lr, weight_decay=args.weight_decay)
-        # shuffle data for each epoch
-        loss_train = 0
-        rand_idx = torch.randperm(data_train.size(0))
-        for batch in range(batches):
-            data = data_train[rand_idx][batch * bsz:(batch + 1) * bsz]
-            target = target_train[rand_idx][batch * bsz:(batch + 1) * bsz]
-            days = days_train[rand_idx][batch * bsz:(batch + 1) * bsz]
-            time = time_train[rand_idx][batch * bsz:(batch + 1) * bsz]
-            data = Variable(data)
-            target = Variable(target)
-            days = Variable(days)
-            time = Variable(time)
+# TESTING
+model = torch.load(modelpath + '.pt').cuda()
 
-            optimizer.zero_grad()
-            loss = predict(data, target, days, time)
-            loss.backward()
-            if data_type == 'seqs':
-                nn.utils.clip_grad_norm(model.parameters(), args.clip)
-            optimizer.step()
+loss_test = eval_model()
+print('Test {}: {}'.format(modelpath, loss_test))
+np.savetxt(modelpath + '_loss.txt', loss_test)
 
-            loss_train += loss.data
-        # turn on eval
-        model.eval()
-
-        data = Variable(data_valid, volatile=True)
-        target = Variable(target_valid, volatile=True)
-        days = Variable(days_valid, volatile=True)
-        time = Variable(time_valid, volatile=True)
-        loss_valid = predict(data, target, days, time)
-
-        if (epoch + 1) % interval == 0:
-            data = Variable(data_test, volatile=True)
-            target = Variable(target_test, volatile=True)
-            days = Variable(days_test, volatile=True)
-            time = Variable(time_test, volatile=True)
-            loss_test = predict(data, target, days, time)
-            print("%d: lr %.4f, train %.4f, valid %.4f, test %.4f" % (
-                epoch + 1,
-                lr,
-                loss_train[0] / batches,
-                loss_valid.data[0],
-                loss_test.data[0]))
-
-        if not loss_best or loss_valid.data[0] < loss_best:
-            loss_best = loss_valid.data[0]
-            with open(savepath, 'wb') as f:
-                torch.save(model, f)
-        elif lr > args.lr_min:
-            lr /= 2
-        else:
-            break
-
-
-training(linear_regression, 'images', 'linear_regression')
-
-training(neural_network, 'images', 'neural_network')
-training(cnn, 'images', 'cnn')
-
-training(embedding_nn, 'images', 'embedding_nn', embedding=True)
-training(embedding_cnn, 'images', 'embedding_cnn', embedding=True)
-
-training(rnn_tanh, 'seqs', 'rnn_tanh')
-training(gru, 'seqs', 'gru')
-training(lstm, 'seqs', 'lstm')
-
-training(embedding_rnn_tanh, 'seqs', 'embedding_rnn_tanh', True)
-training(embedding_gru, 'seqs', 'embedding_gru', True)
-training(embedding_lstm, 'seqs', 'embedding_lstm', True)
-
-
-###############################################################################
-# TEST
-###############################################################################
+if (args.model == 'RNN' and args.attn) or args.model == 'Transformer':
+    attn = attn_model()
+    np.save(modelpath + '_attn', attn)
