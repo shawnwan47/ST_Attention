@@ -39,7 +39,7 @@ def load_adj(contrib=0.01):
 
 
 def load_flow_data(affix='O'):
-    filepath = DATA_PATH + 'O' + '.csv'
+    filepath = DATA_PATH + affix + '.csv'
     if os.path.exists(filepath):
         flow = pd.read_csv(filepath, index_col=0, parse_dates=True)
     else:
@@ -50,12 +50,35 @@ def load_flow_data(affix='O'):
             pd.read_csv(DATA_PATH + x, index_col=0, parse_dates=True)
             for x in data_files])
         flow.to_csv(filepath, index=True)
-    # remove station with all zero
-    flow.drop(flow.columns[flow.sum() == 0], axis=1, inplace=True)
     return flow
 
 
-def load_flow(gran=15, start_time=5, end_time=23):
+def load_flow_highway():
+    o = load_flow_data('O')
+    d = load_flow_data('D')
+    day = o.index.map(lambda x: x.weekday())
+    hour = o.index.map(lambda x: x.hour)
+    minute = o.index.map(lambda x: x.minute)
+    time = hour * 4 + minute // 15
+
+    o = o.astype(float).as_matrix()
+    d = d.astype(float).as_matrix()
+    flow = np.concatenate((o, d), -1)
+    daytime = np.stack((np.array(day), np.array(time)))
+
+    # normalization
+    flow_mean = flow.mean(0)
+    flow_std = flow.std(0) + EPS
+    flow = (flow - flow_mean) / flow_std
+
+    # reshape
+    flow = flow.reshape(-1, 96, flow.shape[-1])
+    daytime = daytime.reshape(-1, 96, 2)
+
+    return flow, daytime, flow_mean, flow_std
+
+
+def load_flow_metro(gran=15, start_time=5, end_time=23):
     assert gran in [5, 10, 15, 20, 30, 60]
     steps = gran // 5
     o = load_flow_data('O').astype(float).as_matrix()

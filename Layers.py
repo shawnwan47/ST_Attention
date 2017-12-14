@@ -94,21 +94,10 @@ class TransformerLayer(nn.Module):
         mask = _get_attn_subsequent_mask()
         self.register_buffer('mask', mask)
 
-    def encode(self, inp, mask=None):
-        mask = self.mask[:, :inp.size(1), :inp.size(1)] if mask else None
-        out, attn = self.attn(inp, inp, inp, mask)
-        out = self.feed_forward(out)
-        return out, attn
-
-    def forward(self, inp, src):
-        # Args Checks
-        inp_batch, inp_len, _ = inp.size()
-        src_batch, src_len, _ = src.size()
-        aeq(inp_batch, src_batch)
-        # END Args Checks
-        out = torch.cat((src, inp), 1)
-        mask = self.mask[:, src_len:src_len + inp_len, :src_len + inp_len]
-        hid, attn = self.attn(out, out, inp, mask)
+    def forward(self, inp, mask):
+        inp_len = inp.size(1)
+        mask = torch.gt(mask + self.mask[:, :inp_len, :inp_len], 0)
+        hid, attn = self.attn(inp, inp, inp, mask)
         out = self.feed_forward(hid)
         return out, attn
 
@@ -270,7 +259,7 @@ class MultiHeadedAttention(nn.Module):
         if mask is not None:
             batch_, q_len_, k_len_ = mask.size()
             aeq(k_len_, k_len)
-            aeq(q_len_ == q_len)
+            aeq(q_len_, q_len)
         # END CHECKS
 
         def shape_projection(x):

@@ -19,6 +19,8 @@ Args.add_loss(args)
 Args.add_optim(args)
 Args.add_model(args)
 args = args.parse_args()
+Args.update_args(args)
+print(args)
 
 # CUDA
 if args.gpuid:
@@ -27,41 +29,33 @@ if args.seed > 0:
     torch.cuda.manual_seed(args.seed)
 
 # DATA
-(flow_train, flow_valid, flow_test,
+data = getattr(Utils, 'load_data_' + args.data_type)(args)
+(inp_train, inp_valid, inp_test,
+ tgt_train, tgt_valid, tgt_test,
  daytime_train, daytime_valid, daytime_test,
- flow_mean, flow_std) = Utils.load_data(args)
+ data_mean, data_std) = data
 
-flow_train = Variable(flow_train)
-flow_valid = Variable(flow_valid, volatile=True)
-flow_test = Variable(flow_test, volatile=True)
+
+inp_train = Variable(inp_train)
+inp_valid = Variable(inp_valid, volatile=True)
+inp_test = Variable(inp_test, volatile=True)
 daytime_train = Variable(daytime_train)
 daytime_valid = Variable(daytime_valid, volatile=True)
 daytime_test = Variable(daytime_test, volatile=True)
-flow_mean = Variable(flow_mean, requires_grad=False)
-flow_std = Variable(flow_std, requires_grad=False)
-
-past, future = args.past, args.future
-if args.yesterday:
-    past += flow_train.size(0) // 2
-if args.daytime:
-    args.input_size += args.day_size + args.time_size
-
-
-def denormalize(flow):
-    return flow * flow_std + flow_mean
-
+data_mean = Variable(data_mean, requires_grad=False)
+data_std = Variable(data_std, requires_grad=False)
 
 # MODEL
 modelpath = MODEL_PATH + Args.modelname(args)
 print('Model: {}'.format(modelpath))
 model = getattr(Models, args.model)(args).cuda()
-daytime = Models.DayTime(args).cuda()
+emb_dt = Models.DayTime(args).cuda()
 
 # LOSS
 criterion = getattr(torch.nn, args.loss)()
 
 # OPTIM
-parameters = list(model.parameters()) + list(daytime.parameters())
+parameters = list(model.parameters()) + list(emb_dt.parameters())
 optimizer = getattr(torch.optim, args.optim)(
     parameters, lr=args.lr, weight_decay=args.weight_decay)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -70,16 +64,13 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
 
 def train_model():
     loss_train = []
-    for t in range(past, flow_train.size(0) - future - 1):
-        src = flow_train[:t]
-        tgt = flow_train[t + 1:t + future + 1]
-        inp = flow_train[t:t + future]
+    for d in torch.randperm(inp_train.size(0)):
+        inp = inp_train[d]
+        tgt = tgt_train[d]
         if args.daytime:
-            src = torch.cat((src, daytime(daytime_train[:t])), -1)
-            inp = torch.cat((inp, daytime(daytime_train[t:t + future])), -1)
-        out = model(src, inp, teach=True)
-        out = denormalize(out[0])
-        tgt = denormalize(tgt)
+            inp = torch.cat((inp, emb_dt(daytime_train[d])), -1)
+        out = model(inp)
+        out = Utils.denormalize(out[0], data_mean, data_std)
         loss = criterion(out, tgt)
         loss.backward()
         clip_grad_norm(parameters, args.max_grad_norm)
@@ -89,62 +80,30 @@ def train_model():
 
 
 def valid_model():
-    loss_valid = []
-    for t in range(past, flow_valid.size(0) - future - 1):
-        src = flow_valid[:t]
-        tgt = flow_valid[t + 1:t + future + 1]
-        inp = flow_valid[t:t + future]
-        if args.daytime:
-            src = torch.cat((src, daytime(daytime_valid[:t])), -1)
-            inp = torch.cat((inp, daytime(daytime_valid[t:t + future])), -1)
-        out = model(src, inp, teach=False)
-        out = denormalize(out[0])
-        tgt = denormalize(tgt)
-        loss = criterion(out, tgt)
-        loss_valid.append(loss.data[0])
-    return sum(loss_valid) / len(loss_valid)
+    inp = inp_valid
+    out = model(inp)
+    out = Utils.denormalize(out[0])
+    loss = criterion(out, tgt_valid).data[0]
+    return loss
 
 
 def eval_model():
-    def pe(out, tgt):
+    def percent_err(out, tgt):
         return criterion(out, tgt).data[0] / tgt.mean()
 
-    times, days = flow_test.size()[:2]
-    end = times - future - 1
-    outs = []
-    tgts = []
-    for t in range(past, end):
-        src = flow_test[:t]
-        tgt = flow_test[t + 1:t + future + 1]
-        inp = flow_test[t:t + future]
-        if args.daytime:
-            src = torch.cat((src, daytime(daytime_test[:t])), -1)
-            inp = torch.cat((inp, daytime(daytime_test[t:t + future])), -1)
-        out = model(src, inp, teach=False)
-        out = denormalize(out[0])
-        tgt = denormalize(tgt)
-        outs.append(out)
-        tgts.append(tgt)
-    outs = torch.stack(outs, 1)
-    tgts = torch.stack(tgts, 1)
-    loss = [pe(outs[i], tgts[i]) for i in range(args.future)]
-    return np.array(list(map(float, loss)))
+    def nth_future(data, i):
+        return data[:, :, i * args.dim:(i + 1) * args.dim]
 
-
-def attn_model():
-    src = flow_test[:past]
-    tgt = flow_test[past:-1]
-    if args.daytime:
-        src = torch.cat((src, daytime(daytime_test[:past])), -1)
-        tgt = torch.cat((tgt, daytime(daytime_test[past:-1])), -1)
-    out = model(src, tgt, teach=True)
-    attn = out[-1].data.numpy()
-    return attn
+    out, attn = model(inp_test)
+    out = Utils.denormalize(out, data_mean, data_std)
+    loss = [percent_err(nth_future(out, i), nth_future(tgt_test, i))
+            for i in range(args.future)]
+    return np.array(list(map(float, loss))), attn
 
 
 # TRAINING
 if not args.test:
-    for epoch in range(args.nepoch):
+    for epoch in range(args.epoches):
         loss_train = train_model()
         loss_valid = valid_model()
 
@@ -158,10 +117,9 @@ if not args.test:
 # TESTING
 model = torch.load(modelpath + '.pt').cuda()
 
-loss_test = eval_model()
+loss_test, attn = eval_model()
 print('Test {}: {}'.format(modelpath, loss_test))
 np.savetxt(modelpath + '_loss.txt', loss_test)
 
 if (args.model == 'RNN' and args.attn) or args.model == 'Transformer':
-    attn = attn_model()
     np.save(modelpath + '_attn', attn)

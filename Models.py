@@ -25,28 +25,13 @@ class DayTime(nn.Module):
         return torch.cat((day, time), 2)
 
 
-class MLP(nn.Module):
-    def __init__(self, args):
-        super(MLP, self).__init__()
-        self.input_size = args.input_size * args.past
-        self.output_size = args.output_size * args.future
-        self.hidden_size = args.hidden_size * (args.past + args.future)
-        self.linear_in = nn.Linear(self.input_size, self.hidden_size)
-        self.linear_out = nn.Linear(self.hidden_size, self.output_size)
-        self.layernorm = UtilClass.LayerNorm()
-        self.activation = nn.ReLU()
-        self.dropout = nn.Dropout(args.dropout)
-
-    def forward(self, input):
-
-
-
 class RNN(nn.Module):
     def __init__(self, args):
         super(RNN, self).__init__()
         self.attn = args.attn
         self.daytime = args.daytime
-        self.output_size = args.output_size
+        self.dim = args.dim
+        self.output_size = args.future
         if self.attn:
             self.rnn = Layers.RNNAttn(
                 args.rnn_type, args.input_size, args.hidden_size,
@@ -56,14 +41,14 @@ class RNN(nn.Module):
                 args.rnn_type, args.input_size, args.hidden_size,
                 args.num_layers, args.dropout)
         self.dropout = nn.Dropout(args.dropout)
-        self.linear_out = nn.Linear(args.hidden_size, args.output_size)
+        self.linear_out = BottleLinear(args.hidden_size, args.output_size)
 
     def forward(self, src, input, teach=True):
         src_len, bsz, ndim = src.size()
         tgt_len, bsz_, ndim_ = input.size()
         aeq(bsz, bsz_)
         aeq(ndim, ndim_)
-        dim = self.output_size
+        dim = self.dim
         if self.daytime:
             daytime = input[:, :, dim:]
         hidden = self.rnn.initHidden(src)
@@ -90,56 +75,65 @@ class RNN(nn.Module):
             return out, hidden
 
 
-class Transformer(nn.Module):
+class Attn(nn.Module):
     """
-    The Transformer decoder for Spatial-Temporal Attention Model
+    The Attn model for Spatial-Temporal traffic forecasting
     """
 
     def __init__(self, args):
-        super(Transformer, self).__init__()
-        self.daytime = args.daytime
-        self.output_size = args.output_size
-        self.linear_in = BottleLinear(args.input_size, args.hidden_size)
-        self.linear_out = BottleLinear(args.hidden_size, args.output_size)
-        self.dropout = nn.Dropout()
+        super(Attn, self).__init__()
+        self.past = args.past
+        self.future = args.future
+        self.dim = args.dim
         self.head = args.head
-        self.mask_src = args.mask_src
+        self.input_size = args.input_size
+        self.hidden_size = args.hidden_size
+        self.output_size = args.output_size
+        self.linear_in = BottleLinear(self.input_size, self.hidden_size)
+        self.linear_out = BottleLinear(self.hidden_size, self.output_size)
         self.transformer_layers = nn.ModuleList(
-            [Layers.TransformerLayer(args.hidden_size, args.head, args.dropout)
+            [Layers.TransformerLayer(self.hidden_size, self.head, args.dropout)
              for _ in range(args.num_layers)])
 
-    def encode(self, input):
+    def forward(self, inp):
+        '''
+        inp: batch x len x dim
+        out: batch x len - past x dim x future
+        attn: batch x len - past x len
+        '''
+        batch, length, dim = inp.size()
+        hid = self.linear_in(inp)
         for layer in self.transformer_layers:
-            input, _ = layer.encode(input, self.mask_src)
-        return input
-
-    def forward(self, src, input, teach=True):
-        src_len, src_batch, _ = src.size()
-        inp_len, inp_batch, _ = input.size()
-        aeq(src_batch, inp_batch)
-        dim = self.output_size
-        if self.daytime:
-            daytime = input[:, :, dim:]
-
-        context = self.encode(self.linear_in(src.transpose(0, 1).contiguous()))
-        out = input[:, :, :dim].clone()
-        attn = Variable(torch.zeros(
-            inp_batch, self.head, inp_len, src_len + inp_len))
-        inp = input[0, :, :dim]
-
-        for i in range(inp_len):
-            if teach and random() < 0.5:
-                inp = input[i]
-            elif self.daytime:
-                inp = torch.cat((inp, daytime[i]), -1)
-            mid = self.linear_in(inp.unsqueeze(0).transpose(0, 1).contiguous())
-            for layer in self.transformer_layers:
-                mid, attn[:, :, i, :context.size(1) + 1] = layer(mid, context)
-            context = torch.cat((context, mid), 1)
-            out[i] = inp[:, :dim] + self.linear_out(
-                self.dropout(mid)).transpose(0, 1)
-            inp = out[i].clone()
+            hid, attn = layer(hid, hid)
+        out = self.linear_out(hid[:, self.past:])
+        out = out.view(batch, length - self.past, dim, self.future)
+        out += inp[self.past:].expand_as(out)
         return out, attn
+        # src_len, src_batch, _ = src.size()
+        # inp_len, inp_batch, _ = input.size()
+        # aeq(src_batch, inp_batch)
+        # dim = self.dim
+        # if self.daytime:
+        #     daytime = input[:, :, dim:]
+
+        # context = self.encode(self.linear_in(src.transpose(0, 1).contiguous()))
+        # out = input[:, :, :dim].clone()
+        # attn = Variable(torch.zeros(
+        #     inp_batch, self.head, inp_len, src_len + inp_len))
+        # inp = input[0, :, :dim]
+
+        # for i in range(inp_len):
+        #     if teach and random() < 0.5:
+        #         inp = input[i]
+        #     elif self.daytime:
+        #         inp = torch.cat((inp, daytime[i]), -1)
+        #     mid = self.linear_in(inp.unsqueeze(0).transpose(0, 1).contiguous())
+        #     for layer in self.transformer_layers:
+        #         mid, attn[:, :, i, :context.size(1) + 1] = layer(mid, context)
+        #     context = torch.cat((context, mid), 1)
+        #     out[i] = inp[:, :dim] + self.linear_out(
+        #         self.dropout(mid)).transpose(0, 1)
+        #     inp = out[i].clone()
 
 
 class GCN(nn.Module):
@@ -163,15 +157,15 @@ class GAT(nn.Module):
     A simplified 2-layer GAT
     '''
 
-    def __init__(self, input_size, hidden_size, head_count, output_size):
+    def __init__(self, input_size, hidden_size, head_count, dim):
         super(GAT, self).__init__()
         self.input_size = input_size
-        self.output_size = output_size
+        self.dim = dim
         self.hidden_size = hidden_size
         self.head_count = head_count
 
         self.gat1 = Layers.GraphAttention(input_size, hidden_size, head_count, True)
-        self.gat2 = Layers.GraphAttention(self.gat1.output_size, output_size)
+        self.gat2 = Layers.GraphAttention(self.gat1.dim, dim)
 
     def forward(self, input, adj):
         out, att1 = self.gat1(input, adj)
