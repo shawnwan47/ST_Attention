@@ -28,7 +28,7 @@ def load_data_highway(args):
     def cat_tgt(tgt):
         length = tgt.size(1)
         return torch.cat([tgt[:, i:length - args.future + i + 1]
-                          for i in range(future)], -1)
+                          for i in range(args.future)], -1)
 
     flow_train, flow_valid, flow_test = split_dataset(flow)
     daytime_train, daytime_valid, daytime_test = split_dataset(daytime)
