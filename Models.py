@@ -39,7 +39,7 @@ class RNN(nn.Module):
                 args.num_layers, args.dropout)
         self.dropout = nn.Dropout(args.dropout)
         self.linear_out = BottleLinear(args.hidden_size, args.output_size)
-        self.register_buffer('mask', _get_mask(self.past))
+        self.register_buffer('mask', _get_mask(args.input_length, self.past))
 
     def forward(self, inp):
         '''
@@ -50,7 +50,7 @@ class RNN(nn.Module):
         residual = inp[:, self.past:, :self.dim].unsqueeze(-2)
         hid = self.rnn.initHidden(inp)
         if self.attn:
-            mask = self.mask[:, :inp.size(1), :inp.size(1)]
+            mask = self.mask[:inp.size(1), :inp.size(1)]
             out, hid, attn = self.rnn(inp, hid, mask)
         else:
             out, hid = self.rnn(inp, hid)
@@ -76,12 +76,12 @@ class Attention(nn.Module):
         self.dim = args.dim
         self.head = args.head
         self.input_size = args.input_size
+        self.output_size = args.output_size
         self.hidden_size = args.hidden_size
         self.num_layers = args.num_layers
-        self.output_size = args.output_size
         self.linear_in = BottleLinear(self.input_size, self.hidden_size)
         self.linear_out = BottleLinear(self.hidden_size, self.output_size)
-        self.attention_layers = nn.ModuleList(
+        self.layers = nn.ModuleList(
             [Layers.AttentionLayer(self.hidden_size, self.head, args.dropout)
              for _ in range(self.num_layers)])
         self.dilated = args.dilated
@@ -91,10 +91,12 @@ class Attention(nn.Module):
             for i in range(self.num_layers):
                 dilation = self.dilation[i]
                 window = self.dilation[i + 1] // dilation
-                masks.append(_get_mask_dilated(dilation, window))
-                self.register_buffer('mask', masks)
+                mask = _get_mask_dilated(args.input_length, dilation, window)
+                masks.append(mask)
+            self.register_buffer('mask', torch.stack(masks, 0))
         else:
-            self.register_buffer('mask', _get_mask(self.past))
+            mask = _get_mask(args.input_length, self.past)
+            self.register_buffer('mask', mask)
 
     def forward(self, inp):
         '''
@@ -103,16 +105,19 @@ class Attention(nn.Module):
         attn: batch x len - past x len
         '''
         residual = inp[:, self.past:, :self.dim].unsqueeze(-2)
+        attns = []
         hid = self.linear_in(inp)
         for i in range(self.num_layers):
             if self.dilated:
-                mask = self.mask[i][:, :inp.size(1), :inp.size(1)]
-                hid, attn = self.attention_layers[i](hid, mask)
+                mask = self.mask[i, :inp.size(1), :inp.size(1)]
+                hid, attn = self.layers[i](hid, mask)
             else:
-                mask = self.mask[:, :inp.size(1), :inp.size(1)]
-                hid, attn = self.attention_layers[i](hid, mask)
+                mask = self.mask[:inp.size(1), :inp.size(1)]
+                hid, attn = self.layers[i](hid, mask)
+            attns.append(attn)
         out = self.linear_out(hid[:, self.past:].contiguous())
         batch, length, _ = out.size()
         out = out.view(batch, length, self.future, self.dim)
-        out = out + residual
+        out += residual
+        attn = torch.cat(attns, 0)
         return out, attn

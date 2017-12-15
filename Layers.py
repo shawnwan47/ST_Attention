@@ -200,7 +200,7 @@ class MultiHeadedAttention(nn.Module):
         b = bh // self.head
         if mask is not None:
             scaled = scaled.view(b, self.head, l, dim_head)
-            mask = mask.unsqueeze(1).expand_as(scaled)
+            # mask = mask.expand_as(scaled)
             scaled.data.masked_fill_(mask, -float('inf'))
         attn = self.sm(scaled.view(bh, l, dim_head))
 

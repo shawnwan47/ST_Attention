@@ -1,9 +1,7 @@
 import numpy as np
 import torch
-from torch.autograd import Variable
 
 import Data
-from Consts import MAX_SEQ_LEN
 
 
 def load_data_highway(args):
@@ -118,8 +116,8 @@ def aeq(*args):
         "Not all arguments have the same value: " + str(args)
 
 
-def _get_mask(past):
-    attn_shape = (1, MAX_SEQ_LEN, MAX_SEQ_LEN)
+def _get_mask(length, past):
+    attn_shape = (length, length)
     mask_past = np.tril(np.ones(attn_shape), k=-past).astype('uint8')
     mask_future = np.triu(np.ones(attn_shape), k=1).astype('uint8')
     mask_past = torch.from_numpy(mask_past)
@@ -127,12 +125,13 @@ def _get_mask(past):
     return mask_future + mask_past
 
 
-def _get_mask_dilated(dilation, window):
-    attn_shape = (1, MAX_SEQ_LEN, MAX_SEQ_LEN)
+def _get_mask_dilated(length, dilation, window):
+    attn_shape = (length, length)
     mask = np.ones(attn_shape)
     for i in range(window):
-        diag = np.diag(mask, -i * dilation)
-        mask -= diag
+        k = -i * dilation
+        mask -= np.diag(np.ones(length + k), k)
+    mask = torch.from_numpy(mask.astype('uint8'))
     return mask
 
 

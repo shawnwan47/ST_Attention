@@ -16,6 +16,7 @@ def add_data(args):
     # args to be inferred
     args.add_argument('-past', type=int)
     args.add_argument('-daily_times', type=int)
+    args.add_argument('-input_length', type=int)
     args.add_argument('-dim', type=int)
     args.add_argument('-days', type=int)
     args.add_argument('-days_train', type=int)
@@ -82,6 +83,7 @@ def _dataset(args):
     args.daily_times = (args.end_time - args.start_time) * 60 // args.gran
     assert args.past_days > 0
     args.past = args.past_days * args.daily_times
+    args.input_length = args.daily_times + args.past
 
 
 def _model(args):
