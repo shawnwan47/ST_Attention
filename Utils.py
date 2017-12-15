@@ -3,7 +3,7 @@ import torch
 from torch.autograd import Variable
 
 import Data
-from Consts import DAYS, DAYS_TRAIN, DAYS_TEST, MAX_SEQ_LEN
+from Consts import MAX_SEQ_LEN
 
 
 def load_data_highway(args):
@@ -13,11 +13,10 @@ def load_data_highway(args):
     flow_mean = torch.FloatTensor(flow_mean).cuda()
     flow_std = torch.FloatTensor(flow_std).cuda()
 
-    if args.past_days:
-        flow = torch.cat((flow[i:args.days - args.past_days + i]
-                          for i in range(args.past_days)), 1)
-        daytime = torch.cat((daytime[i:args.days - args.past_days + i]
-                             for i in range(args.past_days)), 1)
+    flow = torch.cat([flow[i:args.days - args.past_days + i]
+                      for i in range(args.past_days + 1)], 1)
+    daytime = torch.cat([daytime[i:args.days - args.past_days + i]
+                         for i in range(args.past_days + 1)], 1)
 
     def split_dataset(data):
         data_train = data[:args.days_train]
@@ -26,28 +25,24 @@ def load_data_highway(args):
         return data_train, data_valid, data_test
 
     def cat_tgt(tgt):
-        length = tgt.size(1)
-        return torch.cat([tgt[:, i:length - args.future + i + 1]
-                          for i in range(args.future)], -1)
+        return torch.stack([tgt[:, i:tgt.size(1) - args.future + i + 1]
+                            for i in range(args.future)], -2)
 
     flow_train, flow_valid, flow_test = split_dataset(flow)
     daytime_train, daytime_valid, daytime_test = split_dataset(daytime)
 
-    inp_train = flow_train[:, :-args.future]
-    inp_valid = flow_valid[:, :-args.future]
-    inp_test = flow_test[:, :-args.future]
-    daytime_train = daytime_train[:, :-args.future]
-    daytime_valid = daytime_valid[:, :-args.future]
-    daytime_test = daytime_test[:, :-args.future]
-    tgt_train = flow_train[:, args.past:]
-    tgt_valid = flow_valid[:, args.past:]
-    tgt_test = flow_test[:, args.past:]
-    tgt_train = denormalize(tgt_train, flow_mean, flow_std)
-    tgt_valid = denormalize(tgt_valid, flow_mean, flow_std)
-    tgt_test = denormalize(tgt_test, flow_mean, flow_std)
-    tgt_train = cat_tgt(tgt_train)
-    tgt_valid = cat_tgt(tgt_valid)
-    tgt_test = cat_tgt(tgt_test)
+    inp_train = flow_train[:, :-args.future].contiguous()
+    inp_valid = flow_valid[:, :-args.future].contiguous()
+    inp_test = flow_test[:, :-args.future].contiguous()
+    daytime_train = daytime_train[:, :-args.future].contiguous()
+    daytime_valid = daytime_valid[:, :-args.future].contiguous()
+    daytime_test = daytime_test[:, :-args.future].contiguous()
+    tgt_train = flow_train[:, args.past + 1:]
+    tgt_valid = flow_valid[:, args.past + 1:]
+    tgt_test = flow_test[:, args.past + 1:]
+    tgt_train = cat_tgt(denormalize(tgt_train, flow_mean, flow_std))
+    tgt_valid = cat_tgt(denormalize(tgt_valid, flow_mean, flow_std))
+    tgt_test = cat_tgt(denormalize(tgt_test, flow_mean, flow_std))
 
     print('Data loaded.\n flow: {}, target: {}, time: {}'.format(
         inp_train.size(), tgt_train.size(), daytime_train.size()))
@@ -65,7 +60,7 @@ def load_data_metro(args):
     flow_mean = torch.FloatTensor(flow_mean).cuda()
     flow_std = torch.FloatTensor(flow_std).cuda()
 
-    slices = flow.size(0) // DAYS
+    slices = flow.size(0) // args.days
 
     def init_idx(batch):
         return torch.arange(batch).long().cuda()
@@ -84,9 +79,9 @@ def load_data_metro(args):
     def split_data(data):
         batch = data.size(0) // slices
         idx = init_idx(batch)
-        idx_train = generate_idx(idx[:DAYS_TRAIN], batch)
-        idx_valid = generate_idx(idx[DAYS_TRAIN:-DAYS_TEST], batch)
-        idx_test = generate_idx(idx[-DAYS_TEST:], batch)
+        idx_train = generate_idx(idx[:args.days_train], batch)
+        idx_valid = generate_idx(idx[args.days_train:-args.days_test], batch)
+        idx_test = generate_idx(idx[-args.days_test:], batch)
         return data[idx_train], data[idx_valid], data[idx_test]
 
     if args.yesterday:
@@ -109,10 +104,6 @@ def load_data_metro(args):
             flow_mean, flow_std)
 
 
-def tensor2VarRNN(t):
-    return Variable(t.transpose(0, 1))
-
-
 def var2np(x):
     return x.cpu().data.numpy()
 
@@ -127,14 +118,23 @@ def aeq(*args):
         "Not all arguments have the same value: " + str(args)
 
 
-def _get_attn_subsequent_mask():
+def _get_mask(past):
     attn_shape = (1, MAX_SEQ_LEN, MAX_SEQ_LEN)
-    subsequent_mask = np.triu(np.ones(attn_shape), k=1).astype('uint8')
-    subsequent_mask = torch.from_numpy(subsequent_mask)
-    return subsequent_mask
+    mask_past = np.tril(np.ones(attn_shape), k=-past).astype('uint8')
+    mask_future = np.triu(np.ones(attn_shape), k=1).astype('uint8')
+    mask_past = torch.from_numpy(mask_past)
+    mask_future = torch.from_numpy(mask_future)
+    return mask_future + mask_past
+
+
+def _get_mask_dilated(dilation, window):
+    attn_shape = (1, MAX_SEQ_LEN, MAX_SEQ_LEN)
+    mask = np.ones(attn_shape)
+    for i in range(window):
+        diag = np.diag(mask, -i * dilation)
+        mask -= diag
+    return mask
 
 
 def denormalize(flow, flow_mean, flow_std):
     return flow * flow_std + flow_mean
-
-

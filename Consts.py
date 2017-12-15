@@ -18,5 +18,5 @@ else:
     DAYS_TEST = 4
     WEEKDAY = 0
 
-MAX_SEQ_LEN = 96 * 7
+MAX_SEQ_LEN = 96 * 8
 EPS = 1e-8

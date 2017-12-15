@@ -64,7 +64,7 @@ def load_flow_highway():
     o = o.astype(float).as_matrix()
     d = d.astype(float).as_matrix()
     flow = np.concatenate((o, d), -1)
-    daytime = np.stack((np.array(day), np.array(time)))
+    daytime = np.vstack((np.array(day), np.array(time))).T
 
     # normalization
     flow_mean = flow.mean(0)

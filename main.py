@@ -32,45 +32,52 @@ if args.seed > 0:
 data = getattr(Utils, 'load_data_' + args.data_type)(args)
 (inp_train, inp_valid, inp_test,
  tgt_train, tgt_valid, tgt_test,
- daytime_train, daytime_valid, daytime_test,
- data_mean, data_std) = data
+ dt_train, dt_valid, dt_test,
+ flow_mean, flow_std) = data
 
 
 inp_train = Variable(inp_train)
 inp_valid = Variable(inp_valid, volatile=True)
 inp_test = Variable(inp_test, volatile=True)
-daytime_train = Variable(daytime_train)
-daytime_valid = Variable(daytime_valid, volatile=True)
-daytime_test = Variable(daytime_test, volatile=True)
-data_mean = Variable(data_mean, requires_grad=False)
-data_std = Variable(data_std, requires_grad=False)
+dt_train = Variable(dt_train)
+dt_valid = Variable(dt_valid, volatile=True)
+dt_test = Variable(dt_test, volatile=True)
+tgt_train = Variable(tgt_train)
+tgt_valid = Variable(tgt_valid, volatile=True)
+tgt_test = Variable(tgt_test, volatile=True)
+flow_mean = Variable(flow_mean, requires_grad=False)
+flow_std = Variable(flow_std, requires_grad=False)
 
 # MODEL
 modelpath = MODEL_PATH + Args.modelname(args)
 print('Model: {}'.format(modelpath))
 model = getattr(Models, args.model)(args).cuda()
-emb_dt = Models.DayTime(args).cuda()
+daytime = Models.Embedding_DayTime(args).cuda()
 
 # LOSS
 criterion = getattr(torch.nn, args.loss)()
 
 # OPTIM
-parameters = list(model.parameters()) + list(emb_dt.parameters())
+parameters = list(model.parameters()) + list(daytime.parameters())
 optimizer = getattr(torch.optim, args.optim)(
     parameters, lr=args.lr, weight_decay=args.weight_decay)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
     optimizer, patience=args.patience, verbose=True)
 
 
+# TRAINING
 def train_model():
     loss_train = []
     for d in torch.randperm(inp_train.size(0)):
-        inp = inp_train[d]
-        tgt = tgt_train[d]
+        inp = inp_train[d].unsqueeze(0)
+        tgt = tgt_train[d].unsqueeze(0)
+        dt = dt_train[d].unsqueeze(0)
         if args.daytime:
-            inp = torch.cat((inp, emb_dt(daytime_train[d])), -1)
+            inp = torch.cat((inp, daytime(dt)), -1)
         out = model(inp)
-        out = Utils.denormalize(out[0], data_mean, data_std)
+        if type(out) is tuple:
+            out, attn = out
+        out = Utils.denormalize(out, flow_mean, flow_std).contiguous()
         loss = criterion(out, tgt)
         loss.backward()
         clip_grad_norm(parameters, args.max_grad_norm)
@@ -81,24 +88,32 @@ def train_model():
 
 def valid_model():
     inp = inp_valid
+    if args.daytime:
+        inp = torch.cat((inp, daytime(dt_valid)), -1)
     out = model(inp)
-    out = Utils.denormalize(out[0])
+    if type(out) is tuple:
+        out, attn = out
+    out = Utils.denormalize(out, flow_mean, flow_std)
     loss = criterion(out, tgt_valid).data[0]
     return loss
 
 
-def eval_model():
+def test_model():
     def percent_err(out, tgt):
-        return criterion(out, tgt).data[0] / tgt.mean()
+        return float(criterion(out, tgt).data[0] / tgt.mean())
 
-    def nth_future(data, i):
-        return data[:, :, i * args.dim:(i + 1) * args.dim]
-
-    out, attn = model(inp_test)
-    out = Utils.denormalize(out, data_mean, data_std)
-    loss = [percent_err(nth_future(out, i), nth_future(tgt_test, i))
-            for i in range(args.future)]
-    return np.array(list(map(float, loss))), attn
+    inp = inp_test
+    if args.daytime:
+        inp = torch.cat((inp, daytime(dt_test)), -1)
+    out = model(inp)
+    ret_attn = False
+    if type(out) is tuple:
+        out, attn = out
+        ret_attn = True
+    out = Utils.denormalize(out, flow_mean, flow_std)
+    loss = np.array([percent_err(out[:, :, i], tgt_test[:, :, i])
+                     for i in range(args.future)])
+    return (loss, attn) if ret_attn else loss
 
 
 # TRAINING
@@ -112,14 +127,16 @@ if not args.test:
 
         scheduler.step(loss_valid)
 
-    torch.save(model.cpu(), modelpath + '.pt')
+    torch.save((model.cpu(), daytime.cpu()), modelpath + '.pt')
 
 # TESTING
-model = torch.load(modelpath + '.pt').cuda()
+model, daytime = torch.load(modelpath + '.pt')
+model = model.cuda()
+daytime = daytime.cuda()
 
-loss_test, attn = eval_model()
-print('Test {}: {}'.format(modelpath, loss_test))
-np.savetxt(modelpath + '_loss.txt', loss_test)
-
-if (args.model == 'RNN' and args.attn) or args.model == 'Transformer':
-    np.save(modelpath + '_attn', attn)
+out = test_model()
+if type(out) is tuple:
+    out, attn = out
+    np.save(modelpath + '_attn', attn.cpu().data.numpy())
+print('Test {}: {}'.format(modelpath, out))
+np.savetxt(modelpath + '_loss.txt', out)

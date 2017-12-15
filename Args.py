@@ -1,20 +1,22 @@
 def add_gpu(args):
-    args.add_argument('-gpuid', default=[], nargs='+', type=int)
+    args.add_argument('-gpuid', type=int, default=[], nargs='+')
     args.add_argument('-seed', type=int, default=47)
     args.add_argument('-eps', type=float, default=1e-8)
 
 
 def add_data(args):
-    args.add_argument('-gran', type=int, default=15)
-    args.add_argument('-future', type=int, default=8)
-    args.add_argument('-start_time', type=int, default=5)
-    args.add_argument('-end_time', type=int, default=23)
     args.add_argument('-data_type', type=str, default='highway',
                       choices=['highway', 'metro'])
+    args.add_argument('-past_days', type=int, default=1)
+    args.add_argument('-future', type=int, default=8)
+    # for metro only
+    args.add_argument('-gran', type=int, default=15)
+    args.add_argument('-start_time', type=int, default=6)
+    args.add_argument('-end_time', type=int, default=22)
+    # args to be inferred
+    args.add_argument('-past', type=int)
     args.add_argument('-daily_times', type=int)
     args.add_argument('-dim', type=int)
-    args.add_argument('-past', type=int)
-    args.add_argument('-past_days', type=int)
     args.add_argument('-days', type=int)
     args.add_argument('-days_train', type=int)
     args.add_argument('-days_test', type=int)
@@ -30,15 +32,15 @@ def add_optim(args):
     args.add_argument('-epoches', type=int, default=100)
     args.add_argument('-optim', type=str, default='SGD',
                       choices=['SGD', 'Adam', 'Adadelta', 'Adamax'])
-    args.add_argument('-lr', type=float, default=0.1)
+    args.add_argument('-lr', type=float, default=1)
     args.add_argument('-patience', type=int, default=5)
     args.add_argument('-weight_decay', type=float, default=1e-5)
     args.add_argument('-max_grad_norm', type=float, default=1)
 
 
 def add_model(args):
-    args.add_argument('-model', type=str, default='Attn',
-                      choices=['RNN', 'Attn', 'DilatedAttn'])
+    args.add_argument('-model', type=str, default='Attention',
+                      choices=['RNN', 'Attention', 'DilatedAttention'])
     # general
     args.add_argument('-input_size', type=int)
     args.add_argument('-output_size', type=int)
@@ -57,6 +59,8 @@ def add_model(args):
                       choices=['dot', 'general', 'mlp', 'kvq'])
     # Transformer
     args.add_argument('-head', type=int, default=1)
+    args.add_argument('-dilated', action='store_true')
+    args.add_argument('-dilation', type=int, nargs='+', default=[])
 
 
 def _dataset(args):
@@ -76,16 +80,16 @@ def _dataset(args):
     else:
         raise KeyError
     args.daily_times = (args.end_time - args.start_time) * 60 // args.gran
-
-    if args.past_days:
-        args.past = args.past_days * args.daily_times
+    assert args.past_days > 0
+    args.past = args.past_days * args.daily_times
 
 
 def _model(args):
-    if args.model == 'RNN':
+    if args.model == 'Attention':
         args.attn = False
-    if args.model == 'Attn':
         args.daytime = True
+    # dilations for up to 4 layers
+    args.dilation = [1, 4, 16, args.daily_times, args.daily_times * 7]
     args.input_size = args.dim
     args.output_size = args.dim * args.future
     if args.daytime:
@@ -101,16 +105,18 @@ def modelname(args):
     # MODEL
     path = args.model
     # RNN
-    path += args.rnn_type if args.model == 'RNN' else ''
-    path += ('Attn' + args.attn_type) if (
-        args.model == 'RNN' and args.attn) else ''
-    # Transformer
-    path += ('Head' + str(args.head)) if args.model == 'Transformer' else ''
-    path += 'Masked' if args.model == 'Transformer' and args.mask_src else ''
+    if args.model == 'RNN':
+        path += args.rnn_type
+        path += 'Attn' + args.attn_type if args.attn else ''
+    # Attention
+    if args.model == 'Attention':
+        path += ('Head' + str(args.head))
+        path += 'Dilated' if args.dilated else ''
     # general
-    path += 'Layer' + str(args.num_layers)
-    path += 'Hidden' + str(args.hidden_size)
+    path += 'Lay' + str(args.num_layers)
+    path += 'Hid' + str(args.hidden_size)
     # Data
-    path += 'DayTime' if args.daytime else ''
-    path += str(args.past_days)
+    if args.daytime:
+        path += 'Day' + str(args.day_size) + 'Time' + str(args.time_size)
+    path += 'Past' + str(args.past_days)
     return path
