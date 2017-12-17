@@ -82,6 +82,8 @@ def _dataset(args):
         raise KeyError
     args.daily_times = (args.end_time - args.start_time) * 60 // args.gran
     assert args.past_days > 0
+    if args.dilated and args.num_layers > 3:
+        args.past_days = 7
     args.past = args.past_days * args.daily_times
     args.input_length = args.daily_times + args.past
 
@@ -112,7 +114,6 @@ def modelname(args):
         path += 'Attn' + args.attn_type if args.attn else ''
     # Attention
     if args.model == 'Attention':
-        path += ('Head' + str(args.head))
         path += 'Dilated' if args.dilated else ''
     # general
     path += 'Lay' + str(args.num_layers)

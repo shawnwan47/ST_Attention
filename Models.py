@@ -74,16 +74,13 @@ class Attention(nn.Module):
         self.past = args.past
         self.future = args.future
         self.dim = args.dim
-        self.head = args.head
         self.input_size = args.input_size
         self.output_size = args.output_size
-        self.hidden_size = args.hidden_size
         self.num_layers = args.num_layers
-        self.linear_in = BottleLinear(self.input_size, self.hidden_size)
-        self.linear_out = BottleLinear(self.hidden_size, self.output_size)
-        self.layers = nn.ModuleList(
-            [Layers.AttentionLayer(self.hidden_size, self.head, args.dropout)
-             for _ in range(self.num_layers)])
+        self.linear_out = BottleLinear(self.input_size, self.output_size)
+        self.layers = nn.ModuleList([
+            Layers.AttentionLayer(self.input_size, args.dropout)
+            for _ in range(self.num_layers)])
         self.dilated = args.dilated
         self.dilation = args.dilation
         if self.dilated:
@@ -105,19 +102,18 @@ class Attention(nn.Module):
         attn: batch x len - past x len
         '''
         residual = inp[:, self.past:, :self.dim].unsqueeze(-2)
+        out = inp.clone()
         attns = []
-        hid = self.linear_in(inp)
         for i in range(self.num_layers):
             if self.dilated:
                 mask = self.mask[i, :inp.size(1), :inp.size(1)]
-                hid, attn = self.layers[i](hid, mask)
             else:
                 mask = self.mask[:inp.size(1), :inp.size(1)]
-                hid, attn = self.layers[i](hid, mask)
+            out, attn = self.layers[i](out, mask)
             attns.append(attn)
-        out = self.linear_out(hid[:, self.past:].contiguous())
+        out = self.linear_out(out[:, self.past:].contiguous())
         batch, length, _ = out.size()
         out = out.view(batch, length, self.future, self.dim)
         out += residual
-        attn = torch.cat(attns, 0)
+        attn = torch.stack(attns, 0)
         return out, attn

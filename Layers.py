@@ -72,9 +72,9 @@ class RNNAttn(RNNBase):
 
 
 class AttentionLayer(nn.Module):
-    def __init__(self, dim, head=8, dropout=0.1):
+    def __init__(self, dim, dropout=0.1):
         super(AttentionLayer, self).__init__()
-        self.attn = MultiHeadedAttention(head, dim, dropout=dropout)
+        self.attn = SelfAttention(dim, dropout=dropout)
         self.feed_forward = PositionwiseFeedForward(dim, dropout=dropout)
 
     def forward(self, inp, mask=None):
@@ -147,11 +147,34 @@ class GlobalAttention(nn.Module):
         return attn_h, attn
 
 
-class MultiHeadedAttention(nn.Module):
-    '''
-    'Attention is All You Need'.
-    '''
+class SelfAttention(nn.Module):
+    def __init__(self, dim, dropout=0.1):
+        super(SelfAttention, self).__init__()
+        self.dim = dim
+        self.linear_k = BottleLinear(dim, dim, bias=False)
+        self.linear_v = BottleLinear(dim, dim, bias=False)
+        self.linear_q = BottleLinear(dim, dim, bias=False)
+        self.layer_norm = BottleLayerNorm(dim)
+        self.dropout = nn.Dropout(dropout)
+        self.sm = nn.Softmax(2)
 
+    def forward(self, inp, mask):
+        '''
+        inp: batch x len x dim
+        '''
+        k = self.linear_k(inp)
+        v = self.linear_v(inp)
+        q = self.linear_q(inp)
+        score = torch.bmm(q, k.transpose(1, 2)) / math.sqrt(self.dim)
+        if mask is not None:
+            score.data.masked_fill_(mask, -float('inf'))
+        attn = self.sm(score)
+        out = torch.bmm(self.dropout(attn), v)
+        out = self.layer_norm(out + inp)
+        return out, attn
+
+
+class MultiHeadedAttention(nn.Module):
     def __init__(self, head, dim, dropout=0.1):
         '''
         Args:

@@ -11,16 +11,6 @@ class Bottle(nn.Module):
         return out.contiguous().view(size[0], size[1], -1)
 
 
-class Bottle2(nn.Module):
-    def forward(self, input):
-        if len(input.size()) <= 3:
-            return super(Bottle2, self).forward(input)
-        size = input.size()
-        out = super(Bottle2, self).forward(input.view(size[0] * size[1],
-                                                      size[2], size[3]))
-        return out.contiguous().view(size[0], size[1], size[2], size[3])
-
-
 class LayerNorm(nn.Module):
     ''' Layer normalization module '''
 
