@@ -6,36 +6,41 @@ import numpy as np
 from Consts import *
 
 
-def load_adj_spatial():
-    spatial = np.genfromtxt(DATA_PATH + 'link.txt', dtype=int)
-    od = load_od()
-    adj = od.copy().astype(int)
-    adj[:] = 0
-    for i in range(spatial.shape[0]):
-        if spatial[i, 0] in od.columns and spatial[i, 1] in od.columns:
-            adj.loc[spatial[i, 0], spatial[i, 1]] = 1
-    return adj
+def load_station():
+    ret = pd.read_csv(DATA_PATH + 'STATION.csv', index_col=0)
+    flow = load_flow_data()
+    return ret.loc[flow.columns, :]
 
 
-def load_od(od_name=DATA_PATH + 'od_al.csv'):
-    ret = pd.read_csv(od_name, index_col=0)
-    ret.columns = list(map(int, ret.columns))
-    ret.index.name = ''
+def load_adj_link():
+    link = np.genfromtxt(DATA_PATH + 'LINK.txt', dtype=int)
+    station = load_station()
+    idx = station.index
+    ret = pd.DataFrame(0, index=idx, columns=idx)
+    for i in range(link.shape[0]):
+        if link[i, 0] in idx and link[i, 1] in idx:
+            ret.loc[link[i, 0], link[i, 1]] = 1
     return ret
 
 
-def od2graph(od, contrib=0.01):
+def load_adj_od(contrib=0.01):
+    od_name = DATA_PATH + 'OD.csv'
+    od = pd.read_csv(od_name, index_col=0)
+    od.index.name = ''
+    od.columns = list(map(int, od.columns))
+    station = load_station()
+    od = od.loc[station.index, station.index]
+    od = od + od.transpose()
     return od / od.sum(0) >= contrib
 
 
 def load_adj(contrib=0.01):
-    adj = load_adj_spatial().as_matrix()
-    od = load_od().as_matrix()
-    do = od2graph(od, contrib)
-    od = od2graph(od.transpose(), contrib).transpose()
-    oood = np.hstack((adj, od))
-    dodd = np.hstack((do, adj))
-    return np.vstack((oood, dodd))
+    link = load_adj_link()
+    od = load_adj_od()
+    adj = od + link + np.eye(len(od)) > 0
+    adj = np.vstack([adj, adj])
+    adj = np.hstack([adj, adj])
+    return adj
 
 
 def load_flow_data(affix='O'):
@@ -50,6 +55,7 @@ def load_flow_data(affix='O'):
             pd.read_csv(DATA_PATH + x, index_col=0, parse_dates=True)
             for x in data_files])
         flow.to_csv(filepath, index=True)
+    flow.columns = list(map(int, flow.columns))
     return flow
 
 
