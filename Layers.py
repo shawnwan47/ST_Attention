@@ -20,9 +20,9 @@ class AttnLayer(nn.Module):
         return out, attn
 
 
-class MultiChannelContextAttn(nn.Module):
+class MultiChannelContextAttention(nn.Module):
     def __init__(self, dim, channel=1, adj=None, dropout=0.1):
-        super(MultiChannelContextAttn, self).__init__()
+        super(MultiChannelContextAttention, self).__init__()
         self.dim = dim
         self.channel = channel
         self.attn_channel = nn.ModuleList([
@@ -46,23 +46,53 @@ class MultiChannelContextAttn(nn.Module):
         attn_channel: batch x channel x length_query x length_context
         '''
         batch, length_query, dim = query.size()
-        channel, batch_, length_context, dim_ = context.size()
+        batch_, channel, length_context, dim_ = context.size()
         aeq(batch, batch_)
         aeq(channel, self.channel)
         aeq(dim, dim_)
 
         out_channel, attn_channel = [], []
         for i in range(self.channel):
-            out, attn = self.attn_channel[i](query, context[:, i], mask)
+            out, attn = self.attn_channel[i](
+                query, context[:, i].contiguous(), mask)
             out_channel.append(out)
             attn_channel.append(attn)
         out_channel = torch.stack(out_channel, -2).view(-1, channel, dim)
+        query = query.contiguous().view(-1, 1, dim)
         out, attn_merge = self.attn_merge(query.view(-1, 1, dim), out_channel)
         attn_channel = torch.stack(attn_channel, 1)
-        out = out.view_as(query) + query
-
-        # out = self.feed_forward(out)  # guess I could remove this nonlinearity
+        # out = self.feed_forward(out)  # guess I could remove nonlinearity
+        out = out.view(batch, length_query, dim)
         return out, attn_merge, attn_channel
+
+
+class ContextAttention(nn.Module):
+    def __init__(self, dim, adj=None, dropout=0.1):
+        super(ContextAttention, self).__init__()
+        self.dim = dim
+        self.w_k = BottleSparseLinear(dim, dim, adj, bias=False)
+        self.w_v = BottleSparseLinear(dim, dim, adj, bias=False)
+        self.layer_norm = BottleLayerNorm(dim)
+        self.dropout = nn.Dropout(dropout)
+        self.sm = nn.Softmax(2)
+        self.feed_forward = PointwiseMLP(dim, adj, dropout)
+
+    def forward(self, query, context, mask=None):
+        '''
+        query: batch x len x dim
+        context: batch x len_ x dim
+        '''
+        key, val = self.w_k(context), self.w_v(context)
+        score = torch.bmm(query, key.transpose(1, 2))
+        score /= math.sqrt(self.dim)
+        if mask is not None:
+            score.data.masked_fill_(mask, -float('inf'))
+        attn = self.sm(score)
+        out = torch.bmm(attn, val)
+        # out = self.dropout(out)
+        out = self.layer_norm(out + query)
+        out = self.feed_forward(out)  # really?
+        return out, attn
 
 
 class MultiChannelSelfAttention(nn.Module):
@@ -76,54 +106,24 @@ class MultiChannelSelfAttention(nn.Module):
     def forward(self, inp, mask=None):
         '''
         inp: batch x channel x length x dim
+        out: batch x channel x length x dim
+        attn: batch x channel x length x length
         '''
         outs, attns = [], []
         for i in range(self.channel):
-            out, attn = self.attn[i](inp, mask)
+            out, attn = self.attn[i](inp[:, i].contiguous(), mask)
+            outs.append(out)
+            attns.append(attn)
         out = torch.stack(outs, 1)
         attn = torch.stack(attns, 1)
-        return out, attn
-
-
-class ContextAttention(nn.Module):
-    def __init__(self, dim, adj=None, dropout=0.1):
-        super(ContextAttention, self).__init__()
-        self.dim = dim
-        if adj is None:
-            self.w_k = BottleLinear(dim, dim, bias=False)
-            self.w_v = BottleLinear(dim, dim, bias=False)
-        else:
-            self.w_k = BottleSparseLinear(dim, dim, bias=False)
-            self.w_v = BottleSparseLinear(dim, dim, bias=False)
-        self.layer_norm = BottleLayerNorm(dim)
-        self.dropout = nn.Dropout(dropout)
-        self.sm = nn.Softmax(2)
-
-    def forward(self, query, context, mask=None):
-        '''
-        query: batch x len x dim
-        context: batch x len_ x dim
-        '''
-        key, val = self.w_k(context), self.w_v(context)
-        score = torch.bmm(query, key.transpose(1, 2))
-        # score = torch.bmm(self.w(query), context.transpose(1, 2)) / math.sqrt(self.dim)
-        if mask is not None:
-            score.data.masked_fill_(mask, -float('inf'))
-        attn = self.sm(score)
-        out = torch.bmm(self.dropout(attn), val)
-        # out = torch.bmm(self.dropout(attn), context)  # pure temporal model
-        out = self.layer_norm(self.dropout(out) + query)
         return out, attn
 
 
 class SelfAttention(nn.Module):
     def __init__(self, dim, adj=None, dropout=0.1):
         super(SelfAttention, self).__init__()
-        self.dim = args.dim
-        if adj is None:
-            self.w_1 = BottleLinear(self.dim, self.dim)
-        else:
-            self.w_1 = BottleSparseLinear(self.dim, self.dim, adj)
+        self.dim = dim
+        self.w_1 = BottleSparseLinear(self.dim, self.dim, adj=adj)
         self.w_2 = BottleLinear(self.dim, 1)
         self.activation = nn.Tanh()
         self.dropout = nn.Dropout(dropout)
@@ -131,23 +131,23 @@ class SelfAttention(nn.Module):
 
     def forward(self, inp, mask=None):
         '''
-        inp: batch x len x dim
-        mask: len x len
-        score: batch x len
-        attn: batch x len x len
-        out: batch x len x dim
+        inp: batch x length x dim
+        mask: length x length
+        score: batch x length
+        attn: batch x length x length
+        out: batch x length x dim
         '''
         batch, length, dim = inp.size()
         aeq(dim, self.dim)
-        score = self.w_2(self.dropout(self.activation(self.w_1(inp)))).transpose(1, 2)
-        attn = score.repeat(1, 1, length)
+        score = self.activation(self.w_1(inp))
+        score = self.w_2(self.dropout(score))
+        attn = score.repeat(1, 1, length).transpose(1, 2)
         if mask is not None:
             aeq(length, mask.size(0), mask.size(1))
             attn.data.masked_fill_(mask, -float('inf'))
         attn = self.sm(attn)
         out = torch.bmm(attn, inp).view(batch, length, dim)
         return out, attn
-
 
 
 class RNNBase(nn.Module):
@@ -187,7 +187,6 @@ class RNNAttn(RNNBase):
         out, hid = self.rnn(inp, hid)
         out, attn = self.attn(out, mask)
         return out, hid, attn
-
 
 
 class MultiHeadedAttention(nn.Module):

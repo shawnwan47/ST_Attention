@@ -3,8 +3,8 @@ import torch.nn as nn
 
 import Layers
 
-from Utils import _get_mask, _get_mask_dilated
-from UtilClass import BottleLinear, BottleSparseLinear
+from Utils import get_mask_trim, get_mask_dilated
+from UtilClass import *
 
 
 class Embedding_DayTime(nn.Module):
@@ -39,7 +39,8 @@ class RNN(nn.Module):
                 args.num_layers, args.dropout)
         self.dropout = nn.Dropout(args.dropout)
         self.linear_out = BottleLinear(args.hidden_size, args.output_size)
-        self.register_buffer('mask', _get_mask(args.input_length, self.past))
+        mask = get_mask_trim(args.input_length, self.past)
+        self.register_buffer('mask', mask)
 
     def forward(self, inp):
         '''
@@ -78,7 +79,7 @@ class Attn(nn.Module):
             Layers.AttnLayer(self.input_size, args.dropout)
             for _ in range(self.num_layers)])
         self.dilated = args.dilated
-        self.dilation = args.dilation
+        self.dilation = args.dilation[:self.num_layers + 1]
         if self.dilated:
             masks = []
             for i in range(self.num_layers):
@@ -88,7 +89,7 @@ class Attn(nn.Module):
                 masks.append(mask)
             self.register_buffer('mask', torch.stack(masks, 0))
         else:
-            mask = _get_mask(args.input_length, self.past)
+            mask = get_mask_trim(args.input_length, self.past)
             self.register_buffer('mask', mask)
 
     def forward(self, inp):
@@ -125,21 +126,27 @@ class STAttn(nn.Module):
         self.output_size = args.output_size
         self.num_layers = args.num_layers
         self.channel = args.channel
-        self.encoder = Layers.MultiChannelSelfAttention(self.dim, self.channel, adj, args.dropout)
-        self.decoder = Layers.MultiChannelContextAttention(self.dim, self.channel, adj, args.dropout)
+        self.encoder = Layers.MultiChannelSelfAttention(
+            self.input_size, self.channel, adj, args.dropout)
+        self.decoder = Layers.MultiChannelContextAttention(
+            self.input_size, self.channel, adj, args.dropout)
+        self.encoders = nn.ModuleList([
+            Layers.MultiChannelSelfAttention(
+                self.input_size, self.channel, adj, args.dropout)
+            for _ in range(self.num_layers)])
+        self.decoders = nn.ModuleList([
+            Layers.MultiChannelContextAttention(
+                self.input_size, self.channel, adj, args.dropout)
+            for _ in range(self.num_layers)])
+        self.linear_out = BottleSparseLinear(
+            self.input_size, self.output_size, adj=adj)
         self.dilated = args.dilated
-        self.dilation = args.dilation
-        masks = []
+        self.dilation = args.dilation[:self.num_layers + 1]
         if self.dilated:
-            for i in range(self.num_layers):
-                dilation = self.dilation[i]
-                window = self.dilation[i + 1] // dilation
-                mask = _get_mask_dilated(args.input_length, dilation, window)
-                masks.append(mask)
-            self.register_buffer('mask', torch.stack(masks, 0))
+            mask = get_mask_dilated(args.input_length, self.dilation)
         else:
-            mask = _get_mask(args.input_length, self.past)
-            self.register_buffer('mask', mask)
+            mask = get_mask_trim(args.input_length, self.past)
+        self.register_buffer('mask', mask)
 
     def forward(self, inp):
         '''
@@ -149,7 +156,7 @@ class STAttn(nn.Module):
         attn_channel: batch x num_layers x channel x length - past x length
         attn_context: batch x num_layers x channel x length x length
         '''
-        res = inp[:, self.past:, :self.dim]
+        res = inp[:, self.past:, :self.dim].unsqueeze(-2)
         out = inp[:, self.past:]
         context = inp.unsqueeze(1).repeat(1, self.channel, 1, 1)
         length = inp.size(1)
@@ -160,14 +167,82 @@ class STAttn(nn.Module):
                 mask = self.mask[i]
             else:
                 mask = self.mask
-            mask_decode = mask[-length_query:, -length:]
-            mask_encode = mask[:length, :length]
-            out, attn_merge, attn_channel = self.decoder(out, context, mask_decode)
-            context, attn_context = self.encoder(context, mask_encode)
+            mask_dec = mask[-length_query:, -length:]
+            mask_enc = mask[:length, :length]
+            # out, attn_merge, attn_channel = self.decoder(
+            #     out, context, mask_dec)
+            # context, attn_context = self.encoder(context, mask_enc)
+            out, attn_merge, attn_channel = self.decoders[i](
+                out, context, mask_dec)
+            context, attn_context = self.encoders[i](context, mask_enc)
             attn_merges.append(attn_merge)
             attn_channels.append(attn_channel)
             attn_contexts.append(attn_context)
         attn_merge = torch.stack(attn_merges, 1)
         attn_channel = torch.stack(attn_channels, 1)
         attn_context = torch.stack(attn_contexts, 1)
+        out = self.linear_out(out)
+        out = out.view(-1, length_query, self.future, self.dim) + res
         return out, attn_merge, attn_channel, attn_context
+
+
+class LinearTemporal(nn.Module):
+    def __init__(self, args, adj=None):
+        super(LinearTemporal, self).__init__()
+        self.past = args.past
+        self.future = args.future
+        self.input_size = args.input_size
+        self.output_size = args.output_size
+        self.linear = BottleLinear(self.past, self.future)
+
+    def forward(self, inp):
+        '''
+        inp: batch x length x dim
+        out: batch x length - past x dim
+        '''
+        out = []
+        for i in range(inp.size(1) - self.past):
+            inp_i = inp[:, i:i + self.past].transpose(1, 2).contiguous()
+            out.append(self.linear(inp_i).transpose(1, 2))
+        out = torch.stack(out, 1)
+        return out
+
+
+class LinearSpatial(nn.Module):
+    def __init__(self, args, adj=None):
+        super(LinearSpatial, self).__init__()
+        self.past = args.past
+        self.future = args.future
+        self.input_size = args.input_size
+        self.output_size = args.output_size
+        self.linear = BottleLinear(self.input_size, self.output_size)
+
+    def forward(self, inp):
+        '''
+        inp: batch x length x dim
+        out: batch x length - past x dim
+        '''
+        batch, _, dim = inp.size()
+        out = self.linear(inp)[:, self.past:]
+        out = out.contiguous().view(batch, -1, self.future, dim)
+        return out
+
+
+class LinearST(nn.Module):
+    def __init__(self, args, adj=None):
+        super(LinearST, self).__init__()
+        self.past = args.past
+        self.future = args.future
+        self.input_size = args.input_size
+        self.output_size = args.output_size
+        self.linear = BottleLinear(
+            self.input_size * self.past, self.output_size)
+
+    def forward(self, inp):
+        batch, length, dim = inp.size()
+        out = []
+        for i in range(length - self.past):
+            inp_i = inp[:, i:i + self.past].contiguous().view(batch, -1)
+            out.append(self.linear(inp_i))
+        out = torch.stack(out, 1).view(batch, -1, self.future, dim)
+        return out

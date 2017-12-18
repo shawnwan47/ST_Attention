@@ -37,13 +37,14 @@ class LayerNorm(nn.Module):
 
 
 class SparseLinear(nn.Linear):
-    def __init__(self, in_features, out_features, adj, bias=True):
+    def __init__(self, in_features, out_features=None, adj=None, bias=True):
         super(SparseLinear, self).__init__(in_features, out_features, bias)
-        self.adj = adj == 0
+        self.adj = adj
 
     def forward(self, inp):
-        sparse_weight = self.weight.masked_fill(self.adj, 0)
-        self.weight = nn.Parameter(sparse_weight)
+        if self.adj is not None:
+            sparse_weight = self.weight.masked_fill(self.adj, 0)
+            self.weight = nn.Parameter(sparse_weight.data)
         return super(SparseLinear, self).forward(inp)
 
 

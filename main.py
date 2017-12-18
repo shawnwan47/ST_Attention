@@ -46,13 +46,16 @@ dt_test = Variable(dt_test, volatile=True)
 tgt_train = Variable(tgt_train)
 tgt_valid = Variable(tgt_valid, volatile=True)
 tgt_test = Variable(tgt_test, volatile=True)
-flow_mean = Variable(flow_mean, requires_grad=False)
-flow_std = Variable(flow_std, requires_grad=False)
+flow_mean = Variable(flow_mean)
+flow_std = Variable(flow_std)
+adj = Variable(adj)
+if not args.adj:
+    adj = None
 
 # MODEL
 modelpath = MODEL_PATH + Args.modelname(args)
 print('Model: {}'.format(modelpath))
-model = getattr(Models, args.model)(args).cuda()
+model = getattr(Models, args.model)(args, adj).cuda()
 daytime = Models.Embedding_DayTime(args).cuda()
 
 # LOSS
@@ -71,64 +74,58 @@ def train_model():
     loss_train = []
     size = inp_train.size(0)
     days = torch.randperm(size).cuda()
-    times = torch.randperm(args.daily_times - args.future - args.dilate_1).cuda()
-    for day in range(size // args.batch):
-        idx = days[day::size // args.batch]
-        for time in times[:10]:
-            inp = inp_train[idx][:, time:time + args.past + args.dilate_1]
-            dt = dt_train[idx][:, time:time + args.past + args.dilate_1]
-            tgt = tgt_train[idx][:, time:time + args.dilate_1]
-            if args.daytime:
-                inp = torch.cat((inp, daytime(dt)), -1)
-            out = model(inp)
-            if type(out) is tuple:
-                out, attn = out
-            out = Utils.denormalize(out, flow_mean, flow_std).contiguous()
-            loss = criterion(out, tgt)
-            loss.backward()
-            clip_grad_norm(parameters, args.max_grad_norm)
-            optimizer.step()
-            loss_train.append(loss.data[0])
-    return sum(loss_train) / len(loss_train)
-
-
-def valid_model():
-    loss = []
-    for time in range(0, args.daily_times - args.future - args.dilate_1, args.dilate_1):
-        inp = inp_valid[:, time:time + args.past + args.dilate_1]
-        tgt = tgt_valid[:, time:time + args.dilate_1]
-        dt = dt_valid[:, time:time + args.past + args.dilate_1]
+    iters = size // args.batch
+    for day in range(iters):
+        idx = days[day::iters]
+        inp = inp_train[idx]
+        dt = dt_train[idx]
+        tgt = tgt_train[idx]
         if args.daytime:
             inp = torch.cat((inp, daytime(dt)), -1)
         out = model(inp)
         if type(out) is tuple:
-            out, attn = out
-        out = Utils.denormalize(out, flow_mean, flow_std)
-        loss.append(criterion(out, tgt).data[0])
-    return sum(loss) / len(loss)
+            out = out[0]
+        out = Utils.denormalize(out, flow_mean, flow_std).contiguous()
+        loss = criterion(out, tgt)
+        loss.backward()
+        clip_grad_norm(parameters, args.max_grad_norm)
+        optimizer.step()
+        loss_train.append(loss.data[0])
+    return sum(loss_train) / len(loss_train)
+
+
+def valid_model():
+    inp = inp_valid
+    tgt = tgt_valid
+    dt = dt_valid
+    if args.daytime:
+        inp = torch.cat((inp, daytime(dt)), -1)
+    out = model(inp)
+    if type(out) is tuple:
+        out = out[0]
+    out = Utils.denormalize(out, flow_mean, flow_std)
+    loss = criterion(out, tgt).data[0]
+    return loss
 
 
 def test_model():
     def percent_err(out, tgt):
         return float(criterion(out, tgt).data[0] / tgt.mean())
 
-    loss = []
-    attns = []
-    for time in range(0, args.daily_times - args.future - args.dilate_1, args.dilate_1):
-        inp = inp_test[:, time:time + args.past + args.dilate_1]
-        tgt = tgt_test[:, time:time + args.dilate_1]
-        dt = dt_test[:, time:time + args.past + args.dilate_1]
-        if args.daytime:
-            inp = torch.cat((inp, daytime(dt)), -1)
-        out = model(inp)
-        if type(out) is tuple:
-            out, attn = out
-            attns.append(attn[:, :, -args.dilate_1:])
-        out = Utils.denormalize(out, flow_mean, flow_std)
-        loss.append(criterion(out, tgt).data[0])
-    loss = sum(loss) / len(loss)
-    if attns:
-        attn = torch.cat(attns, -2)
+    inp = inp_test
+    tgt = tgt_test
+    dt = dt_test
+    if args.daytime:
+        inp = torch.cat((inp, daytime(dt)), -1)
+    out = model(inp)
+    ret_attn = False
+    if type(out) is tuple:
+        out, attn = out[0], out[1:]
+        ret_attn = True
+    out = Utils.denormalize(out, flow_mean, flow_std)
+    loss = [percent_err(out[:, :, i], tgt[:, :, i])
+            for i in range(args.future)]
+    if ret_attn:
         return loss, attn
     else:
         return loss
@@ -155,6 +152,6 @@ daytime = daytime.cuda()
 out = test_model()
 if type(out) is tuple:
     out, attn = out
-    np.save(modelpath + '_attn', attn.cpu().data.numpy())
+    Utils.torch2npsave(modelpath + '_attn', attn)
 print('Test {}: {}'.format(modelpath, out))
 np.savetxt(modelpath + '_loss.txt', out)

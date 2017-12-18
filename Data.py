@@ -37,10 +37,10 @@ def load_adj_od(contrib=0.01):
 def load_adj(contrib=0.01):
     link = load_adj_link()
     od = load_adj_od()
-    adj = od + link + np.eye(len(od)) > 0
+    adj = (od + link + np.eye(len(od))) > 0
     adj = np.vstack([adj, adj])
     adj = np.hstack([adj, adj])
-    return adj
+    return adj.astype(int)
 
 
 def load_flow_data(affix='O'):

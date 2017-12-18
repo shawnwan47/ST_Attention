@@ -103,10 +103,6 @@ def load_data_metro(args):
             flow_mean, flow_std)
 
 
-def var2np(x):
-    return x.cpu().data.numpy()
-
-
 def aeq(*args):
     """
     Assert all arguments have the same value
@@ -117,7 +113,7 @@ def aeq(*args):
         "Not all arguments have the same value: " + str(args)
 
 
-def _get_mask(length, past):
+def get_mask_trim(length, past):
     attn_shape = (length, length)
     mask_past = np.tril(np.ones(attn_shape), k=-past).astype('uint8')
     mask_future = np.triu(np.ones(attn_shape), k=1).astype('uint8')
@@ -126,15 +122,36 @@ def _get_mask(length, past):
     return mask_future + mask_past
 
 
-def _get_mask_dilated(length, dilation, window):
-    attn_shape = (length, length)
-    mask = np.ones(attn_shape)
-    for i in range(window):
-        k = -i * dilation
-        mask -= np.diag(np.ones(length + k), k)
-    mask = torch.from_numpy(mask.astype('uint8'))
-    return mask
+def get_mask_dilated(length, dilations):
+    def _get_mask_dilated(length, dilation, window):
+        attn_shape = (length, length)
+        mask = np.ones(attn_shape)
+        for i in range(window):
+            k = -i * dilation
+            mask -= np.diag(np.ones(length + k), k)
+        mask = torch.from_numpy(mask.astype('uint8'))
+        return mask
+
+    masks = []
+    for i in range(len(dilations) - 1):
+        dilation = dilations[i]
+        window = dilations[i + 1] // dilation
+        mask = _get_mask_dilated(length, dilation, window)
+        masks.append(mask)
+    return torch.stack(masks, 0)
 
 
 def denormalize(flow, flow_mean, flow_std):
     return flow * flow_std + flow_mean
+
+
+def var2np(x):
+    return x.cpu().data.numpy()
+
+
+def torch2npsave(file, data):
+    if type(data) is tuple:
+        data = [var2np(d) for d in data]
+    else:
+        data = var2np(data)
+    np.save(file, data)
