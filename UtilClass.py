@@ -36,15 +36,26 @@ class LayerNorm(nn.Module):
         return ln_out
 
 
+class SparseLinear(nn.Linear):
+    def __init__(self, in_features, out_features, adj, bias=True):
+        super(SparseLinear, self).__init__(in_features, out_features, bias)
+        self.adj = adj == 0
+
+    def forward(self, inp):
+        sparse_weight = self.weight.masked_fill(self.adj, 0)
+        self.weight = nn.Parameter(sparse_weight)
+        return super(SparseLinear, self).forward(inp)
+
+
 class BottleLinear(Bottle, nn.Linear):
     pass
 
 
-class BottleLayerNorm(Bottle, LayerNorm):
+class BottleSparseLinear(Bottle, SparseLinear):
     pass
 
 
-class BottleSoftmax(Bottle, nn.Softmax):
+class BottleLayerNorm(Bottle, LayerNorm):
     pass
 
 
@@ -76,3 +87,30 @@ class Elementwise(nn.ModuleList):
             return sum(outputs)
         else:
             return outputs
+
+
+class PointwiseMLP(nn.Module):
+    ''' A two-layer Feed-Forward-Network.'''
+
+    def __init__(self, dim, adj=None, dropout=0.1):
+        '''
+        Args:
+            dim(int): the dim of inp for the first-layer of the FFN.
+            hidden_size(int): the hidden layer dim of the second-layer
+                              of the FNN.
+            droput(float): dropout probability(0-1.0).
+        '''
+        super(PointwiseMLP, self).__init__()
+        if adj is None:
+            self.w_1 = BottleLinear(dim, dim)
+            self.w_2 = BottleLinear(dim, dim)
+        else:
+            self.w_1 = BottleSparseLinear(dim, dim, adj)
+            self.w_2 = BottleSparseLinear(dim, dim, adj)
+        self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(dropout)
+        self.layer_norm = BottleLayerNorm(dim)
+
+    def forward(self, inp):
+        out = self.dropout(self.w_2(self.relu(self.w_1(inp))))
+        return self.layer_norm(out + inp)

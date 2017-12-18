@@ -17,6 +17,7 @@ Args.add_gpu(args)
 Args.add_data(args)
 Args.add_loss(args)
 Args.add_optim(args)
+Args.add_run(args)
 Args.add_model(args)
 args = args.parse_args()
 Args.update_args(args)
@@ -33,7 +34,7 @@ data = getattr(Utils, 'load_data_' + args.data_type)(args)
 (inp_train, inp_valid, inp_test,
  tgt_train, tgt_valid, tgt_test,
  dt_train, dt_valid, dt_test,
- flow_mean, flow_std) = data
+ flow_mean, flow_std, adj) = data
 
 
 inp_train = Variable(inp_train)
@@ -68,52 +69,69 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
 # TRAINING
 def train_model():
     loss_train = []
-    for d in torch.randperm(inp_train.size(0)):
-        inp = inp_train[d].unsqueeze(0)
-        tgt = tgt_train[d].unsqueeze(0)
-        dt = dt_train[d].unsqueeze(0)
+    size = inp_train.size(0)
+    days = torch.randperm(size).cuda()
+    times = torch.randperm(args.daily_times - args.future - args.dilate_1).cuda()
+    for day in range(size // args.batch):
+        idx = days[day::size // args.batch]
+        for time in times[:10]:
+            inp = inp_train[idx][:, time:time + args.past + args.dilate_1]
+            dt = dt_train[idx][:, time:time + args.past + args.dilate_1]
+            tgt = tgt_train[idx][:, time:time + args.dilate_1]
+            if args.daytime:
+                inp = torch.cat((inp, daytime(dt)), -1)
+            out = model(inp)
+            if type(out) is tuple:
+                out, attn = out
+            out = Utils.denormalize(out, flow_mean, flow_std).contiguous()
+            loss = criterion(out, tgt)
+            loss.backward()
+            clip_grad_norm(parameters, args.max_grad_norm)
+            optimizer.step()
+            loss_train.append(loss.data[0])
+    return sum(loss_train) / len(loss_train)
+
+
+def valid_model():
+    loss = []
+    for time in range(0, args.daily_times - args.future - args.dilate_1, args.dilate_1):
+        inp = inp_valid[:, time:time + args.past + args.dilate_1]
+        tgt = tgt_valid[:, time:time + args.dilate_1]
+        dt = dt_valid[:, time:time + args.past + args.dilate_1]
         if args.daytime:
             inp = torch.cat((inp, daytime(dt)), -1)
         out = model(inp)
         if type(out) is tuple:
             out, attn = out
-        out = Utils.denormalize(out, flow_mean, flow_std).contiguous()
-        loss = criterion(out, tgt)
-        loss.backward()
-        clip_grad_norm(parameters, args.max_grad_norm)
-        optimizer.step()
-        loss_train.append(loss.data[0])
-    return sum(loss_train) / len(loss_train)
-
-
-def valid_model():
-    inp = inp_valid
-    if args.daytime:
-        inp = torch.cat((inp, daytime(dt_valid)), -1)
-    out = model(inp)
-    if type(out) is tuple:
-        out, attn = out
-    out = Utils.denormalize(out, flow_mean, flow_std)
-    loss = criterion(out, tgt_valid).data[0]
-    return loss
+        out = Utils.denormalize(out, flow_mean, flow_std)
+        loss.append(criterion(out, tgt).data[0])
+    return sum(loss) / len(loss)
 
 
 def test_model():
     def percent_err(out, tgt):
         return float(criterion(out, tgt).data[0] / tgt.mean())
 
-    inp = inp_test
-    if args.daytime:
-        inp = torch.cat((inp, daytime(dt_test)), -1)
-    out = model(inp)
-    ret_attn = False
-    if type(out) is tuple:
-        out, attn = out
-        ret_attn = True
-    out = Utils.denormalize(out, flow_mean, flow_std)
-    loss = np.array([percent_err(out[:, :, i], tgt_test[:, :, i])
-                     for i in range(args.future)])
-    return (loss, attn) if ret_attn else loss
+    loss = []
+    attns = []
+    for time in range(0, args.daily_times - args.future - args.dilate_1, args.dilate_1):
+        inp = inp_test[:, time:time + args.past + args.dilate_1]
+        tgt = tgt_test[:, time:time + args.dilate_1]
+        dt = dt_test[:, time:time + args.past + args.dilate_1]
+        if args.daytime:
+            inp = torch.cat((inp, daytime(dt)), -1)
+        out = model(inp)
+        if type(out) is tuple:
+            out, attn = out
+            attns.append(attn[:, :, -args.dilate_1:])
+        out = Utils.denormalize(out, flow_mean, flow_std)
+        loss.append(criterion(out, tgt).data[0])
+    loss = sum(loss) / len(loss)
+    if attns:
+        attn = torch.cat(attns, -2)
+        return loss, attn
+    else:
+        return loss
 
 
 # TRAINING

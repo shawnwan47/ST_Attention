@@ -8,9 +8,9 @@ def add_data(args):
     args.add_argument('-data_type', type=str, default='highway',
                       choices=['highway', 'metro'])
     args.add_argument('-past_days', type=int, default=1)
-    args.add_argument('-future', type=int, default=8)
+    args.add_argument('-future', type=int, default=1)
     # for metro only
-    args.add_argument('-gran', type=int, default=15)
+    args.add_argument('-resolution', type=int, default=15)
     args.add_argument('-start_time', type=int, default=6)
     args.add_argument('-end_time', type=int, default=22)
     # args to be inferred
@@ -29,8 +29,6 @@ def add_loss(args):
 
 
 def add_optim(args):
-    args.add_argument('-test', action='store_true')
-    args.add_argument('-epoches', type=int, default=100)
     args.add_argument('-optim', type=str, default='SGD',
                       choices=['SGD', 'Adam', 'Adadelta', 'Adamax'])
     args.add_argument('-lr', type=float, default=1)
@@ -39,9 +37,15 @@ def add_optim(args):
     args.add_argument('-max_grad_norm', type=float, default=1)
 
 
+def add_run(args):
+    args.add_argument('-test', action='store_true')
+    args.add_argument('-epoches', type=int, default=100)
+    args.add_argument('-batch', type=int, default=10)
+
+
 def add_model(args):
     args.add_argument('-model', type=str, default='Attention',
-                      choices=['RNN', 'Attention', 'DilatedAttention'])
+                      choices=['RNN', 'Attn', 'STAttn'])
     # general
     args.add_argument('-input_size', type=int)
     args.add_argument('-output_size', type=int)
@@ -58,10 +62,11 @@ def add_model(args):
     args.add_argument('-attn', action='store_true')
     args.add_argument('-attn_type', type=str, default='dot',
                       choices=['dot', 'general', 'mlp', 'kvq'])
-    # Transformer
-    args.add_argument('-head', type=int, default=1)
+    # dilation
     args.add_argument('-dilated', action='store_true')
-    args.add_argument('-dilation', type=int, nargs='+', default=[])
+    args.add_argument('-dilation', type=int, default=[], nargs='+')
+    # Attention
+    args.add_argument('-channel', type=int, default=1)
 
 
 def _dataset(args):
@@ -72,7 +77,7 @@ def _dataset(args):
         args.days_test = 30
         args.start_time = 0
         args.end_time = 24
-        args.gran = 15
+        args.resolution = 15
     elif args.data_type == 'metro':
         args.dim = 286
         args.days = 22
@@ -80,7 +85,7 @@ def _dataset(args):
         args.days_test = 4
     else:
         raise KeyError
-    args.daily_times = (args.end_time - args.start_time) * 60 // args.gran
+    args.daily_times = (args.end_time - args.start_time) * 60 // args.resolution
     assert args.past_days > 0
     if args.dilated and args.num_layers > 3:
         args.past_days = 7
@@ -91,9 +96,9 @@ def _dataset(args):
 def _model(args):
     if args.model == 'Attention':
         args.attn = False
-        args.daytime = True
     # dilations for up to 4 layers
-    args.dilation = [1, 4, 16, args.daily_times, args.daily_times * 7]
+    assert 16 % args.dilate_1 == 0
+    args.dilation = [1, args.dilate_1, 16, args.daily_times, args.daily_times * 7]
     args.input_size = args.dim
     args.output_size = args.dim * args.future
     if args.daytime:
@@ -122,4 +127,5 @@ def modelname(args):
     if args.daytime:
         path += 'Day' + str(args.day_size) + 'Time' + str(args.time_size)
     path += 'Past' + str(args.past_days)
+    path += 'Future' + str(args.future)
     return path

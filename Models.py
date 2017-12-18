@@ -4,7 +4,7 @@ import torch.nn as nn
 import Layers
 
 from Utils import _get_mask, _get_mask_dilated
-from UtilClass import BottleLinear
+from UtilClass import BottleLinear, BottleSparseLinear
 
 
 class Embedding_DayTime(nn.Module):
@@ -64,13 +64,9 @@ class RNN(nn.Module):
             return out
 
 
-class Attention(nn.Module):
-    """
-    The Attention model for Spatial-Temporal traffic forecasting
-    """
-
-    def __init__(self, args):
-        super(Attention, self).__init__()
+class Attn(nn.Module):
+    def __init__(self, args, adj=None):
+        super(Attn, self).__init__()
         self.past = args.past
         self.future = args.future
         self.dim = args.dim
@@ -79,7 +75,7 @@ class Attention(nn.Module):
         self.num_layers = args.num_layers
         self.linear_out = BottleLinear(self.input_size, self.output_size)
         self.layers = nn.ModuleList([
-            Layers.AttentionLayer(self.input_size, args.dropout)
+            Layers.AttnLayer(self.input_size, args.dropout)
             for _ in range(self.num_layers)])
         self.dilated = args.dilated
         self.dilation = args.dilation
@@ -115,5 +111,63 @@ class Attention(nn.Module):
         batch, length, _ = out.size()
         out = out.view(batch, length, self.future, self.dim)
         out += residual
-        attn = torch.stack(attns, 0)
+        attn = torch.stack(attns, 1)
         return out, attn
+
+
+class STAttn(nn.Module):
+    def __init__(self, args, adj=None):
+        super(STAttn, self).__init__()
+        self.past = args.past
+        self.future = args.future
+        self.dim = args.dim
+        self.input_size = args.input_size
+        self.output_size = args.output_size
+        self.num_layers = args.num_layers
+        self.channel = args.channel
+        self.encoder = Layers.MultiChannelSelfAttention(self.dim, self.channel, adj, args.dropout)
+        self.decoder = Layers.MultiChannelContextAttention(self.dim, self.channel, adj, args.dropout)
+        self.dilated = args.dilated
+        self.dilation = args.dilation
+        masks = []
+        if self.dilated:
+            for i in range(self.num_layers):
+                dilation = self.dilation[i]
+                window = self.dilation[i + 1] // dilation
+                mask = _get_mask_dilated(args.input_length, dilation, window)
+                masks.append(mask)
+            self.register_buffer('mask', torch.stack(masks, 0))
+        else:
+            mask = _get_mask(args.input_length, self.past)
+            self.register_buffer('mask', mask)
+
+    def forward(self, inp):
+        '''
+        inp: batch x length x dim
+        out: batch x length - past x future x dim
+        attn_merge: batch x num_layers x length x channel
+        attn_channel: batch x num_layers x channel x length - past x length
+        attn_context: batch x num_layers x channel x length x length
+        '''
+        res = inp[:, self.past:, :self.dim]
+        out = inp[:, self.past:]
+        context = inp.unsqueeze(1).repeat(1, self.channel, 1, 1)
+        length = inp.size(1)
+        length_query = length - self.past
+        attn_merges, attn_channels, attn_contexts = [], [], []
+        for i in range(self.num_layers):
+            if self.dilated:
+                mask = self.mask[i]
+            else:
+                mask = self.mask
+            mask_decode = mask[-length_query:, -length:]
+            mask_encode = mask[:length, :length]
+            out, attn_merge, attn_channel = self.decoder(out, context, mask_decode)
+            context, attn_context = self.encoder(context, mask_encode)
+            attn_merges.append(attn_merge)
+            attn_channels.append(attn_channel)
+            attn_contexts.append(attn_context)
+        attn_merge = torch.stack(attn_merges, 1)
+        attn_channel = torch.stack(attn_channels, 1)
+        attn_context = torch.stack(attn_contexts, 1)
+        return out, attn_merge, attn_channel, attn_context

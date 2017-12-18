@@ -5,6 +5,7 @@ import Data
 
 
 def load_data_highway(args):
+    adj = torch.ByteTensor(Data.load_adj()).cuda()
     flow, daytime, flow_mean, flow_std = Data.load_flow_highway()
     flow = torch.FloatTensor(flow).cuda()
     daytime = torch.LongTensor(daytime).cuda()
@@ -47,11 +48,11 @@ def load_data_highway(args):
     return (inp_train, inp_valid, inp_test,
             tgt_train, tgt_valid, tgt_test,
             daytime_train, daytime_valid, daytime_test,
-            flow_mean, flow_std)
+            flow_mean, flow_std, adj)
 
 
 def load_data_metro(args):
-    data = Data.load_flow(args.gran, args.start_time, args.end_time)
+    data = Data.load_flow(args.resolution, args.start_time, args.end_time)
     flow, daytime, flow_mean, flow_std = data
     flow = torch.FloatTensor(flow).cuda()
     daytime = torch.LongTensor(daytime).cuda()

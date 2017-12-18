@@ -84,9 +84,9 @@ def load_flow_highway():
     return flow, daytime, flow_mean, flow_std
 
 
-def load_flow_metro(gran=15, start_time=5, end_time=23):
-    assert gran in [5, 10, 15, 20, 30, 60]
-    steps = gran // 5
+def load_flow_metro(resolution=15, start_time=5, end_time=23):
+    assert resolution in [5, 10, 15, 20, 30, 60]
+    steps = resolution // 5
     o = load_flow_data('O').astype(float).as_matrix()
     d = load_flow_data('D').astype(float).as_matrix()
     flow = np.concatenate((o, d), -1)

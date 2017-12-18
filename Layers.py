@@ -5,31 +5,149 @@ import torch.nn as nn
 from torch.autograd import Variable
 
 from Utils import aeq
-from UtilClass import BottleLinear, BottleLayerNorm
+from UtilClass import *
 
 
-class PositionwiseFeedForward(nn.Module):
-    ''' A two-layer Feed-Forward-Network.'''
+class AttnLayer(nn.Module):
+    def __init__(self, dim, adj=None, dropout=0.1):
+        super(AttnLayer, self).__init__()
+        self.attn = ContextAttention(dim, adj, dropout)
+        self.feed_forward = PointwiseMLP(dim, adj, dropout)
 
-    def __init__(self, size, hidden_size=None, dropout=0.1):
-        '''
-        Args:
-            size(int): the size of inp for the first-layer of the FFN.
-            hidden_size(int): the hidden layer size of the second-layer
-                              of the FNN.
-            droput(float): dropout probability(0-1.0).
-        '''
-        super(PositionwiseFeedForward, self).__init__()
-        hidden_size = size if hidden_size is None else hidden_size
-        self.w_1 = BottleLinear(size, hidden_size)
-        self.w_2 = BottleLinear(hidden_size, size)
-        self.relu = nn.ReLU()
+    def forward(self, inp, mask=None):
+        out, attn = self.attn(inp, mask)
+        out = self.feed_forward(out)  # I guess I can remove this nonlinearity
+        return out, attn
+
+
+class MultiChannelContextAttn(nn.Module):
+    def __init__(self, dim, channel=1, adj=None, dropout=0.1):
+        super(MultiChannelContextAttn, self).__init__()
+        self.dim = dim
+        self.channel = channel
+        self.attn_channel = nn.ModuleList([
+            ContextAttention(dim, adj, dropout) for _ in range(channel)])
+        self.attn_merge = ContextAttention(dim, adj, dropout)
+        self.feed_forward = PointwiseMLP(dim, adj, dropout)
         self.dropout = nn.Dropout(dropout)
-        self.layer_norm = BottleLayerNorm(size)
 
-    def forward(self, inp):
-        out = self.dropout(self.w_2(self.relu(self.w_1(inp))))
-        return self.layer_norm(out + inp)
+    def forward(self, query, context, mask=None):
+        '''
+        IN
+        query: batch x length_query x dim
+        context: batch x channel x length_context x dim
+        mask: length_query x length_context
+        mask_context: length_context x length_context
+        MID
+        out_channel: batch*length_query x channel x dim
+        OUT
+        out: batch x length_query x dim
+        attn_merge: batch x length_query x channel
+        attn_channel: batch x channel x length_query x length_context
+        '''
+        batch, length_query, dim = query.size()
+        channel, batch_, length_context, dim_ = context.size()
+        aeq(batch, batch_)
+        aeq(channel, self.channel)
+        aeq(dim, dim_)
+
+        out_channel, attn_channel = [], []
+        for i in range(self.channel):
+            out, attn = self.attn_channel[i](query, context[:, i], mask)
+            out_channel.append(out)
+            attn_channel.append(attn)
+        out_channel = torch.stack(out_channel, -2).view(-1, channel, dim)
+        out, attn_merge = self.attn_merge(query.view(-1, 1, dim), out_channel)
+        attn_channel = torch.stack(attn_channel, 1)
+        out = out.view_as(query) + query
+
+        # out = self.feed_forward(out)  # guess I could remove this nonlinearity
+        return out, attn_merge, attn_channel
+
+
+class MultiChannelSelfAttention(nn.Module):
+    def __init__(self, dim, channel=1, adj=None, dropout=0.1):
+        super(MultiChannelSelfAttention, self).__init__()
+        self.dim = dim
+        self.channel = channel
+        self.attn = nn.ModuleList([
+            SelfAttention(dim, adj, dropout) for _ in range(channel)])
+
+    def forward(self, inp, mask=None):
+        '''
+        inp: batch x channel x length x dim
+        '''
+        outs, attns = [], []
+        for i in range(self.channel):
+            out, attn = self.attn[i](inp, mask)
+        out = torch.stack(outs, 1)
+        attn = torch.stack(attns, 1)
+        return out, attn
+
+
+class ContextAttention(nn.Module):
+    def __init__(self, dim, adj=None, dropout=0.1):
+        super(ContextAttention, self).__init__()
+        self.dim = dim
+        if adj is None:
+            self.w_k = BottleLinear(dim, dim, bias=False)
+            self.w_v = BottleLinear(dim, dim, bias=False)
+        else:
+            self.w_k = BottleSparseLinear(dim, dim, bias=False)
+            self.w_v = BottleSparseLinear(dim, dim, bias=False)
+        self.layer_norm = BottleLayerNorm(dim)
+        self.dropout = nn.Dropout(dropout)
+        self.sm = nn.Softmax(2)
+
+    def forward(self, query, context, mask=None):
+        '''
+        query: batch x len x dim
+        context: batch x len_ x dim
+        '''
+        key, val = self.w_k(context), self.w_v(context)
+        score = torch.bmm(query, key.transpose(1, 2))
+        # score = torch.bmm(self.w(query), context.transpose(1, 2)) / math.sqrt(self.dim)
+        if mask is not None:
+            score.data.masked_fill_(mask, -float('inf'))
+        attn = self.sm(score)
+        out = torch.bmm(self.dropout(attn), val)
+        # out = torch.bmm(self.dropout(attn), context)  # pure temporal model
+        out = self.layer_norm(self.dropout(out) + query)
+        return out, attn
+
+
+class SelfAttention(nn.Module):
+    def __init__(self, dim, adj=None, dropout=0.1):
+        super(SelfAttention, self).__init__()
+        self.dim = args.dim
+        if adj is None:
+            self.w_1 = BottleLinear(self.dim, self.dim)
+        else:
+            self.w_1 = BottleSparseLinear(self.dim, self.dim, adj)
+        self.w_2 = BottleLinear(self.dim, 1)
+        self.activation = nn.Tanh()
+        self.dropout = nn.Dropout(dropout)
+        self.sm = nn.Softmax(2)
+
+    def forward(self, inp, mask=None):
+        '''
+        inp: batch x len x dim
+        mask: len x len
+        score: batch x len
+        attn: batch x len x len
+        out: batch x len x dim
+        '''
+        batch, length, dim = inp.size()
+        aeq(dim, self.dim)
+        score = self.w_2(self.dropout(self.activation(self.w_1(inp)))).transpose(1, 2)
+        attn = score.repeat(1, 1, length)
+        if mask is not None:
+            aeq(length, mask.size(0), mask.size(1))
+            attn.data.masked_fill_(mask, -float('inf'))
+        attn = self.sm(attn)
+        out = torch.bmm(attn, inp).view(batch, length, dim)
+        return out, attn
+
 
 
 class RNNBase(nn.Module):
@@ -71,15 +189,70 @@ class RNNAttn(RNNBase):
         return out, hid, attn
 
 
-class AttentionLayer(nn.Module):
-    def __init__(self, dim, dropout=0.1):
-        super(AttentionLayer, self).__init__()
-        self.attn = SelfAttention(dim, dropout=dropout)
-        self.feed_forward = PositionwiseFeedForward(dim, dropout=dropout)
+
+class MultiHeadedAttention(nn.Module):
+    def __init__(self, dim, head=1, dropout=0.1):
+        '''
+        Args:
+            head(int): number of parallel heads.
+            dim(int): the dimension of keys/values/queries in this
+                MultiHeadedAttention, must be divisible by head.
+        '''
+        assert dim % head == 0, '{}, {}'.format(dim, head)
+        super(MultiHeadedAttention, self).__init__()
+        self.dim = dim
+        self.head = head
+        self.dim_head = dim // head
+        self.w_k = BottleLinear(dim, dim, bias=False)
+        self.w_v = BottleLinear(dim, dim, bias=False)
+        self.w_q = BottleLinear(dim, dim, bias=False)
+        self.sm = nn.Softmax(2)
+        self.activation = nn.ReLU()
+        self.layer_norm = BottleLayerNorm(dim)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, inp, mask=None):
-        hid, attn = self.attn(inp, mask)
-        out = self.feed_forward(hid)
+        batch, length, dim = inp.size()
+
+        def shape_projection(x):
+            b, l, d = x.size()
+            return x.view(b, l, self.head, self.dim_head) \
+                .transpose(1, 2).contiguous() \
+                .view(b * self.head, l, self.dim_head)
+
+        def unshape_projection(x, q):
+            b, l, d = q.size()
+            return x.view(b, self.head, l, self.dim_head) \
+                    .transpose(1, 2).contiguous() \
+                    .view(b, l, self.dim)
+
+        residual = inp
+        key_up = shape_projection(self.w_k(inp))
+        value_up = shape_projection(self.w_v(inp))
+        query_up = shape_projection(self.w_q(inp))
+
+        scaled = torch.bmm(query_up, key_up.transpose(1, 2))
+        scaled = scaled / math.sqrt(self.dim_head)
+        bh, l, dim_head = scaled.size()
+        b = bh // self.head
+        if mask is not None:
+            scaled = scaled.view(b, self.head, l, dim_head)
+            # mask = mask.expand_as(scaled)
+            scaled.data.masked_fill_(mask, -float('inf'))
+        attn = self.sm(scaled.view(bh, l, dim_head))
+
+        # values : (batch * 8) x qlen x dim
+        out = torch.bmm(self.dropout(attn), value_up)
+        out = unshape_projection(out, residual)
+        out = self.layer_norm(self.dropout(out) + residual)
+        attn = attn.view(b, self.head, l, dim_head)
+
+        # CHECK
+        batch_, length_, dim_ = out.size()
+        aeq(length, length_)
+        aeq(batch, batch_)
+        aeq(dim, dim_)
+        # END CHECK
         return out, attn
 
 
@@ -91,10 +264,10 @@ class GlobalAttention(nn.Module):
         assert self.attn_type in ['dot', 'general', 'mlp']
 
         if self.attn_type == 'general':
-            self.linear_in = BottleLinear(dim, dim, bias=False)
+            self.w_in = BottleLinear(dim, dim, bias=False)
         elif self.attn_type == 'mlp':
-            self.linear_context = BottleLinear(dim, dim, bias=False)
-            self.linear_query = BottleLinear(dim, dim, bias=True)
+            self.w_c = BottleLinear(dim, dim, bias=False)
+            self.w_q = BottleLinear(dim, dim, bias=True)
             self.v = BottleLinear(dim, 1, bias=False)
         # mlp wants it with bias
         out_bias = self.attn_type == 'mlp'
@@ -112,15 +285,15 @@ class GlobalAttention(nn.Module):
 
         if self.attn_type in ['general', 'dot']:
             if self.attn_type == 'general':
-                hid_ = self.linear_in(inp).transpose(1, 2)
+                hid_ = self.w_in(inp).transpose(1, 2)
                 return torch.bmm(inp, hid_)
             else:
                 hid_ = inp.transpose(1, 2).contiguous()
                 return torch.bmm(inp, hid_)
         else:
             dim = self.dim
-            wq = self.linear_query(inp).view(batch, length, 1, dim)
-            uh = self.linear_context(inp).view(batch, 1, length, dim)
+            wq = self.w_q(inp).view(batch, length, 1, dim)
+            uh = self.w_c(inp).view(batch, 1, length, dim)
             wq = wq.expand(batch, length, length, dim)
             uh = uh.expand(batch, length, length, dim)
             wquh = self.tanh(wq + uh).view(-1, dim)
@@ -146,97 +319,3 @@ class GlobalAttention(nn.Module):
 
         return attn_h, attn
 
-
-class SelfAttention(nn.Module):
-    def __init__(self, dim, dropout=0.1):
-        super(SelfAttention, self).__init__()
-        self.dim = dim
-        self.linear_k = BottleLinear(dim, dim, bias=False)
-        self.linear_v = BottleLinear(dim, dim, bias=False)
-        self.linear_q = BottleLinear(dim, dim, bias=False)
-        self.layer_norm = BottleLayerNorm(dim)
-        self.dropout = nn.Dropout(dropout)
-        self.sm = nn.Softmax(2)
-
-    def forward(self, inp, mask):
-        '''
-        inp: batch x len x dim
-        '''
-        k = self.linear_k(inp)
-        v = self.linear_v(inp)
-        q = self.linear_q(inp)
-        score = torch.bmm(q, k.transpose(1, 2)) / math.sqrt(self.dim)
-        if mask is not None:
-            score.data.masked_fill_(mask, -float('inf'))
-        attn = self.sm(score)
-        out = torch.bmm(self.dropout(attn), v)
-        out = self.layer_norm(out + inp)
-        return out, attn
-
-
-class MultiHeadedAttention(nn.Module):
-    def __init__(self, head, dim, dropout=0.1):
-        '''
-        Args:
-            head(int): number of parallel heads.
-            dim(int): the dimension of keys/values/queries in this
-                MultiHeadedAttention, must be divisible by head.
-        '''
-        assert dim % head == 0, '{}, {}'.format(dim, head)
-        self.dim_head = dim // head
-        self.dim = dim
-
-        super(MultiHeadedAttention, self).__init__()
-        self.head = head
-
-        self.linear_keys = BottleLinear(dim, dim, bias=False)
-        self.linear_values = BottleLinear(dim, dim, bias=False)
-        self.linear_query = BottleLinear(dim, dim, bias=False)
-        self.sm = nn.Softmax(2)
-        self.activation = nn.ReLU()
-        self.layer_norm = BottleLayerNorm(dim)
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, inp, mask=None):
-        batch, length, dim = inp.size()
-
-        def shape_projection(x):
-            b, l, d = x.size()
-            return x.view(b, l, self.head, self.dim_head) \
-                .transpose(1, 2).contiguous() \
-                .view(b * self.head, l, self.dim_head)
-
-        def unshape_projection(x, q):
-            b, l, d = q.size()
-            return x.view(b, self.head, l, self.dim_head) \
-                    .transpose(1, 2).contiguous() \
-                    .view(b, l, self.dim)
-
-        residual = inp
-        key_up = shape_projection(self.linear_keys(inp))
-        value_up = shape_projection(self.linear_values(inp))
-        query_up = shape_projection(self.linear_query(inp))
-
-        scaled = torch.bmm(query_up, key_up.transpose(1, 2))
-        scaled = scaled / math.sqrt(self.dim_head)
-        bh, l, dim_head = scaled.size()
-        b = bh // self.head
-        if mask is not None:
-            scaled = scaled.view(b, self.head, l, dim_head)
-            # mask = mask.expand_as(scaled)
-            scaled.data.masked_fill_(mask, -float('inf'))
-        attn = self.sm(scaled.view(bh, l, dim_head))
-
-        # values : (batch * 8) x qlen x dim
-        out = torch.bmm(self.dropout(attn), value_up)
-        out = unshape_projection(out, residual)
-        out = self.layer_norm(self.dropout(out) + residual)
-        attn = attn.view(b, self.head, l, dim_head)
-
-        # CHECK
-        batch_, length_, dim_ = out.size()
-        aeq(length, length_)
-        aeq(batch, batch_)
-        aeq(dim, dim_)
-        # END CHECK
-        return out, attn
