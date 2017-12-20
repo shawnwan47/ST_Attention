@@ -20,26 +20,25 @@ class AttnLayer(nn.Module):
         return out, attn
 
 
-class MultiChannelContextAttention(nn.Module):
+class MultiChannelAttention(nn.Module):
     def __init__(self, dim, channel=1, adj=None, dropout=0.1):
-        super(MultiChannelContextAttention, self).__init__()
+        super(MultiChannelAttention, self).__init__()
         self.dim = dim
         self.channel = channel
         self.attn_channel = nn.ModuleList([
             ContextAttention(dim, adj, dropout) for _ in range(channel)])
         self.attn_merge = ContextAttention(dim, adj, dropout)
-        self.feed_forward = PointwiseMLP(dim, adj, dropout)
-        self.dropout = nn.Dropout(dropout)
 
     def forward(self, query, context, mask=None):
         '''
+        !!!!!!!! dim of channel should change!
         IN
         query: batch x length_query x dim
         context: batch x channel x length_context x dim
         mask: length_query x length_context
         mask_context: length_context x length_context
         MID
-        out_channel: batch*length_query x channel x dim
+        out_channel: batch x channel x length_query x dim
         OUT
         out: batch x length_query x dim
         attn_merge: batch x length_query x channel
@@ -59,10 +58,10 @@ class MultiChannelContextAttention(nn.Module):
             attn_channel.append(attn)
         out_channel = torch.stack(out_channel, -2).view(-1, channel, dim)
         query = query.contiguous().view(-1, 1, dim)
-        out, attn_merge = self.attn_merge(query.view(-1, 1, dim), out_channel)
-        attn_channel = torch.stack(attn_channel, 1)
-        # out = self.feed_forward(out)  # guess I could remove nonlinearity
+        out, attn_merge = self.attn_merge(query, out_channel)
         out = out.view(batch, length_query, dim)
+        attn_merge = attn_merge.view(batch, length_query, channel)
+        attn_channel = torch.stack(attn_channel, 1)
         return out, attn_merge, attn_channel
 
 
@@ -72,9 +71,9 @@ class ContextAttention(nn.Module):
         self.dim = dim
         self.w_k = BottleSparseLinear(dim, dim, adj, bias=False)
         self.w_v = BottleSparseLinear(dim, dim, adj, bias=False)
-        self.layer_norm = BottleLayerNorm(dim)
         self.dropout = nn.Dropout(dropout)
         self.sm = nn.Softmax(2)
+        self.layer_norm = BottleLayerNorm(dim)
         self.feed_forward = PointwiseMLP(dim, adj, dropout)
 
     def forward(self, query, context, mask=None):
@@ -89,9 +88,35 @@ class ContextAttention(nn.Module):
             score.data.masked_fill_(mask, -float('inf'))
         attn = self.sm(score)
         out = torch.bmm(attn, val)
-        # out = self.dropout(out)
+        out = self.dropout(out)
         out = self.layer_norm(out + query)
-        out = self.feed_forward(out)  # really?
+        # out = self.feed_forward(out)  # really?
+        return out, attn
+
+
+class GeneralAttention(nn.Module):
+    def __init__(self, dim, adj=None, dropout=0.1):
+        super(GeneralAttention, self).__init__()
+        self.dim = dim
+        self.w = BottleSparseLinear(dim, dim, adj, bias=False)
+        self.dropout = nn.Dropout(dropout)
+        self.sm = nn.Softmax(2)
+        self.layer_norm = BottleLayerNorm(dim)
+
+    def forward(self, query, context, mask=None):
+        '''
+        query: batch x len x dim
+        context: batch x len_ x dim
+        '''
+        key = self.w(context)
+        score = torch.bmm(query, key.transpose(1, 2))
+        score /= math.sqrt(self.dim)
+        if mask is not None:
+            score.data.masked_fill_(mask, -float('inf'))
+        attn = self.sm(score)
+        out = torch.bmm(attn, context)
+        out = self.dropout(out)
+        out = self.layer_norm(out + query)
         return out, attn
 
 

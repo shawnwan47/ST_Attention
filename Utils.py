@@ -145,13 +145,13 @@ def denormalize(flow, flow_mean, flow_std):
     return flow * flow_std + flow_mean
 
 
-def var2np(x):
-    return x.cpu().data.numpy()
+def _var2np(x):
+    return x.data.cpu().numpy()
 
 
 def torch2npsave(file, data):
-    if type(data) is tuple:
-        data = [var2np(d) for d in data]
+    if type(data) in [tuple, list]:
+        for i, d in enumerate(data):
+            np.save(file + '_' + str(i), _var2np(d))
     else:
-        data = var2np(data)
-    np.save(file, data)
+        np.save(file, _var2np(data))

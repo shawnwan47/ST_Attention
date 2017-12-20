@@ -8,7 +8,7 @@ def add_data(args):
     args.add_argument('-data_type', type=str, default='highway',
                       choices=['highway', 'metro'])
     args.add_argument('-past_days', type=int, default=1)
-    args.add_argument('-future', type=int, default=8)
+    args.add_argument('-future', type=int, default=4)
     args.add_argument('-adj', action='store_true')
     # for metro only
     args.add_argument('-resolution', type=int, default=15)
@@ -32,13 +32,19 @@ def add_loss(args):
 def add_optim(args):
     args.add_argument('-optim', type=str, default='SGD',
                       choices=['SGD', 'Adam', 'Adadelta', 'Adamax'])
-    args.add_argument('-lr', type=float, default=0.1)
+    args.add_argument('-lr', type=float, default=1.0)
     args.add_argument('-patience', type=int, default=10)
+    args.add_argument('-lr_min', type=float, default=1e-7)
     args.add_argument('-weight_decay', type=float, default=5e-5)
     args.add_argument('-max_grad_norm', type=float, default=1)
 
 
 def add_run(args):
+    args.add_argument('-pretrain', action='store_true')
+    args.add_argument('-eval_layers', type=int, default=0)
+    args.add_argument('-retrain', action='store_true')
+    args.add_argument('-fix_layers', type=int, default=0)
+    args.add_argument('-tune', action='store_true')
     args.add_argument('-test', action='store_true')
     args.add_argument('-epoches', type=int, default=500)
     args.add_argument('-batch', type=int, default=10)
@@ -47,7 +53,8 @@ def add_run(args):
 def add_model(args):
     args.add_argument('-model', type=str, default='STAttn',
                       choices=['RNN', 'Attn', 'STAttn',
-                               'LinearTemporal', 'LinearSpatial', 'LinearST'])
+                               'LinearTemporal', 'LinearSpatial',
+                               'LinearST', 'LinearSpatialTemporal'])
     # general
     args.add_argument('-input_size', type=int)
     args.add_argument('-output_size', type=int)
@@ -81,7 +88,7 @@ def _dataset(args):
         args.end_time = 24
         args.resolution = 15
     elif args.data_type == 'metro':
-        args.dim = 286
+        args.dim = 536
         args.days = 22
         args.days_train = 14
         args.days_test = 4
@@ -91,7 +98,7 @@ def _dataset(args):
     args.daily_times //= args.resolution
     assert args.past_days > 0
     assert args.num_layers < 5
-    if args.dilated and args.num_layers == 3:
+    if args.dilated and args.num_layers == 4:
         args.past_days = 7
     args.past = args.past_days * args.daily_times
     args.input_length = args.daily_times + args.past
@@ -108,9 +115,16 @@ def _model(args):
         args.input_size += args.day_size + args.time_size
 
 
+def _optim(args):
+    assert args.fix_layers <= args.num_layers
+    if args.tune:
+        args.lr = 1e-4
+
+
 def update_args(args):
     _dataset(args)
     _model(args)
+    _optim(args)
 
 
 def modelname(args):

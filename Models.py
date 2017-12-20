@@ -19,6 +19,14 @@ class Embedding_DayTime(nn.Module):
         time = self.dropout(self.embedding_time(daytime[:, :, 1]))
         return torch.cat((day, time), -1)
 
+    def fix(self):
+        self.embedding_day.require_grad = False
+        self.embedding_time.require_grad = False
+
+    def reset(self):
+        self.embedding_day.require_grad = True
+        self.embedding_time.require_grad = True
+
 
 class RNN(nn.Module):
     def __init__(self, args):
@@ -126,27 +134,39 @@ class STAttn(nn.Module):
         self.output_size = args.output_size
         self.num_layers = args.num_layers
         self.channel = args.channel
-        self.encoder = Layers.MultiChannelSelfAttention(
-            self.input_size, self.channel, adj, args.dropout)
-        self.decoder = Layers.MultiChannelContextAttention(
-            self.input_size, self.channel, adj, args.dropout)
+        self.dilated = args.dilated
+        self.dilation = args.dilation[:self.num_layers + 1]
+        self.dropout = nn.Dropout(args.dropout)
+        self.linear_out = BottleSparseLinear(
+            self.input_size, self.output_size, adj=adj)
         self.encoders = nn.ModuleList([
             Layers.MultiChannelSelfAttention(
                 self.input_size, self.channel, adj, args.dropout)
             for _ in range(self.num_layers)])
         self.decoders = nn.ModuleList([
-            Layers.MultiChannelContextAttention(
+            Layers.MultiChannelAttention(
                 self.input_size, self.channel, adj, args.dropout)
             for _ in range(self.num_layers)])
-        self.linear_out = BottleSparseLinear(
-            self.input_size, self.output_size, adj=adj)
-        self.dilated = args.dilated
-        self.dilation = args.dilation[:self.num_layers + 1]
         if self.dilated:
             mask = get_mask_dilated(args.input_length, self.dilation)
         else:
             mask = get_mask_trim(args.input_length, self.past)
         self.register_buffer('mask', mask)
+        self.eval_layers = self.num_layers
+
+    def fix_layers(self, layers):
+        for i in range(layers):
+            self.encoders[i].require_grad = False
+            self.decoders[i].require_grad = False
+
+    def set_eval_layers(self, layers):
+        self.eval_layers = layers
+
+    def reset(self):
+        self.eval_layers = self.num_layers
+        for i in range(self.num_layers):
+            self.encoders[i].require_grad = True
+            self.decoders[i].require_grad = True
 
     def forward(self, inp):
         '''
@@ -162,16 +182,13 @@ class STAttn(nn.Module):
         length = inp.size(1)
         length_query = length - self.past
         attn_merges, attn_channels, attn_contexts = [], [], []
-        for i in range(self.num_layers):
+        for i in range(self.eval_layers):
             if self.dilated:
                 mask = self.mask[i]
             else:
                 mask = self.mask
             mask_dec = mask[-length_query:, -length:]
             mask_enc = mask[:length, :length]
-            # out, attn_merge, attn_channel = self.decoder(
-            #     out, context, mask_dec)
-            # context, attn_context = self.encoder(context, mask_enc)
             out, attn_merge, attn_channel = self.decoders[i](
                 out, context, mask_dec)
             context, attn_context = self.encoders[i](context, mask_enc)
@@ -225,6 +242,29 @@ class LinearSpatial(nn.Module):
         batch, _, dim = inp.size()
         out = self.linear(inp)[:, self.past:]
         out = out.contiguous().view(batch, -1, self.future, dim)
+        return out
+
+
+class LinearSpatialTemporal(nn.Module):
+    def __init__(self, args, adj=None):
+        super(LinearSpatialTemporal, self).__init__()
+        self.past = args.past
+        self.future = args.future
+        self.input_size = args.input_size
+        self.output_size = args.output_size
+        self.temporal = BottleLinear(self.past, self.future)
+        self.spatial = BottleLinear(self.input_size, self.input_size)
+
+    def forward(self, inp):
+        batch, length, dim = inp.size()
+        out = []
+        for i in range(length - self.past):
+            inp_i = inp[:, i:i + self.past].transpose(1, 2).contiguous()
+            out_i = self.temporal(inp_i).transpose(1, 2).contiguous()
+            out_i = self.spatial(out_i)
+            out.append(out_i)  # batch x future x dim
+        out = torch.stack(out, 1)
+        out = out.view(batch, -1, self.future, dim)
         return out
 
 

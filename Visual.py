@@ -14,17 +14,14 @@ def saveclf(figpath):
 
 
 def plotTimeTicks(args, length, axis='x', offset=True):
-    hour = 60 // args.gran
-    if offset:
-        start_time = args.start_time + args.past // hour
-    else:
-        start_time = args.start_time
+    hour = 60 // args.resolution
+    daily_hour = args.daily_times // hour
     ticks = np.arange(length // hour + 1).astype(int)
     labels = list(map(lambda x: str(x) + ':00',
-                      ticks % (args.end_time - args.start_time) + start_time))
+                      ticks % daily_hour + args.start_time))
     ticks *= hour
     if axis is 'x':
-        plt.xticks(ticks, labels, rotation=45)
+        plt.xticks(ticks, labels, rotation=60)
     else:
         plt.yticks(ticks, labels)
 
@@ -53,18 +50,6 @@ def plot_flow_steps(flows):
         plt.plot(x + step, flows[:, step], label=str(step) + '-step')
 
 
-def show_attn(attn, args):
-    plt.clf()
-    h, w = attn.shape
-    mask = np.triu(np.ones_like(attn), w - h) > 0
-    attn[mask] = np.nan
-    plt.imshow(attn)
-    ylen, xlen = attn.shape
-    plotTimeTicks(args, xlen, axis='x', offset=False)
-    plotTimeTicks(args, ylen, axis='y', offset=True)
-    plt.xlabel('Past')
-    plt.ylabel('Future')
-
 
 def num2ceil(num):
     num = str(int(num))
@@ -81,3 +66,51 @@ def plot_errs(errors):
     plt.ylabel('Error')
     plt.xlabel('Step')
     plt.legend()
+
+
+def show_attn(attn, args):
+    plt.clf()
+    attn_copy = attn.copy()
+    h, w = attn_copy.shape
+    mask_u = np.triu(np.ones_like(attn_copy), w - h) > 0
+    mask_l = np.tril(np.ones_like(attn_copy), w - h - 96) > 0
+    attn_copy[mask_u] = np.nan
+    attn_copy[mask_l] = np.nan
+    plt.imshow(attn_copy, cmap='rainbow')
+    ylen, xlen = attn_copy.shape
+    plotTimeTicks(args, xlen, axis='x', offset=False)
+    plotTimeTicks(args, ylen, axis='y', offset=True)
+    plt.xlabel('Past')
+    plt.ylabel('Future')
+
+
+def show_attns(attns, args, day=7):
+    attn_merge, attn_channel, attn_context = attns
+    attn_merge = attn_merge[day]
+    attn_channel = attn_channel[day]
+    attn_context = attn_context[day]
+
+
+def show_attn_merge(attn_merge, args):
+    '''
+    attn_merge: length x channel
+    '''
+    length, channel = attn_merge.shape
+    plt.imshow(attn_merge, cmap='rainbow')
+    plotTimeTicks(args, length, axis='y')
+
+
+def chain_attns(attn1, attn2):
+    '''
+    attn1: len1 x len2
+    attn2: len2 x len3
+    ret: len1 x len3
+    '''
+    assert attn1.shape[1] == attn2.shape[0]
+    return np.matmul(attn1, attn2)
+
+
+def show_attn_channel(attn_channel, a):
+    pass
+
+

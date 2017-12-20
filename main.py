@@ -3,6 +3,7 @@ import argparse
 import numpy as np
 
 import torch
+import torch.nn as nn
 from torch.nn.utils import clip_grad_norm
 from torch.autograd import Variable
 
@@ -55,8 +56,19 @@ if not args.adj:
 # MODEL
 modelpath = MODEL_PATH + Args.modelname(args)
 print('Model: {}'.format(modelpath))
-model = getattr(Models, args.model)(args, adj).cuda()
-daytime = Models.Embedding_DayTime(args).cuda()
+
+model = getattr(Models, args.model)(args)
+daytime = Models.Embedding_DayTime(args)
+if args.test or args.retrain or args.tune:
+    model, daytime = torch.load(modelpath + '.pt')
+    print('Loaded models from file.')
+if args.fix_layers:
+    model.fix_layers(args.fix_layers)
+    daytime.fix()
+if args.eval_layers:
+    model.set_eval_layers(args.eval_layers)
+model.cuda()
+daytime.cuda()
 
 # LOSS
 criterion = getattr(torch.nn, args.loss)()
@@ -65,8 +77,7 @@ criterion = getattr(torch.nn, args.loss)()
 parameters = list(model.parameters()) + list(daytime.parameters())
 optimizer = getattr(torch.optim, args.optim)(
     parameters, lr=args.lr, weight_decay=args.weight_decay)
-scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-    optimizer, patience=args.patience, verbose=True)
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True)
 
 
 # TRAINING
@@ -131,27 +142,40 @@ def test_model():
         return loss
 
 
-# TRAINING
-if not args.test:
-    for epoch in range(args.epoches):
-        loss_train = train_model()
-        loss_valid = valid_model()
+def run():
+    # TRAINING
+    if not args.test:
+        for epoch in range(args.epoches):
+            loss_train = train_model()
+            loss_valid = valid_model()
 
-        print('Epoch: %d train: %.4f valid: %.4f' % (
-            epoch, loss_train, loss_valid))
+            print('Epoch: %d train: %.4f valid: %.4f' % (
+                epoch, loss_train, loss_valid))
 
-        scheduler.step(loss_valid)
+            scheduler.step(loss_valid)
+            if optimizer.param_groups[0]['lr'] <= args.lr_min:
+                break
 
+    # TESTING
+    model.cuda()
+    daytime.cuda()
+    out = test_model()
+    if type(out) is tuple:
+        out, attn = out
+        Utils.torch2npsave(modelpath + '_attn', attn)
+    print('Test {}: {}'.format(modelpath, out))
+    np.savetxt(modelpath + '_loss.txt', out)
+    if args.model in ['LinearSpatial', 'LinearTemporal',
+                      'LinearSpatialTemporal', 'LinearST']:
+        Utils.torch2npsave(modelpath + '_params', list(model.parameters()))
+
+    try:
+        model.reset()
+    except AttributeError:
+        pass
+    daytime.reset()
     torch.save((model.cpu(), daytime.cpu()), modelpath + '.pt')
 
-# TESTING
-model, daytime = torch.load(modelpath + '.pt')
-model = model.cuda()
-daytime = daytime.cuda()
 
-out = test_model()
-if type(out) is tuple:
-    out, attn = out
-    Utils.torch2npsave(modelpath + '_attn', attn)
-print('Test {}: {}'.format(modelpath, out))
-np.savetxt(modelpath + '_loss.txt', out)
+if __name__ == '__main__':
+    run()
