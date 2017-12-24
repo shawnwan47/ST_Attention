@@ -2,7 +2,7 @@ import math
 
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
+from torch.nn import functional as F
 
 from Utils import aeq
 from UtilClass import *
@@ -68,12 +68,11 @@ class MultiHeadedAttention(AttentionBase):
             dim(int): the dimension of keys/values/queries in this
                 MultiHeadedAttention, must be divisible by head.
         '''
-        mod = dim % head
-        dim += mod
+        pad = head - dim % head
+        dim += pad
         super(MultiHeadedAttention, self).__init__(dim, dropout)
-        self.pad = (mod // 2, mod // 2 + mod % 2)
+        self.pad = (pad // 2, pad // 2 + pad % 2)
         self.head = head
-        self.dim_head = dim // head
         self.w_k = BottleLinear(dim, dim, bias=False)
         self.w_v = BottleLinear(dim, dim, bias=False)
         self.w_q = BottleLinear(dim, dim, bias=False)
@@ -83,39 +82,38 @@ class MultiHeadedAttention(AttentionBase):
         inp: batch x length x dim
         attn: batch x head x length x dim_head
         '''
-        if self.pad:
+        if self.pad[1]:
             inp = F.pad(inp, self.pad)
-        residual = inp
         batch, length, dim = inp.size()
+        dim_head = dim // self.head
 
         def shape_projection(x):
-            return x.view(batch, length, self.head, self.dim_head) \
+            return x.view(batch, length, self.head, dim_head) \
                 .transpose(1, 2).contiguous() \
-                .view(batch * self.head, length, self.dim_head)
+                .view(batch * self.head, length, dim_head)
 
         def unshape_projection(x):
-            return x.view(batch, self.head, length, self.dim_head) \
+            return x.view(batch, self.head, length, dim_head) \
                     .transpose(1, 2).contiguous() \
-                    .view(batch, length, self.dim)
-
+                    .view(batch, length, dim)
 
         key = shape_projection(self.w_k(inp))
         value = shape_projection(self.w_v(inp))
         query = shape_projection(self.w_q(inp))
 
         score = torch.bmm(query, key.transpose(1, 2))
-        score = score / math.sqrt(self.dim_head)
+        score = score / math.sqrt(dim_head)
         if mask is not None:
             score = score.view(batch, self.head, length, length)
             score.data.masked_fill_(mask, -float('inf'))
         attn = self.softmax(score.view(-1, length, length))
 
-        # values : (batch * 8) x qlen x dim
         out = torch.bmm(self.dropout(attn), value)
         out = unshape_projection(out)
-        out = self.layer_norm(self.dropout(out) + residual)
-        out = out[:, :, self.pad[0]:-self.pad[1]]
+        out = self.layer_norm(self.dropout(out) + inp)
         attn = attn.view(batch, self.head, length, length)
+        if self.pad[1]:
+            out = out[:, :, self.pad[0]:-self.pad[1]]
         return out, attn
 
 
@@ -185,5 +183,5 @@ class MLPAttention(AttentionBase):
         if mask is not None:
             score.data.masked_fill_(mask, -float('inf'))
         attn = self.softmax(score)
-        out = torch.bmm(attn, inp)
+        out = torch.bmm(attn, value)
         return out, attn

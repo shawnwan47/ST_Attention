@@ -51,10 +51,10 @@ def add_run(args):
 
 
 def add_model(args):
-    args.add_argument('-model', type=str, default='Attn',
-                      choices=['RNN', 'Attn',
+    args.add_argument('-model', type=str, default='HeadAttn',
+                      choices=['RNN', 'ConvAttn', 'HeadAttn',
                                'LinearTemporal', 'LinearSpatial',
-                               'LinearST', 'LinearSpatialTemporal'])
+                               'LinearSpatialTemporal'])
     # general
     args.add_argument('-input_size', type=int)
     args.add_argument('-output_size', type=int)
@@ -74,6 +74,7 @@ def add_model(args):
     args.add_argument('-dilated', action='store_true')
     args.add_argument('-dilation', type=int, default=[], nargs='+')
     # Attention
+    args.add_argument('-head', type=int, default=1)
     args.add_argument('-channel', type=int, default=1)
 
 

@@ -50,26 +50,26 @@ class RNNAttn(RNNBase):
 
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, dim, channel, head, dropout=0.1):
+    def __init__(self, dim, head, channel, dropout=0.1):
         super(MultiHeadAttention, self).__init__()
         self.channel = channel
         self.attn = nn.ModuleList([
-            AttentionInterface(dim, 'head', head, dropout=dropout)
+            AttentionInterface(dim, 'head', head=head, dropout=dropout)
             for _ in range(channel)])
+        self.feed_forward = PointwiseMLP(dim, dropout=dropout)
 
     def forward(self, inp, mask):
         batch, length, channel, dim = inp.size()
-
         out = []
         attn = []
         for i in range(self.channel):
             out_i, attn_i = self.attn[i](inp[:, :, i], mask)
+            out_i = self.feed_forward(out_i)
             out.append(out_i)
             attn.append(attn_i)
         out = torch.stack(out, -2)
         attn = torch.stack(attn, 1)
         return out, attn
-
 
 
 class MultiChannelAttention(nn.Module):

@@ -3,7 +3,7 @@ import torch.nn as nn
 
 import Layers
 
-from Utils import get_mask_trim, get_mask_dilated
+from Utils import get_mask_trim, get_mask_dilated, aeq
 from UtilClass import *
 
 
@@ -102,15 +102,33 @@ class HeadAttn(ModelBase):
         self.dilated = args.dilated
         self.dilation = args.dilation[:self.num_layers + 1]
         self.layers = nn.ModuleList([Layers.MultiHeadAttention(
-            self.dim, self.future, self.head, dropout=args.dropout)
-        for _ in self.future])
+            self.input_size,
+            head=self.head,
+            channel=self.future,
+            dropout=args.dropout)
+            for _ in range(self.num_layers)])
+        if self.dilated:
+            mask = get_mask_dilated(args.input_length, self.dilation)
+        else:
+            mask = get_mask_trim(args.input_length, self.past)
+        self.register_buffer('mask', mask)
 
     def forward(self, inp, daytime=None):
         inp = super(HeadAttn, self).forward(inp, daytime)
         batch, length, dim = inp.size()
         out = inp.unsqueeze(2).expand(batch, length, self.future, dim)
         attn = []
-        for i in range(self.num_layers)
+        for i in range(self.num_layers):
+            if self.dilated:
+                mask = self.mask[i]
+            else:
+                mask = self.mask
+            mask = mask[:length, :length]
+            out, attn_i = self.layers[i](out, mask)
+            attn.append(attn_i)
+        attn = torch.cat(attn, 1)
+        out = out[:, self.past:, :, :self.dim]
+        return out, attn
 
 
 class ConvAttn(ModelBase):
@@ -119,7 +137,7 @@ class ConvAttn(ModelBase):
         self.dilated = args.dilated
         self.dilation = args.dilation[:self.num_layers + 1]
         self.layers = nn.ModuleList([Layers.Attention(
-            self.dim, self.future, self.future, args.attn_type, args.dropout)
+            self.input_size, self.future, self.future, args.attn_type, args.dropout)
             for _ in range(self.num_layers)])
         if self.dilated:
             mask = get_mask_dilated(args.input_length, self.dilation)
