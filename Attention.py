@@ -21,6 +21,7 @@ class AttentionBase(nn.Module):
 class AttentionInterface(nn.Module):
     def __init__(self, dim, attn_type, head=1, dropout=0.1):
         super(AttentionInterface, self).__init__()
+        self.attn_type = attn_type
         if attn_type == 'dot':
             attn = DotAttention(dim, dropout)
         elif attn_type == 'general':
@@ -36,6 +37,8 @@ class AttentionInterface(nn.Module):
         self.attn = attn
 
     def forward(self, inp, mask=None):
+        if self.attn_type == 'self':
+            return self.attn(inp)
         return self.attn(inp, mask)
 
 
@@ -110,6 +113,7 @@ class MultiHeadedAttention(AttentionBase):
 
         out = torch.bmm(self.dropout(attn), value)
         out = unshape_projection(out)
+        # out = self.layer_norm(out)
         out = self.layer_norm(self.dropout(out) + inp)
         attn = attn.view(batch, self.head, length, length)
         if self.pad[1]:

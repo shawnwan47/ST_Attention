@@ -49,9 +49,9 @@ class RNNAttn(RNNBase):
         return out, hid, attn
 
 
-class MultiHeadAttention(nn.Module):
+class HeadAttnLayer(nn.Module):
     def __init__(self, dim, head, channel, dropout=0.1):
-        super(MultiHeadAttention, self).__init__()
+        super(HeadAttnLayer, self).__init__()
         self.channel = channel
         self.attn = nn.ModuleList([
             AttentionInterface(dim, 'head', head=head, dropout=dropout)
@@ -64,7 +64,7 @@ class MultiHeadAttention(nn.Module):
         attn = []
         for i in range(self.channel):
             out_i, attn_i = self.attn[i](inp[:, :, i], mask)
-            out_i = self.feed_forward(out_i)
+            out_i = self.feed_forward(out_i.contiguous())
             out.append(out_i)
             attn.append(attn_i)
         out = torch.stack(out, -2)
@@ -72,9 +72,9 @@ class MultiHeadAttention(nn.Module):
         return out, attn
 
 
-class MultiChannelAttention(nn.Module):
+class ConvAttnLayer(nn.Module):
     def __init__(self, dim, in_channel, out_channel, attn_type, dropout=0.1):
-        super(MultiChannelAttention, self).__init__()
+        super(ConvAttnLayer, self).__init__()
         self.in_channel = in_channel
         self.out_channel = out_channel
         self.attn_merge = nn.ModuleList([
@@ -119,4 +119,3 @@ class MultiChannelAttention(nn.Module):
         attn = torch.stack(attn, 2)
         attn_merge = torch.stack(attn_merge, 2)
         return out, attn, attn_merge
-

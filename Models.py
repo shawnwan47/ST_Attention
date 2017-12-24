@@ -101,7 +101,7 @@ class HeadAttn(ModelBase):
         self.head = args.head
         self.dilated = args.dilated
         self.dilation = args.dilation[:self.num_layers + 1]
-        self.layers = nn.ModuleList([Layers.MultiHeadAttention(
+        self.layers = nn.ModuleList([Layers.HeadAttnLayer(
             self.input_size,
             head=self.head,
             channel=self.future,
@@ -127,6 +127,7 @@ class HeadAttn(ModelBase):
             out, attn_i = self.layers[i](out, mask)
             attn.append(attn_i)
         attn = torch.cat(attn, 1)
+        out += inp.unsqueeze(2)
         out = out[:, self.past:, :, :self.dim]
         return out, attn
 
@@ -136,7 +137,7 @@ class ConvAttn(ModelBase):
         super(ConvAttn, self).__init__(args)
         self.dilated = args.dilated
         self.dilation = args.dilation[:self.num_layers + 1]
-        self.layers = nn.ModuleList([Layers.Attention(
+        self.layers = nn.ModuleList([Layers.ConvAttnLayer(
             self.input_size, self.future, self.future, args.attn_type, args.dropout)
             for _ in range(self.num_layers)])
         if self.dilated:
