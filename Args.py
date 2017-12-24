@@ -32,9 +32,9 @@ def add_loss(args):
 def add_optim(args):
     args.add_argument('-optim', type=str, default='SGD',
                       choices=['SGD', 'Adam', 'Adadelta', 'Adamax'])
-    args.add_argument('-lr', type=float, default=1.0)
+    args.add_argument('-lr', type=float, default=0.1)
     args.add_argument('-patience', type=int, default=10)
-    args.add_argument('-lr_min', type=float, default=1e-7)
+    args.add_argument('-lr_min', type=float, default=1e-6)
     args.add_argument('-weight_decay', type=float, default=5e-5)
     args.add_argument('-max_grad_norm', type=float, default=1)
 
@@ -47,12 +47,12 @@ def add_run(args):
     args.add_argument('-tune', action='store_true')
     args.add_argument('-test', action='store_true')
     args.add_argument('-epoches', type=int, default=500)
-    args.add_argument('-batch', type=int, default=10)
+    args.add_argument('-batch', type=int, default=5)
 
 
 def add_model(args):
-    args.add_argument('-model', type=str, default='STAttn',
-                      choices=['RNN', 'Attn', 'STAttn',
+    args.add_argument('-model', type=str, default='Attn',
+                      choices=['RNN', 'Attn',
                                'LinearTemporal', 'LinearSpatial',
                                'LinearST', 'LinearSpatialTemporal'])
     # general
@@ -68,9 +68,8 @@ def add_model(args):
     # RNN
     args.add_argument('-rnn_type', type=str, default='RNN',
                       choices=['RNN', 'GRU', 'LSTM'])
-    args.add_argument('-attn', action='store_true')
     args.add_argument('-attn_type', type=str, default='dot',
-                      choices=['dot', 'general', 'mlp', 'kvq'])
+                      choices=['dot', 'general', 'mlp', 'context'])
     # dilation
     args.add_argument('-dilated', action='store_true')
     args.add_argument('-dilation', type=int, default=[], nargs='+')
@@ -98,7 +97,7 @@ def _dataset(args):
     args.daily_times //= args.resolution
     assert args.past_days > 0
     assert args.num_layers < 5
-    if args.dilated and args.num_layers == 4:
+    if args.dilated and args.num_layers == 3:
         args.past_days = 7
     args.past = args.past_days * args.daily_times
     args.input_length = args.daily_times + args.past
@@ -108,7 +107,7 @@ def _model(args):
     if args.model == 'Attention':
         args.attn = False
     # dilations for up to 4 layers
-    args.dilation = [1, 4, 16, args.daily_times, args.daily_times * 7]
+    args.dilation = [1, 8, args.daily_times, args.daily_times * 7]
     args.input_size = args.dim
     args.output_size = args.dim * args.future
     if args.daytime:

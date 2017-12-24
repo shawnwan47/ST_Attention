@@ -7,48 +7,56 @@ from Utils import get_mask_trim, get_mask_dilated
 from UtilClass import *
 
 
-class Embedding_DayTime(nn.Module):
+class ModelBase(nn.Module):
     def __init__(self, args):
-        super(Embedding_DayTime, self).__init__()
+        super(ModelBase, self).__init__()
+        self.past = args.past
+        self.future = args.future
+        self.dim = args.dim
+        self.input_size = args.input_size
+        self.hidden_size = args.hidden_size
+        self.output_size = args.output_size
+        self.num_layers = args.num_layers
+        self.dropout = nn.Dropout(args.dropout)
         self.embedding_day = nn.Embedding(7, args.day_size)
         self.embedding_time = nn.Embedding(args.daily_times, args.time_size)
-        self.dropout = nn.Dropout(args.dropout)
+        self.adj = args.adj
+        # self.longlat = args.longlat
+        self.eval_layers = self.num_layers
 
-    def forward(self, daytime):
-        day = self.dropout(self.embedding_day(daytime[:, :, 0]))
-        time = self.dropout(self.embedding_time(daytime[:, :, 1]))
-        return torch.cat((day, time), -1)
+    def forward(self, inp, daytime=None):
+        if daytime is not None:
+            batch, length, dim = inp.size()
+            batch_, length_, dim_ = daytime.size()
+            aeq(batch, batch_)
+            aeq(length, length_)
+            aeq(dim_, 2)
+            day = self.dropout(self.embedding_day(daytime[:, :, 0]))
+            time = self.dropout(self.embedding_time(daytime[:, :, 1]))
+            inp = torch.cat((inp, day, time), -1)
+        return inp.contiguous()
 
-    def fix(self):
+    def fix_layers(self):
         self.embedding_day.require_grad = False
         self.embedding_time.require_grad = False
 
+    def set_layers(self, eval_layers=None):
+        if eval_layers is not None:
+            self.eval_layers = eval_layers
+
     def reset(self):
+        self.eval_layers = self.num_layers
         self.embedding_day.require_grad = True
         self.embedding_time.require_grad = True
 
 
-class RNN(nn.Module):
+class RNN(ModelBase):
     def __init__(self, args):
-        super(RNN, self).__init__()
-        self.past = args.past
-        self.future = args.future
-        self.attn = args.attn
-        self.dim = args.dim
-        self.input_size = args.input_size
-        self.output_size = args.output_size
-        if self.attn:
-            self.rnn = Layers.RNNAttn(
-                args.rnn_type, args.input_size, args.hidden_size,
-                args.num_layers, args.dropout, args.attn_type)
-        else:
-            self.rnn = Layers.RNNBase(
-                args.rnn_type, args.input_size, args.hidden_size,
-                args.num_layers, args.dropout)
-        self.dropout = nn.Dropout(args.dropout)
+        super(RNN, self).__init__(args)
+        self.layer = Layers.RNNBase(
+            args.rnn_type, args.input_size, args.hidden_size,
+            args.num_layers, args.dropout)
         self.linear_out = BottleLinear(args.hidden_size, args.output_size)
-        mask = get_mask_trim(args.input_length, self.past)
-        self.register_buffer('mask', mask)
 
     def forward(self, inp):
         '''
@@ -57,166 +65,101 @@ class RNN(nn.Module):
         attn: batch x len - past x len
         '''
         residual = inp[:, self.past:, :self.dim].unsqueeze(-2)
-        hid = self.rnn.initHidden(inp)
-        if self.attn:
-            mask = self.mask[:inp.size(1), :inp.size(1)]
-            out, hid, attn = self.rnn(inp, hid, mask)
-        else:
-            out, hid = self.rnn(inp, hid)
+        hid = self.layer.initHidden(inp)
+        out, hid = self.layer(inp, hid)
         out = self.linear_out(self.dropout(out[:, self.past:]))
         batch, length, dim = out.size()
         out = out.view(batch, length, self.future, self.dim)
         out += residual
-        if self.attn:
-            return out, attn
-        else:
-            return out
+        return out
 
 
-class Attn(nn.Module):
-    def __init__(self, args, adj=None):
-        super(Attn, self).__init__()
-        self.past = args.past
-        self.future = args.future
-        self.dim = args.dim
-        self.input_size = args.input_size
-        self.output_size = args.output_size
-        self.num_layers = args.num_layers
-        self.linear_out = BottleLinear(self.input_size, self.output_size)
-        self.layers = nn.ModuleList([
-            Layers.AttnLayer(self.input_size, args.dropout)
-            for _ in range(self.num_layers)])
-        self.dilated = args.dilated
-        self.dilation = args.dilation[:self.num_layers + 1]
-        if self.dilated:
-            masks = []
-            for i in range(self.num_layers):
-                dilation = self.dilation[i]
-                window = self.dilation[i + 1] // dilation
-                mask = _get_mask_dilated(args.input_length, dilation, window)
-                masks.append(mask)
-            self.register_buffer('mask', torch.stack(masks, 0))
-        else:
-            mask = get_mask_trim(args.input_length, self.past)
-            self.register_buffer('mask', mask)
+class RNNAttn(ModelBase):
+    def __init__(self, args):
+        self.layer = Layers.RNNAttn(
+            args.rnn_type, args.input_size, args.hidden_size,
+            args.num_layers, args.dropout, args.attn_type)
+        self.linear_out = BottleLinear(args.hidden_size, args.output_size)
+        mask = get_mask_trim(args.input_length, self.past)
+        self.register_buffer('mask', mask)
 
-    def forward(self, inp):
-        '''
-        inp: batch x len x input_size
-        out: batch x len - past x future x dim
-        attn: batch x len - past x len
-        '''
-        residual = inp[:, self.past:, :self.dim].unsqueeze(-2)
-        out = inp.clone()
-        attns = []
-        for i in range(self.num_layers):
-            if self.dilated:
-                mask = self.mask[i, :inp.size(1), :inp.size(1)]
-            else:
-                mask = self.mask[:inp.size(1), :inp.size(1)]
-            out, attn = self.layers[i](out, mask)
-            attns.append(attn)
-        out = self.linear_out(out[:, self.past:].contiguous())
-        batch, length, _ = out.size()
+    def forward(self, inp, daytime=None):
+        inp, daytime = super(RNNAttn, self).forward(inp, daytime)
+        hid = self.layer.initHidden(inp)
+        mask = self.mask[:inp.size(1), :inp.size(1)]
+        out, hid, attn = self.layer(inp, hid, mask)
+        out = self.linear_out(self.dropout(out[:, self.past:]))
+        batch, length, dim = out.size()
         out = out.view(batch, length, self.future, self.dim)
         out += residual
-        attn = torch.stack(attns, 1)
         return out, attn
 
 
-class STAttn(nn.Module):
-    def __init__(self, args, adj=None):
-        super(STAttn, self).__init__()
-        self.past = args.past
-        self.future = args.future
-        self.dim = args.dim
-        self.input_size = args.input_size
-        self.output_size = args.output_size
-        self.num_layers = args.num_layers
-        self.channel = args.channel
+class HeadAttn(ModelBase):
+    def __init__(self, args):
+        super(HeadAttn, self).__init__(args)
+        self.head = args.head
         self.dilated = args.dilated
         self.dilation = args.dilation[:self.num_layers + 1]
-        self.dropout = nn.Dropout(args.dropout)
-        self.linear_out = BottleSparseLinear(
-            self.input_size, self.output_size, adj=adj)
-        self.encoders = nn.ModuleList([
-            Layers.MultiChannelSelfAttention(
-                self.input_size, self.channel, adj, args.dropout)
-            for _ in range(self.num_layers)])
-        self.decoders = nn.ModuleList([
-            Layers.MultiChannelAttention(
-                self.input_size, self.channel, adj, args.dropout)
+        self.layers = nn.ModuleList([Layers.MultiHeadAttention(
+            self.dim, self.future, self.head, dropout=args.dropout)
+        for _ in self.future])
+
+    def forward(self, inp, daytime=None):
+        inp = super(HeadAttn, self).forward(inp, daytime)
+        batch, length, dim = inp.size()
+        out = inp.unsqueeze(2).expand(batch, length, self.future, dim)
+        attn = []
+        for i in range(self.num_layers)
+
+
+class ConvAttn(ModelBase):
+    def __init__(self, args):
+        super(ConvAttn, self).__init__(args)
+        self.dilated = args.dilated
+        self.dilation = args.dilation[:self.num_layers + 1]
+        self.layers = nn.ModuleList([Layers.Attention(
+            self.dim, self.future, self.future, args.attn_type, args.dropout)
             for _ in range(self.num_layers)])
         if self.dilated:
             mask = get_mask_dilated(args.input_length, self.dilation)
         else:
             mask = get_mask_trim(args.input_length, self.past)
         self.register_buffer('mask', mask)
-        self.eval_layers = self.num_layers
 
-    def fix_layers(self, layers):
-        for i in range(layers):
-            self.encoders[i].require_grad = False
-            self.decoders[i].require_grad = False
-
-    def set_eval_layers(self, layers):
-        self.eval_layers = layers
-
-    def reset(self):
-        self.eval_layers = self.num_layers
-        for i in range(self.num_layers):
-            self.encoders[i].require_grad = True
-            self.decoders[i].require_grad = True
-
-    def forward(self, inp):
+    def forward(self, inp, daytime=None):
         '''
         inp: batch x length x dim
         out: batch x length - past x future x dim
-        attn_merge: batch x num_layers x length x channel
-        attn_channel: batch x num_layers x channel x length - past x length
-        attn_context: batch x num_layers x channel x length x length
+        attn_merge: batch x num_layers x length x future x channel
+        attn: batch x num_layers x length x future x channel x length
         '''
-        res = inp[:, self.past:, :self.dim].unsqueeze(-2)
-        out = inp[:, self.past:]
-        context = inp.unsqueeze(1).repeat(1, self.channel, 1, 1)
-        length = inp.size(1)
-        length_query = length - self.past
-        attn_merges, attn_channels, attn_contexts = [], [], []
-        for i in range(self.eval_layers):
+        inp = super(ConvAttn, self).forward(inp, daytime)
+        batch, length, dim = inp.size()
+        out = inp.unsqueeze(2).expand(batch, length, self.future, dim)
+        attn = []
+        attn_merge = []
+        for i in range(self.num_layers):
             if self.dilated:
                 mask = self.mask[i]
             else:
                 mask = self.mask
-            mask_dec = mask[-length_query:, -length:]
-            mask_enc = mask[:length, :length]
-            out, attn_merge, attn_channel = self.decoders[i](
-                out, context, mask_dec)
-            context, attn_context = self.encoders[i](context, mask_enc)
-            attn_merges.append(attn_merge)
-            attn_channels.append(attn_channel)
-            attn_contexts.append(attn_context)
-        attn_merge = torch.stack(attn_merges, 1)
-        attn_channel = torch.stack(attn_channels, 1)
-        attn_context = torch.stack(attn_contexts, 1)
-        out = self.linear_out(out)
-        out = out.view(-1, length_query, self.future, self.dim) + res
-        return out, attn_merge, attn_channel, attn_context
+            mask = mask[:length, :length]
+            out, attn_merge_i, attn_i = self.layers[i](out)
+            attn_merge.append(attn_merge_i)
+            attn.append(attn_i)
+        attn_merge = torch.stack(attn_merge, 1)
+        attn = torch.stack(attn, 1)
+        out = out[:, self.past:, :, :self.dim]
+        return out, attn_merge, attn
 
 
-class LinearTemporal(nn.Module):
-    def __init__(self, args, adj=None):
-        super(LinearTemporal, self).__init__()
-        self.past = args.past
-        self.future = args.future
-        self.input_size = args.input_size
-        self.output_size = args.output_size
+class LinearTemporal(ModelBase):
+    def __init__(self, args):
+        super(LinearTemporal, self).__init__(args)
         self.linear = BottleLinear(self.past, self.future)
 
-    def forward(self, inp):
-        '''
-        inp: batch x length x dim
-        out: batch x length - past x dim
-        '''
+    def forward(self, inp, daytime=None):
         out = []
         for i in range(inp.size(1) - self.past):
             inp_i = inp[:, i:i + self.past].transpose(1, 2).contiguous()
@@ -225,13 +168,9 @@ class LinearTemporal(nn.Module):
         return out
 
 
-class LinearSpatial(nn.Module):
-    def __init__(self, args, adj=None):
-        super(LinearSpatial, self).__init__()
-        self.past = args.past
-        self.future = args.future
-        self.input_size = args.input_size
-        self.output_size = args.output_size
+class LinearSpatial(ModelBase):
+    def __init__(self, args):
+        super(LinearSpatial, self).__init__(args)
         self.linear = BottleLinear(self.input_size, self.output_size)
 
     def forward(self, inp):
@@ -245,13 +184,9 @@ class LinearSpatial(nn.Module):
         return out
 
 
-class LinearSpatialTemporal(nn.Module):
-    def __init__(self, args, adj=None):
-        super(LinearSpatialTemporal, self).__init__()
-        self.past = args.past
-        self.future = args.future
-        self.input_size = args.input_size
-        self.output_size = args.output_size
+class LinearSpatialTemporal(ModelBase):
+    def __init__(self, args):
+        super(LinearSpatialTemporal, self).__init__(args)
         self.temporal = BottleLinear(self.past, self.future)
         self.spatial = BottleLinear(self.input_size, self.input_size)
 
@@ -265,24 +200,4 @@ class LinearSpatialTemporal(nn.Module):
             out.append(out_i)  # batch x future x dim
         out = torch.stack(out, 1)
         out = out.view(batch, -1, self.future, dim)
-        return out
-
-
-class LinearST(nn.Module):
-    def __init__(self, args, adj=None):
-        super(LinearST, self).__init__()
-        self.past = args.past
-        self.future = args.future
-        self.input_size = args.input_size
-        self.output_size = args.output_size
-        self.linear = BottleLinear(
-            self.input_size * self.past, self.output_size)
-
-    def forward(self, inp):
-        batch, length, dim = inp.size()
-        out = []
-        for i in range(length - self.past):
-            inp_i = inp[:, i:i + self.past].contiguous().view(batch, -1)
-            out.append(self.linear(inp_i))
-        out = torch.stack(out, 1).view(batch, -1, self.future, dim)
         return out

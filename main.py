@@ -52,31 +52,25 @@ flow_std = Variable(flow_std)
 adj = Variable(adj)
 if not args.adj:
     adj = None
+else:
+    args.adj = adj
 
 # MODEL
 modelpath = MODEL_PATH + Args.modelname(args)
 print('Model: {}'.format(modelpath))
 
 model = getattr(Models, args.model)(args)
-daytime = Models.Embedding_DayTime(args)
 if args.test or args.retrain or args.tune:
-    model, daytime = torch.load(modelpath + '.pt')
+    model = torch.load(modelpath + '.pt')
     print('Loaded models from file.')
-if args.fix_layers:
-    model.fix_layers(args.fix_layers)
-    daytime.fix()
-if args.eval_layers:
-    model.set_eval_layers(args.eval_layers)
 model.cuda()
-daytime.cuda()
 
 # LOSS
 criterion = getattr(torch.nn, args.loss)()
 
 # OPTIM
-parameters = list(model.parameters()) + list(daytime.parameters())
 optimizer = getattr(torch.optim, args.optim)(
-    parameters, lr=args.lr, weight_decay=args.weight_decay)
+    model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True)
 
 
@@ -89,17 +83,15 @@ def train_model():
     for day in range(iters):
         idx = days[day::iters]
         inp = inp_train[idx]
-        dt = dt_train[idx]
         tgt = tgt_train[idx]
-        if args.daytime:
-            inp = torch.cat((inp, daytime(dt)), -1)
-        out = model(inp)
+        dt = dt_train[idx] if args.daytime else None
+        out = model(inp, dt)
         if type(out) is tuple:
             out = out[0]
         out = Utils.denormalize(out, flow_mean, flow_std).contiguous()
         loss = criterion(out, tgt)
         loss.backward()
-        clip_grad_norm(parameters, args.max_grad_norm)
+        clip_grad_norm(model.parameters(), args.max_grad_norm)
         optimizer.step()
         loss_train.append(loss.data[0])
     return sum(loss_train) / len(loss_train)
@@ -108,10 +100,8 @@ def train_model():
 def valid_model():
     inp = inp_valid
     tgt = tgt_valid
-    dt = dt_valid
-    if args.daytime:
-        inp = torch.cat((inp, daytime(dt)), -1)
-    out = model(inp)
+    dt = dt_valid if args.daytime else None
+    out = model(inp, dt)
     if type(out) is tuple:
         out = out[0]
     out = Utils.denormalize(out, flow_mean, flow_std)
@@ -125,25 +115,22 @@ def test_model():
 
     inp = inp_test
     tgt = tgt_test
-    dt = dt_test
-    if args.daytime:
-        inp = torch.cat((inp, daytime(dt)), -1)
-    out = model(inp)
-    ret_attn = False
+    dt = dt_test if args.daytime else None
+    out = model(inp, dt)
+    ret_more = False
     if type(out) is tuple:
-        out, attn = out[0], out[1:]
-        ret_attn = True
+        out, out_ = out[0], out[1:]
+        ret_more = True
     out = Utils.denormalize(out, flow_mean, flow_std)
     loss = [percent_err(out[:, :, i], tgt[:, :, i])
             for i in range(args.future)]
-    if ret_attn:
-        return loss, attn
+    if ret_more:
+        return loss, out_
     else:
         return loss
 
 
 def run():
-    # TRAINING
     if not args.test:
         for epoch in range(args.epoches):
             loss_train = train_model()
@@ -153,28 +140,20 @@ def run():
                 epoch, loss_train, loss_valid))
 
             scheduler.step(loss_valid)
-            if optimizer.param_groups[0]['lr'] <= args.lr_min:
+            if optimizer.param_groups[0]['lr'] < args.lr_min:
                 break
 
-    # TESTING
-    model.cuda()
-    daytime.cuda()
     out = test_model()
     if type(out) is tuple:
-        out, attn = out
-        Utils.torch2npsave(modelpath + '_attn', attn)
+        out, out_ = out
+        Utils.torch2npsave(modelpath + '_out', out_)
     print('Test {}: {}'.format(modelpath, out))
     np.savetxt(modelpath + '_loss.txt', out)
-    if args.model in ['LinearSpatial', 'LinearTemporal',
-                      'LinearSpatialTemporal', 'LinearST']:
-        Utils.torch2npsave(modelpath + '_params', list(model.parameters()))
-
     try:
         model.reset()
     except AttributeError:
         pass
-    daytime.reset()
-    torch.save((model.cpu(), daytime.cpu()), modelpath + '.pt')
+    torch.save(model.cpu(), modelpath + '.pt')
 
 
 if __name__ == '__main__':

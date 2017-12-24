@@ -14,12 +14,12 @@ class Bottle(nn.Module):
 class LayerNorm(nn.Module):
     ''' Layer normalization module '''
 
-    def __init__(self, d_hid, eps=1e-3):
+    def __init__(self, dim, eps=1e-3):
         super(LayerNorm, self).__init__()
 
         self.eps = eps
-        self.a_2 = nn.Parameter(torch.ones(d_hid), requires_grad=True)
-        self.b_2 = nn.Parameter(torch.zeros(d_hid), requires_grad=True)
+        self.a_2 = nn.Parameter(torch.ones(dim), requires_grad=True)
+        self.b_2 = nn.Parameter(torch.zeros(dim), requires_grad=True)
 
     def forward(self, z):
         if z.size(1) == 1:
@@ -30,14 +30,16 @@ class LayerNorm(nn.Module):
         if mu.dim() == 1:
             mu = mu.unsqueeze(1)
             sigma = sigma.unsqueeze(1)
-        ln_out = (z - mu.expand_as(z)) / (sigma.expand_as(z) + self.eps)
-        ln_out = ln_out.mul(self.a_2.expand_as(ln_out)) \
-            + self.b_2.expand_as(ln_out)
-        return ln_out
+        out = (z - mu.expand_as(z)) / (sigma.expand_as(z) + self.eps)
+        out = out.mul(self.a_2.expand_as(out)) \
+            + self.b_2.expand_as(out)
+        return out
 
 
 class SparseLinear(nn.Linear):
     def __init__(self, in_features, out_features=None, adj=None, bias=True):
+        if out_features is None:
+            out_features = in_features
         super(SparseLinear, self).__init__(in_features, out_features, bias)
         self.adj = adj
 
