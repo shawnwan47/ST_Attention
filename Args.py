@@ -8,7 +8,7 @@ def add_data(args):
     args.add_argument('-data_type', type=str, default='highway',
                       choices=['highway', 'metro'])
     args.add_argument('-past_days', type=int, default=1)
-    args.add_argument('-future', type=int, default=4)
+    args.add_argument('-future', type=int, default=8)
     args.add_argument('-adj', action='store_true')
     # for metro only
     args.add_argument('-resolution', type=int, default=15)
@@ -34,8 +34,8 @@ def add_optim(args):
                       choices=['SGD', 'Adam', 'Adadelta', 'Adamax'])
     args.add_argument('-lr', type=float, default=0.1)
     args.add_argument('-patience', type=int, default=10)
-    args.add_argument('-lr_min', type=float, default=1e-6)
-    args.add_argument('-weight_decay', type=float, default=5e-5)
+    args.add_argument('-lr_min', type=float, default=1e-5)
+    args.add_argument('-weight_decay', type=float, default=1e-5)
     args.add_argument('-max_grad_norm', type=float, default=1)
 
 
@@ -52,7 +52,7 @@ def add_run(args):
 
 def add_model(args):
     args.add_argument('-model', type=str, default='HeadAttn',
-                      choices=['RNN', 'ConvAttn', 'HeadAttn',
+                      choices=['RNN', 'ConvAttn', 'HeadAttn', 'Linear',
                                'LinearTemporal', 'LinearSpatial',
                                'LinearSpatialTemporal'])
     # general
@@ -60,7 +60,7 @@ def add_model(args):
     args.add_argument('-output_size', type=int)
     args.add_argument('-hidden_size', type=int, default=1024)
     args.add_argument('-num_layers', type=int, default=1)
-    args.add_argument('-dropout', type=float, default=0.1)
+    args.add_argument('-dropout', type=float, default=0.2)
     # Day Time size
     args.add_argument('-daytime', action='store_true')
     args.add_argument('-day_size', type=int, default=16)
@@ -68,12 +68,12 @@ def add_model(args):
     # RNN
     args.add_argument('-rnn_type', type=str, default='RNN',
                       choices=['RNN', 'GRU', 'LSTM'])
-    args.add_argument('-attn_type', type=str, default='dot',
+    # Attention
+    args.add_argument('-attn_type', type=str, default='general',
                       choices=['dot', 'general', 'mlp', 'context'])
-    # dilation
+    args.add_argument('-value_proj', action='store_true')
     args.add_argument('-dilated', action='store_true')
     args.add_argument('-dilation', type=int, default=[], nargs='+')
-    # Attention
     args.add_argument('-head', type=int, default=1)
     args.add_argument('-channel', type=int, default=1)
 

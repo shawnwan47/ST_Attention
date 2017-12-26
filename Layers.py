@@ -49,9 +49,9 @@ class RNNAttn(RNNBase):
         return out, hid, attn
 
 
-class MultiHeadAttention(nn.Module):
-    def __init__(self, dim, head, channel, dropout=0.1):
-        super(MultiHeadAttention, self).__init__()
+class HeadAttnLayer(nn.Module):
+    def __init__(self, dim, head, channel, dropout=0.2):
+        super(HeadAttnLayer, self).__init__()
         self.channel = channel
         self.attn = nn.ModuleList([
             AttentionInterface(dim, 'head', head=head, dropout=dropout)
@@ -72,19 +72,20 @@ class MultiHeadAttention(nn.Module):
         return out, attn
 
 
-class MultiChannelAttention(nn.Module):
-    def __init__(self, dim, in_channel, out_channel, attn_type, dropout=0.1):
-        super(MultiChannelAttention, self).__init__()
+class ConvAttnLayer(nn.Module):
+    def __init__(self, dim, in_channel, out_channel, attn_type, value_proj=False, dropout=0.2):
+        super(ConvAttnLayer, self).__init__()
         self.in_channel = in_channel
         self.out_channel = out_channel
-        self.attn_merge = nn.ModuleList([
-            AttentionInterface(dim, 'self', dropout=dropout)
-            for _ in range(out_channel)])
-        self.attn = nn.ModuleList([
+        self.attn_conv = nn.ModuleList([
             nn.ModuleList([
-                AttentionInterface(dim, attn_type, dropout=dropout)
+                AttentionInterface(dim, attn_type, value_proj=value_proj, dropout=dropout)
                 for _ in range(in_channel)])
             for _ in range(out_channel)])
+        self.linear_pool = nn.ModuleList([
+            BottleLinear(in_channel, 1) for _ in range(out_channel)])
+        self.attn_pool = nn.ModuleList([
+            AttentionInterface(dim, 'self', value_proj=value_proj, dropout=dropout)])
 
     def forward(self, inp, mask=None):
         '''
@@ -93,30 +94,48 @@ class MultiChannelAttention(nn.Module):
         mask: length x length
         OUT
         out: batch x length x out_channel x dim
-        attn_merge: batch x length x out_channel x in_channel
-        attn: batch x length x out_channel x in_channel x length
+        attn_conv: out_channel x in_channel x batch x length x length
         '''
         batch, length, in_channel, dim = inp.size()
 
         out = []
-        attn = []
-        attn_merge = []
+        attn_conv = []
         for i in range(self.out_channel):
             out_i = []
             attn_i = []
             for j in range(self.in_channel):
-                out_j, attn_j = self.attn[i][j](inp[:, :, j], mask)
+                out_j, attn_j = self.attn_conv[i][j](inp[:, :, j], mask)
                 out_i.append(out_j)
                 attn_i.append(attn_j)
-            attn_i = torch.stack(attn_i, 2)
-            out_i = torch.stack(out_i, 2)
-            out_i = out_i.view(-1, in_channel, dim)
-            out_i, attn_merge_i = self.attn_merge[i](out_i)
-            out.append(out_i.view(batch, length, dim))
-            attn.append(attn_i)
-            attn_merge.append(attn_merge_i)
-        out = torch.stack(out, 2)
-        attn = torch.stack(attn, 2)
-        attn_merge = torch.stack(attn_merge, 2)
-        return out, attn, attn_merge
+            attn_i = torch.stack(attn_i, 0)
+            out_i = torch.stack(out_i, -1)
+            # out_i = torch.sum(out_i, -1)
+            out_i = self.linear_pool[i](out_i).squeeze(-1)
+            out.append(out_i)
+            attn_conv.append(attn_i)
+        out = torch.stack(out, -2)
+        attn_conv = torch.stack(attn_conv, 0)
+        return out, attn_conv
 
+
+class LinearLayer(nn.Module):
+    def __init__(self, dim, past, channel, dropout=0.2):
+        super(LinearLayer, self).__init__()
+        self.past = past
+        self.channel = channel
+        self.temporal = nn.ModuleList([
+            BottleLinear(past, 1) for _ in range(channel)])
+        self.spatial = nn.ModuleList([
+            BottleLinear(dim, dim) for _ in range(channel)])
+
+    def forward(self, inp):
+        length = inp.size(1)
+        out = []
+        for i in range(self.channel):
+            out_i = self.spatial[i](inp)
+            out_t = []
+            for t in range(length - self.past):
+                inp_t = out_i[:, t:t + past].transpose(1, 2).contiguous()
+                out_t.append(self.temporal[i](inp_t).transpose(1, 2))
+            out.append(torch.cat(out_t, -2))
+        return torch.stack(out, -2)

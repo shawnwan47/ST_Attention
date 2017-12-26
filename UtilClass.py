@@ -3,12 +3,16 @@ import torch.nn as nn
 
 
 class Bottle(nn.Module):
-    def forward(self, input):
-        if len(input.size()) <= 2:
-            return super(Bottle, self).forward(input)
-        size = input.size()[:2]
-        out = super(Bottle, self).forward(input.view(size[0] * size[1], -1))
-        return out.contiguous().view(size[0], size[1], -1)
+    def forward(self, inp):
+        assert inp.dim() < 5
+        if inp.dim() <= 2:
+            return super(Bottle, self).forward(inp)
+        if inp.dim() == 3:
+            out = super(Bottle, self).forward(inp.view(-1, inp.size(2)))
+            return out.view(inp.size(0), inp.size(1), -1)
+        else:
+            out = super(Bottle, self).forward(inp.view(-1, inp.size(3)))
+            return out.view(inp.size(0), inp.size(1), inp.size(2), -1)
 
 
 class LayerNorm(nn.Module):
@@ -37,11 +41,11 @@ class LayerNorm(nn.Module):
 
 
 class SparseLinear(nn.Linear):
-    def __init__(self, in_features, out_features=None, adj=None, bias=True):
+    def __init__(self, in_features, out_features=None, bias=True):
         if out_features is None:
             out_features = in_features
         super(SparseLinear, self).__init__(in_features, out_features, bias)
-        self.adj = adj
+        
 
     def forward(self, inp):
         if self.adj is not None:
@@ -78,8 +82,8 @@ class Elementwise(nn.ModuleList):
         self.merge = merge
         super(Elementwise, self).__init__(*args)
 
-    def forward(self, input):
-        inputs = [feat.squeeze(2) for feat in input.split(1, dim=2)]
+    def forward(self, inp):
+        inputs = [feat.squeeze(2) for feat in inp.split(1, dim=2)]
         assert len(self) == len(inputs)
         outputs = [f(x) for f, x in zip(self, inputs)]
         if self.merge == 'first':
