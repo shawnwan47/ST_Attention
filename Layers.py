@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 
-from Attention import AttentionInterface, SelfAttention, MultiHeadedAttention
+from Attention import *
 from Utils import aeq
 from UtilClass import *
 
@@ -62,13 +62,13 @@ class HeadAttnLayer(nn.Module):
 
 
 class ConvAttnLayer(nn.Module):
-    def __init__(self, dim, in_channel, out_channel, attn_type, value_proj=False, dropout=0.2):
+    def __init__(self, dim, in_channel, out_channel, attn_type, dropout=0.2):
         super(ConvAttnLayer, self).__init__()
         self.in_channel = in_channel
         self.out_channel = out_channel
         self.attn = nn.ModuleList([
-            nn.ModuleList([AttentionInterface(
-                dim, attn_type, value_proj=value_proj, dropout=dropout)
+            nn.ModuleList([AttnInterface(
+                dim, attn_type, dropout=dropout)
                 for _ in range(in_channel)])
             for _ in range(out_channel)])
         self.merge = nn.ModuleList([
@@ -105,6 +105,33 @@ class ConvAttnLayer(nn.Module):
         out = torch.stack(out, -2)
         attn = torch.stack(attn, 0)
         return out, attn
+
+
+class WAttnLayer(nn.Module):
+    def __init__(self, in_features, out_features,
+                 attn_type='add', head=1, merge='cat', dropout=0.2):
+        super(WAttnLayer, self).__init__()
+        self.head = head
+        self.attn = nn.ModuleList([
+            WAttnInterface(in_features, out_features, attn_type, dropout)
+            for _ in range(head)])
+        self.merge = merge
+
+    def forward(self, inp, mask=None):
+        out, attn, weight = [], [], []
+        for i in range(self.head):
+            out_i, attn_i, weight_i = self.attn[i](inp)
+            out.append(out_i)
+            attn.append(attn_i)
+            weight.append(weight_i)
+        attn = torch.stack(attn, 0)
+        weight = torch.stack(weight, 0)
+        if self.merge == 'cat':
+            out = torch.cat(out, -1)
+        elif self.merge == 'mean':
+            out = torch.stack(out)
+            out = torch.mean(out, 0)
+        return out, attn, weight
 
 
 class SelfAttnLayer(nn.Module):

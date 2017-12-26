@@ -3,7 +3,7 @@ import torch.nn as nn
 
 import Layers
 
-from Utils import get_mask_trim, get_mask_dilated, aeq
+from Utils import get_mask_trim, get_mask_dilated, aeq, load_adj
 from UtilClass import *
 
 
@@ -134,9 +134,9 @@ class ConvAttn(ModelBase):
         super(ConvAttn, self).__init__(args)
         channel = args.channel
         self.layer_in = Layers.ConvAttnLayer(
-            self.input_size, 1, channel, args.attn_type, args.value_proj)
+            self.input_size, 1, channel, args.attn_type)
         self.layer_out = Layers.ConvAttnLayer(
-            self.input_size, channel, self.future, args.attn_type, args.value_proj)
+            self.input_size, channel, self.future, args.attn_type)
         self.register_buffer('mask', get_mask_trim(args.input_length, self.past))
 
     def forward(self, inp, daytime=None):
@@ -156,16 +156,52 @@ class ConvAttn(ModelBase):
         return out, attn_in, attn_out
 
 
-class SpatialAttn(ModelBase):
+class GraphAttn(ModelBase):
     def __init__(self, args):
-        super(SpatialAttn, self).__init__(args)
+        super(GraphAttn, self).__init__(args)
+        self.layer = Layers.WAttnLayer(
+            self.past, self.future, attn_type=args.attn_type,
+            head=args.head, merge='mean', dropout=args.dropout)
+        self.mask = load_adj() if args.adj else None
+
+    def forward(self, inp, daytime=None):
+        batch, length, dim = inp.size()
+        out, attn = [], []
+        for i in range(length - self.past):
+            out_i = inp[:, i:i + self.past].transpose(1, 2).contiguous()
+            out_i, attn_i, weight = self.layer(out_i, self.mask)
+            out.append(out_i.transpose(1, 2))
+            attn.append(attn_i)
+        out = torch.stack(out, 1)
+        attn = torch.stack(attn, 1)
+        return out, attn, weight
+
+class GraphAttn2(ModelBase):
+    def __init__(self, args):
+        super(GraphAttn2, self).__init__(args)
+        self.layer1 = Layers.WAttnLayer(
+            self.past, args.hidden_size, attn_type=args.attn_type,
+            head=args.head, merge='cat', dropout=args.dropout)
+        self.layer2 = Layers.WAttnLayer(
+            args.hidden_size * args.head, self.future, attn_type=args.attn_type,
+            head=1, merge='mean', dropout=args.dropout)
         self.adj = args.adj
-        self.channel = args.channel
+        self.mask = load_adj() if args.adj else None
 
     def forward(self, inp):
         batch, length, dim = inp.size()
-        out = inp.transpose(1, 2).contiguous()
-        return out
+        out, attn1, attn2 = [], [], []
+        for i in range(length - self.past):
+            out_i = inp[:, i:i + self.past].transpose(1, 2).contiguous()
+            out_i, attn1_i, weight1 = self.layer1(out_i, self.mask)
+            out_i, attn2_i, weight1 = self.layer2(out_i, self.mask)
+            out.append(out_i.transpose(1, 2))
+            attn1.append(attn1_i)
+            attn2.append(attn2_i)
+        out = torch.stack(out, 1)
+        attn1 = torch.stack(attn1, 1)
+        attn2 = torch.stack(attn2, 1)
+        return out, attn1, attn2, weight1, weight2
 
 
 class Linear(ModelBase):
@@ -206,39 +242,4 @@ class LinearTemporal(ModelBase):
             inp_i = inp[:, i:i + self.past].transpose(1, 2).contiguous()
             out.append(self.linear(inp_i).transpose(1, 2))
         out = torch.stack(out, 1)
-        return out
-
-
-class LinearSpatial(ModelBase):
-    def __init__(self, args):
-        super(LinearSpatial, self).__init__(args)
-        self.linear = BottleLinear(self.input_size, self.output_size)
-
-    def forward(self, inp):
-        '''
-        inp: batch x length x dim
-        out: batch x length - past x dim
-        '''
-        batch, _, dim = inp.size()
-        out = self.linear(inp)[:, self.past:]
-        out = out.contiguous().view(batch, -1, self.future, dim)
-        return out
-
-
-class LinearSpatialTemporal(ModelBase):
-    def __init__(self, args):
-        super(LinearSpatialTemporal, self).__init__(args)
-        self.temporal = BottleLinear(self.past, self.future)
-        self.spatial = BottleLinear(self.input_size, self.input_size)
-
-    def forward(self, inp):
-        batch, length, dim = inp.size()
-        out = []
-        for i in range(length - self.past):
-            inp_i = inp[:, i:i + self.past].transpose(1, 2).contiguous()
-            out_i = self.temporal(inp_i).transpose(1, 2).contiguous()
-            out_i = self.spatial(out_i)
-            out.append(out_i)  # batch x future x dim
-        out = torch.stack(out, 1)
-        out = out.view(batch, -1, self.future, dim)
         return out

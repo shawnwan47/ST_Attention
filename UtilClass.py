@@ -50,8 +50,8 @@ class SparseLinear(nn.Linear):
 
     def forward(self, inp):
         if self.adj is not None:
-            sparse_weight = self.weight.masked_fill(self.adj, 0)
-            self.weight = nn.Parameter(sparse_weight.data)
+            sparse_weight = self.weight.data.masked_fill(self.adj, 0)
+            self.weight = nn.Parameter(sparse_weight)
         return super(SparseLinear, self).forward(inp)
 
 

@@ -6,8 +6,7 @@ import Data
 
 
 def load_adj():
-    adj = torch.ByteTensor(Data.load_adj()).cuda() == 0
-    return Variable(adj)
+    return torch.ByteTensor(Data.load_adj()).cuda() == 0
 
 
 def load_data_highway(args):

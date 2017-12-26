@@ -66,8 +66,8 @@ def add_model(args):
     args.add_argument('-rnn_type', type=str, default='RNN',
                       choices=['RNN', 'GRU', 'LSTM'])
     # Attention
-    args.add_argument('-attn_type', type=str, default='general',
-                      choices=['general', 'mlp'])
+    args.add_argument('-attn_type', type=str, default='add',
+                      choices=['add', 'mul', 'mlp'])
     args.add_argument('-value_proj', action='store_true')
     args.add_argument('-dilated', action='store_true')
     args.add_argument('-dilation', type=int, default=[], nargs='+')

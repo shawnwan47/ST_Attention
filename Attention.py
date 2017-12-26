@@ -8,34 +8,58 @@ from Utils import aeq
 from UtilClass import *
 
 
-class AttentionInterface(nn.Module):
-    def __init__(self, dim, attn_type, value_proj=False, dropout=0.2):
-        super(AttentionInterface, self).__init__()
+class AttnInterface(nn.Module):
+    def __init__(self, dim, attn_type, dropout=0.2):
+        super(AttnInterface, self).__init__()
         self.attn_type = attn_type
-        if attn_type == 'general':
-            attn = GeneralAttention(dim, dropout)
+        if attn_type == 'add':
+            attn = AddAttention(dim, dropout)
+        elif attn_type == 'mul':
+            attn = MulAttention(dim, dropout)
         elif attn_type == 'mlp':
             attn = MLPAttention(dim, dropout)
         self.attn = attn
-        self.value_proj = value_proj
-        if value_proj:
-            self.w = BottleSparseLinear(dim, dim)
 
     def forward(self, inp, mask=None):
-        inp = inp.contiguous()
+        return self.attn(inp, mask)
+
+
+class WAttnInterface(AttnInterface):
+    def __init__(self, in_features, out_features, attn_type, dropout=0.2):
+        super(WAttnInterface, self).__init__(out_features, attn_type, dropout)
+        self.linear = BottleLinear(in_features, out_features, bias=False)
+
+    def forward(self, inp, mask=None):
+        out = self.linear(inp)
+        out, attn = self.attn(out, mask)
+        return out, attn, self.linear.weight
+
+
+class AddAttention(nn.Module):
+    def __init__(self, dim, dropout=0.2):
+        super(AddAttention, self).__init__()
+        self.dim = dim
+        self.dropout = nn.Dropout(dropout)
+        self.softmax = nn.Softmax(2)
+        self.v = BottleLinear(2 * dim, 1, bias=False)
+
+    def forward(self, inp, mask=None):
         batch, length, dim = inp.size()
-        attn = self.attn(inp, mask)
+        inp = inp.contiguous()
+        key = inp.unsqueeze(2).expand(batch, length, length, dim)
+        query = inp.unsqueeze(1).expand(batch, length, length, dim)
+        kq = self.dropout(torch.cat((query, key), -1))
+        score = self.v(kq).view(batch, length, length)
+        if mask is not None:
+            score.data.masked_fill_(mask, -float('inf'))
+        attn = self.softmax(score)
         out = torch.bmm(attn, inp)
-        if self.attn_type == 'self':
-            out = out.view(batch, dim)
-        if self.value_proj:
-            out = self.w(out)
         return out, attn
 
 
-class GeneralAttention(nn.Module):
+class MulAttention(nn.Module):
     def __init__(self, dim, dropout=0.2):
-        super(GeneralAttention, self).__init__()
+        super(MulAttention, self).__init__()
         self.dim = dim
         self.dropout = nn.Dropout(dropout)
         self.softmax = nn.Softmax(2)
@@ -48,7 +72,8 @@ class GeneralAttention(nn.Module):
         if mask is not None:
             attn.data.masked_fill_(mask, -float('inf'))
         attn = self.softmax(attn)
-        return attn
+        out = torch.bmm(attn, inp)
+        return out, attn
 
 
 class MLPAttention(nn.Module):
@@ -58,24 +83,23 @@ class MLPAttention(nn.Module):
         self.activation = nn.Tanh()
         self.dropout = nn.Dropout(dropout)
         self.softmax = nn.Softmax(2)
-        self.w_k = BottleLinear(dim, dim, bias=False)
-        self.w_q = BottleLinear(dim, dim, bias=True)
+        self.w = BottleLinear(dim, dim, bias=False)
+        self.u = BottleLinear(dim, dim, bias=False)
         self.v = BottleLinear(dim, 1, bias=False)
 
     def forward(self, inp, mask=None):
         batch, length, dim = inp.size()
         inp = inp.contiguous()
         dim = self.dim
-        query = self.w_q(inp).unsqueeze(1)
-        key = self.w_k(inp).unsqueeze(2)
-        query = query.expand(batch, length, length, dim)
-        key = key.expand(batch, length, length, dim)
-        hid = self.dropout(self.activation(query + key)).view(-1, dim)
-        score = self.v(hid).view(batch, length, length)
+        qu = self.u(inp).unsqueeze(1).expand(batch, length, length, dim)
+        kw = self.w(inp).unsqueeze(2).expand(batch, length, length, dim)
+        kq = self.dropout(self.activation(qu + kw)).view(-1, dim)
+        score = self.v(kq).view(batch, length, length)
         if mask is not None:
             score.data.masked_fill_(mask, -float('inf'))
         attn = self.softmax(score)
-        return attn
+        out = torch.bmm(attn, inp)
+        return out, attn
 
 
 class MultiHeadedAttention(nn.Module):
