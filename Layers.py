@@ -50,25 +50,13 @@ class RNNAttn(RNNBase):
 
 
 class HeadAttnLayer(nn.Module):
-    def __init__(self, dim, head, channel, dropout=0.2):
+    def __init__(self, dim, head, dropout=0.2):
         super(HeadAttnLayer, self).__init__()
-        self.channel = channel
-        self.attn = nn.ModuleList([
-            MultiHeadedAttention(dim, head=head, dropout=dropout)
-            for _ in range(channel)])
+        self.attn = MultiHeadedAttention(dim, head=head, dropout=dropout)
         self.feed_forward = PointwiseMLP(dim, dropout=dropout)
 
     def forward(self, inp, mask):
-        batch, length, channel, dim = inp.size()
-        out = []
-        attn = []
-        for i in range(self.channel):
-            out_i, attn_i = self.attn[i](inp[:, :, i], mask)
-            out_i = self.feed_forward(out_i.contiguous())
-            out.append(out_i)
-            attn.append(attn_i)
-        out = torch.stack(out, -2)
-        attn = torch.stack(attn, 1)
+        out, attn = self.attn(inp)
         return out, attn
 
 
@@ -108,12 +96,13 @@ class ConvAttnLayer(nn.Module):
                 out_i.append(out_j)
                 attn_i.append(attn_j)
             attn_i = torch.stack(attn_i, 0)
+            out_i = torch.stack(out_i, -2)
             # linear pool
-            out_i = torch.stack(out_i, -1)
-            out_i = self.linear_aggr[i](out_i)
+            # out_i = self.linear_aggr[i](out_i).squeeze(-1)
             # attn pool
-            out_i = self.attn_aggr[i](out_i)
-            out.append(out_i.squeeze(-1))
+            out_i, attn_aggr_i = self.attn_aggr[i](out_i.view(-1, in_channel, dim))
+            out_i = out_i.view(batch, length, dim)
+            out.append(out_i)
             attn.append(attn_i)
         out = torch.stack(out, -2)
         attn = torch.stack(attn, 0)

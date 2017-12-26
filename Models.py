@@ -99,16 +99,12 @@ class HeadAttn(ModelBase):
     def __init__(self, args):
         super(HeadAttn, self).__init__(args)
         self.head = args.head
-        self.channel = args.channel
         self.dilated = args.dilated
         self.dilation = args.dilation[:self.num_layers + 1]
         self.layers = nn.ModuleList([Layers.HeadAttnLayer(
-            self.input_size,
-            head=self.head,
-            channel=self.channel,
-            dropout=args.dropout)
+            self.input_size, self.head, args.dropout)
             for _ in range(self.num_layers)])
-        self.linear_out = BottleLinear(self.channel, self.future)
+        self.linear_out = BottleLinear(self.dim, self.dim * self.future)
         if self.dilated:
             mask = get_mask_dilated(args.input_length, self.dilation)
         else:
@@ -116,23 +112,20 @@ class HeadAttn(ModelBase):
         self.register_buffer('mask', mask)
 
     def forward(self, inp, daytime=None):
-        inp = super(HeadAttn, self).forward(inp, daytime)
-        batch, length, dim = inp.size()
-        inp = inp.unsqueeze(2)
-        out = inp.expand(batch, length, self.channel, dim)
+        out = super(HeadAttn, self).forward(inp, daytime)
+        batch, length, dim = out.size()
         attn = []
         for i in range(self.num_layers):
-            if self.dilated:
-                mask = self.mask[i]
-            else:
-                mask = self.mask
+            mask = self.mask[i] if self.dilated else self.mask
             mask = mask[:length, :length]
             out, attn_i = self.layers[i](out, mask)
             attn.append(attn_i)
         attn = torch.cat(attn, 1)
-        out = self.linear_out(out.transpose(2, 3).contiguous()).transpose(2, 3)
-        # out += inp
-        out = out[:, self.past:, :, :self.dim]
+        out = out[:, self.past:]
+        out = self.linear_out(out.contiguous())
+        out = out.view(batch, -1, self.future, dim)
+        out = out[:, :, :, :self.dim]
+        # out += inp.unsqueeze(-2)
         return out, attn
 
 
@@ -169,8 +162,8 @@ class ConvAttn(ModelBase):
             out, attn_i = self.layers[i](out)
             attn.append(attn_i)
         attn = torch.stack(attn, 1) if attn else []
-        out = self.linear_out(out.transpose(2, 3).contiguous()).transpose(2, 3)
-        # out, attn_out = self.layer_out(out)
+        # out = self.linear_out(out.transpose(2, 3).contiguous()).transpose(2, 3)
+        out, attn_out = self.layer_out(out)
         out = out[:, self.past:, :, :self.dim]
         return out, attn
 
