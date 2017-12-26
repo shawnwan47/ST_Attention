@@ -1,0 +1,22 @@
+{
+  "logger": {
+    "title": "Server 61"
+  },
+  "uploadOnSave": true,
+  "useAtomicWrites": false,
+  "deleteLocal": false,
+  "hostname": "162.105.92.61",
+  "port": "22",
+  "target": "/home/wdxu/wansheng/projects/ST_Attention",
+  "ignore": [
+    ".remote-sync.json",
+    ".git/**",
+    "model/**",
+    "fig/**",
+    "__pycache__/**"
+  ],
+  "username": "wdxu",
+  "password": "cilatpku",
+  "watch": [],
+  "transport": "scp"
+}

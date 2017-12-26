@@ -71,8 +71,10 @@ class ConvAttnLayer(nn.Module):
                 dim, attn_type, value_proj=value_proj, dropout=dropout)
                 for _ in range(in_channel)])
             for _ in range(out_channel)])
-        self.attn_aggr = nn.ModuleList([
+        self.merge = nn.ModuleList([
             SelfAttention(dim, dropout=dropout) for _ in range(out_channel)])
+        # self.merge = nn.ModuleList([
+        #     BottleLinear(in_channel, 1) for _ in range(out_channel)])
 
     def forward(self, inp, mask=None):
         '''
@@ -87,7 +89,6 @@ class ConvAttnLayer(nn.Module):
 
         out = []
         attn = []
-        attn_aggr = []
         for i in range(self.out_channel):
             out_i = []
             attn_i = []
@@ -96,10 +97,8 @@ class ConvAttnLayer(nn.Module):
                 out_i.append(out_j)
                 attn_i.append(attn_j)
             attn_i = torch.stack(attn_i, 0)
-            out_i = torch.stack(out_i, -1)
-            # attn pool
-            out_i, attn_aggr_i = self.attn_aggr[i](out_i.view(-1, in_channel, dim))
-            # attn_aggr.append(attn_aggr_i)
+            # out_i = self.merge[i](torch.stack(out_i, -1))
+            out_i, attn_aggr_i = self.merge[i](torch.stack(out_i, -2).view(-1, in_channel, dim))
             out_i = out_i.view(batch, length, dim)
             out.append(out_i)
             attn.append(attn_i)

@@ -156,8 +156,7 @@ def torch2npsave(filename, data):
 
     if type(data) in [tuple, list]:
         for i, d in enumerate(data):
-            print(d)
-            np.save(filename + '_' + str(i), _var2np(d))
+            torch2npsave(filename + '_' + str(i), d)
     else:
         np.save(filename, _var2np(data))
 
@@ -168,4 +167,4 @@ def Frobenius(mat):
         ret = (torch.sum(torch.sum((mat ** 2), 1), 2).squeeze() + 1e-10) ** 0.5
         return torch.sum(ret) / size[0]
     else:
-        raise Exception('matrix for computing Frobenius norm should be with 3 dims')
+        raise Exception('dim sould be 3!')

@@ -8,7 +8,7 @@ def add_data(args):
     args.add_argument('-data_type', type=str, default='highway',
                       choices=['highway', 'metro'])
     args.add_argument('-past_days', type=int, default=1)
-    args.add_argument('-future', type=int, default=8)
+    args.add_argument('-future', type=int, default=4)
     args.add_argument('-adj', action='store_true')
     # for metro only
     args.add_argument('-resolution', type=int, default=15)
@@ -55,7 +55,7 @@ def add_model(args):
     # general
     args.add_argument('-input_size', type=int)
     args.add_argument('-output_size', type=int)
-    args.add_argument('-hidden_size', type=int, default=1024)
+    args.add_argument('-hidden_size', type=int, default=128)
     args.add_argument('-num_layers', type=int, default=1)
     args.add_argument('-dropout', type=float, default=0.2)
     # Day Time size

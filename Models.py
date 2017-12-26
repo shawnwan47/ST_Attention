@@ -132,9 +132,11 @@ class HeadAttn(ModelBase):
 class ConvAttn(ModelBase):
     def __init__(self, args):
         super(ConvAttn, self).__init__(args)
-        self.channel = args.channel
-        self.layer = Layers.ConvAttnLayer(
-            self.input_size, self.channel, self.future, args.attn_type, value_proj=args.value_proj)
+        channel = args.channel
+        self.layer_in = Layers.ConvAttnLayer(
+            self.input_size, 1, channel, args.attn_type, args.value_proj)
+        self.layer_out = Layers.ConvAttnLayer(
+            self.input_size, channel, self.future, args.attn_type, args.value_proj)
         self.register_buffer('mask', get_mask_trim(args.input_length, self.past))
 
     def forward(self, inp, daytime=None):
@@ -145,12 +147,13 @@ class ConvAttn(ModelBase):
         '''
         inp = super(ConvAttn, self).forward(inp, daytime)
         batch, length, dim = inp.size()
-        out = inp.unsqueeze(2).expand(batch, length, self.channel, dim)
+        out = inp.unsqueeze(2)
         mask = self.mask[:length, :length]
-        out, attn = self.layer(out, mask)
+        out, attn_in = self.layer_in(out, mask)
+        out, attn_out = self.layer_out(out, mask)
         # out = out + inp.unsqueeze(2)
         out = out[:, self.past:, :, :self.dim]
-        return out, attn
+        return out, attn_in, attn_out
 
 
 class SpatialAttn(ModelBase):
