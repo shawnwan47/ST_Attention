@@ -13,7 +13,7 @@ import Utils
 from Consts import MODEL_PATH
 
 
-args = argparse.ArgumentParser('Traffic Forecasting')
+args = argparse.ArgumentParser()
 Args.add_gpu(args)
 Args.add_data(args)
 Args.add_loss(args)
@@ -35,7 +35,7 @@ data = getattr(Utils, 'load_data_' + args.data_type)(args)
 (inp_train, inp_valid, inp_test,
  tgt_train, tgt_valid, tgt_test,
  dt_train, dt_valid, dt_test,
- flow_mean, flow_std, adj) = data
+ flow_mean, flow_std) = data
 
 
 inp_train = Variable(inp_train)
@@ -49,11 +49,6 @@ tgt_valid = Variable(tgt_valid, volatile=True)
 tgt_test = Variable(tgt_test, volatile=True)
 flow_mean = Variable(flow_mean)
 flow_std = Variable(flow_std)
-adj = Variable(adj)
-if not args.adj:
-    adj = None
-else:
-    args.adj = adj
 
 # MODEL
 modelpath = MODEL_PATH + Args.modelname(args)

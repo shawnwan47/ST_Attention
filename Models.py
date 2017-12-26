@@ -99,14 +99,16 @@ class HeadAttn(ModelBase):
     def __init__(self, args):
         super(HeadAttn, self).__init__(args)
         self.head = args.head
+        self.channel = args.channel
         self.dilated = args.dilated
         self.dilation = args.dilation[:self.num_layers + 1]
         self.layers = nn.ModuleList([Layers.HeadAttnLayer(
             self.input_size,
             head=self.head,
-            channel=self.future,
+            channel=self.channel,
             dropout=args.dropout)
             for _ in range(self.num_layers)])
+        self.linear_out = BottleLinear(self.channel, self.future)
         if self.dilated:
             mask = get_mask_dilated(args.input_length, self.dilation)
         else:
@@ -116,7 +118,8 @@ class HeadAttn(ModelBase):
     def forward(self, inp, daytime=None):
         inp = super(HeadAttn, self).forward(inp, daytime)
         batch, length, dim = inp.size()
-        out = inp.unsqueeze(2).expand(batch, length, self.future, dim)
+        inp = inp.unsqueeze(2)
+        out = inp.expand(batch, length, self.channel, dim)
         attn = []
         for i in range(self.num_layers):
             if self.dilated:
@@ -127,7 +130,8 @@ class HeadAttn(ModelBase):
             out, attn_i = self.layers[i](out, mask)
             attn.append(attn_i)
         attn = torch.cat(attn, 1)
-        out += inp.unsqueeze(2)
+        out = self.linear_out(out.transpose(2, 3).contiguous()).transpose(2, 3)
+        # out += inp
         out = out[:, self.past:, :, :self.dim]
         return out, attn
 
@@ -137,40 +141,53 @@ class ConvAttn(ModelBase):
         super(ConvAttn, self).__init__(args)
         self.dilated = args.dilated
         self.dilation = args.dilation[:self.num_layers + 1]
+        self.channel = args.channel
+        self.layer_in = Layers.ConvAttnLayer(
+            self.input_size, 1, self.channel, args.attn_type, value_proj=args.value_proj)
+        self.layer_out = Layers.ConvAttnLayer(
+            self.input_size, self.channel, self.future, args.attn_type, args.dropout)
+        self.linear_out = BottleLinear(self.channel, self.future, bias=False)
         self.layers = nn.ModuleList([Layers.ConvAttnLayer(
-            self.input_size, self.future, self.future, args.attn_type, args.dropout)
-            for _ in range(self.num_layers)])
-        if self.dilated:
-            mask = get_mask_dilated(args.input_length, self.dilation)
-        else:
-            mask = get_mask_trim(args.input_length, self.past)
-        self.register_buffer('mask', mask)
+            self.input_size, self.channel, self.channel, args.attn_type, args.dropout)
+            for _ in range(self.num_layers - 1)])
+        self.register_buffer('mask', get_mask_trim(args.input_length, self.past))
 
     def forward(self, inp, daytime=None):
         '''
         inp: batch x length x dim
         out: batch x length - past x future x dim
-        attn_merge: batch x num_layers x length x future x channel
-        attn: batch x num_layers x length x future x channel x length
+        attn: num_layers x out_channel x in_channel x batch x length x length
         '''
         inp = super(ConvAttn, self).forward(inp, daytime)
         batch, length, dim = inp.size()
-        out = inp.unsqueeze(2).expand(batch, length, self.future, dim)
+        out = inp.unsqueeze(2)
+        mask = self.mask[:length, :length]
+
+        out, attn_in = self.layer_in(out, mask)
         attn = []
-        attn_merge = []
-        for i in range(self.num_layers):
-            if self.dilated:
-                mask = self.mask[i]
-            else:
-                mask = self.mask
-            mask = mask[:length, :length]
-            out, attn_merge_i, attn_i = self.layers[i](out)
-            attn_merge.append(attn_merge_i)
+        for i in range(self.num_layers - 1):
+            out, attn_i = self.layers[i](out)
             attn.append(attn_i)
-        attn_merge = torch.stack(attn_merge, 1)
-        attn = torch.stack(attn, 1)
+        attn = torch.stack(attn, 1) if attn else []
+        out = self.linear_out(out.transpose(2, 3).contiguous()).transpose(2, 3)
+        # out, attn_out = self.layer_out(out)
         out = out[:, self.past:, :, :self.dim]
-        return out, attn_merge, attn
+        return out, attn
+
+
+class Linear(ModelBase):
+    def __init__(self, args):
+        super(Linear, self).__init__(args)
+        self.channel = args.channel
+        self.layer = Layers.LinearLayer(
+            self.input_size, self.past, self.channel, dropout=args.dropout)
+        self.linear_out = nn.Linear(self.channel, self.future)
+
+    def forward(self, inp, daytime=None):
+        inp = super(Linear, self).forward(inp, daytime)
+        out = self.layer(inp)
+        out = self.linear_out(out.transpose(2, 3).contiguous()).transpose(2, 3)
+        return out
 
 
 class LinearTemporal(ModelBase):

@@ -12,7 +12,7 @@ if DATA_TYPE == 'highway':
     DAYS_TEST = 30
     WEEKDAY = 5  # (day - WEEKDAY) % 7
 else:
-    DIM = 536
+    DIM = 538
     DAYS = 22
     DAYS_TRAIN = 14
     DAYS_TEST = 4

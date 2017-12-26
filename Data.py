@@ -13,25 +13,40 @@ def load_station():
 
 
 def load_adj_link():
-    link = np.genfromtxt(DATA_PATH + 'LINK.txt', dtype=int)
-    station = load_station()
-    idx = station.index
-    ret = pd.DataFrame(0, index=idx, columns=idx)
+    return np.genfromtxt(DATA_PATH + 'LINK.txt', dtype=int)
+
+
+def load_adj_dist():
+    idx = load_station().index
+    link = load_adj_link()
+    idx = np.unique(link)
+    ret = pd.DataFrame(200, index=idx, columns=idx)
     for i in range(link.shape[0]):
         if link[i, 0] in idx and link[i, 1] in idx:
             ret.loc[link[i, 0], link[i, 1]] = 1
+    for i in idx:
+        ret.loc[i, i] = 0
+    ret = ret.as_matrix()
+    length = len(ret)
+    for k in range(length):
+        for i in range(length):
+            for j in range(length):
+                tmp = ret[i][k] + ret[k][j]
+                if ret[i][j] > tmp:
+                    ret[i][j] = tmp
+    ret = ret.astype(int)
     return ret
 
 
 def load_adj_od(contrib=0.01):
+    idx = station = load_station().index
     od_name = DATA_PATH + 'OD.csv'
     od = pd.read_csv(od_name, index_col=0)
     od.index.name = ''
     od.columns = list(map(int, od.columns))
-    station = load_station()
-    od = od.loc[station.index, station.index]
+    # od = od.loc[idx, idx]
     od = od + od.transpose()
-    return od / od.sum(0) >= contrib
+    return od.as_matrix()
 
 
 def load_adj(contrib=0.01):
