@@ -7,76 +7,73 @@ from Consts import *
 
 
 def load_station():
-    ret = pd.read_csv(DATA_PATH + 'STATION.csv', index_col=0)
-    flow = load_flow_data()
-    return ret.loc[flow.columns, :]
+    return pd.read_csv(DATA_PATH + 'STATION.csv', index_col=0)
 
 
-def load_adj_link():
+def load_link():
     return np.genfromtxt(DATA_PATH + 'LINK.txt', dtype=int)
 
 
-def load_adj_dist():
-    idx = load_station().index
-    link = load_adj_link()
-    idx = np.unique(link)
-    ret = pd.DataFrame(200, index=idx, columns=idx)
-    for i in range(link.shape[0]):
-        if link[i, 0] in idx and link[i, 1] in idx:
-            ret.loc[link[i, 0], link[i, 1]] = 1
-    for i in idx:
-        ret.loc[i, i] = 0
-    ret = ret.as_matrix()
-    length = len(ret)
-    for k in range(length):
-        for i in range(length):
-            for j in range(length):
-                tmp = ret[i][k] + ret[k][j]
-                if ret[i][j] > tmp:
-                    ret[i][j] = tmp
-    ret = ret.astype(int)
-    return ret
+def load_flow(affix='O'):
+    filepath = DATA_PATH + affix + '.csv'
+    flow = pd.read_csv(filepath, index_col=0, parse_dates=True)
+    flow.columns = list(map(int, flow.columns))
+    return flow
 
 
-def load_adj_od(contrib=0.01):
-    idx = station = load_station().index
-    od_name = DATA_PATH + 'OD.csv'
-    od = pd.read_csv(od_name, index_col=0)
+def load_idx():
+    station = set(load_station().index)
+    link = set(np.unique(load_link()))
+    flow = set(load_flow().columns)
+    return station.intersection(link).intersection(flow)
+
+
+def load_dist():
+    filepath = DATA_PATH + 'DIST.csv'
+    if os.path.exists(filepath):
+        dist = pd.read_csv(filepath, index_col=0)
+        dist.columns = list(map(int, dist.columns))
+    else:
+        link = load_link()
+        idx = np.unique(link)
+        dist = pd.DataFrame(100, index=idx, columns=idx)
+        for i in range(link.shape[0]):
+            dist.loc[link[i, 0], link[i, 1]] = 1
+        for i in idx:
+            dist.loc[i, i] = 0
+        for k in idx:
+            for i in idx:
+                for j in idx:
+                    tmp = dist.loc[i, k] + dist.loc[k, j]
+                    if dist.loc[i, j] > tmp:
+                        dist.loc[i, j] = tmp
+        dist.to_csv(filepath, index=True)
+    idx = load_idx()
+    return dist.loc[idx, idx].as_matrix()
+
+
+def load_od():
+    idx = load_idx()
+    od = pd.read_csv(DATA_PATH + 'OD.csv', index_col=0)
     od.index.name = ''
     od.columns = list(map(int, od.columns))
-    # od = od.loc[idx, idx]
     od = od + od.transpose()
-    return od.as_matrix()
+    return od.loc[idx, idx].as_matrix()
 
 
 def load_adj(contrib=0.01):
-    link = load_adj_link()
-    od = load_adj_od()
+    link = load_link()
+    od = load_od()
     adj = (od + link + np.eye(len(od))) > 0
     adj = np.vstack([adj, adj])
     adj = np.hstack([adj, adj])
     return adj.astype(int)
 
 
-def load_flow_data(affix='O'):
-    filepath = DATA_PATH + affix + '.csv'
-    if os.path.exists(filepath):
-        flow = pd.read_csv(filepath, index_col=0, parse_dates=True)
-    else:
-        data_files = sorted(os.listdir(DATA_PATH))
-        data_files = list(filter(
-            lambda x: x.startswith(affix + '_'), data_files))
-        flow = pd.concat([
-            pd.read_csv(DATA_PATH + x, index_col=0, parse_dates=True)
-            for x in data_files])
-        flow.to_csv(filepath, index=True)
-    flow.columns = list(map(int, flow.columns))
-    return flow
-
 
 def load_flow_highway():
-    o = load_flow_data('O')
-    d = load_flow_data('D')
+    o = load_flow('O')
+    d = load_flow('D')
     day = o.index.map(lambda x: x.weekday())
     hour = o.index.map(lambda x: x.hour)
     minute = o.index.map(lambda x: x.minute)
@@ -102,8 +99,8 @@ def load_flow_highway():
 def load_flow_metro(resolution=15, start_time=5, end_time=23):
     assert resolution in [5, 10, 15, 20, 30, 60]
     steps = resolution // 5
-    o = load_flow_data('O').astype(float).as_matrix()
-    d = load_flow_data('D').astype(float).as_matrix()
+    o = load_flow('O').astype(float).as_matrix()
+    d = load_flow('D').astype(float).as_matrix()
     flow = np.concatenate((o, d), -1)
 
     # sum up steps interval
