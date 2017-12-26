@@ -57,14 +57,17 @@ def load_od():
     od = pd.read_csv(DATA_PATH + 'OD.csv', index_col=0)
     od.index.name = ''
     od.columns = list(map(int, od.columns))
+    od = od.loc[idx, idx].as_matrix()
     od = od + od.transpose()
-    return od.loc[idx, idx].as_matrix()
+    od = od / (od.sum(0) + EPS)
+    od = (od + od.transpose()) / 2
+    return od
 
 
-def load_adj(contrib=0.01):
-    link = load_link()
-    od = load_od()
-    adj = (od + link + np.eye(len(od))) > 0
+def load_adj(jump=5, contrib=0.01):
+    dist = load_dist() < jump
+    od = load_od() > contrib
+    adj = dist + od
     adj = np.vstack([adj, adj])
     adj = np.hstack([adj, adj])
     return adj.astype(int)
@@ -72,16 +75,17 @@ def load_adj(contrib=0.01):
 
 
 def load_flow_highway():
-    o = load_flow('O')
-    d = load_flow('D')
-    day = o.index.map(lambda x: x.weekday())
-    hour = o.index.map(lambda x: x.hour)
-    minute = o.index.map(lambda x: x.minute)
+    idx = load_idx()
+    origin = load_flow('O').loc[:, idx]
+    destination = load_flow('D').loc[:, idx]
+    day = origin.index.map(lambda x: x.weekday())
+    hour = origin.index.map(lambda x: x.hour)
+    minute = origin.index.map(lambda x: x.minute)
     time = hour * 4 + minute // 15
 
-    o = o.astype(float).as_matrix()
-    d = d.astype(float).as_matrix()
-    flow = np.concatenate((o, d), -1)
+    origin = origin.astype(float).as_matrix()
+    destination = destination.astype(float).as_matrix()
+    flow = np.concatenate((origin, destination), -1)
     daytime = np.vstack((np.array(day), np.array(time))).T
 
     # normalization
@@ -99,9 +103,9 @@ def load_flow_highway():
 def load_flow_metro(resolution=15, start_time=5, end_time=23):
     assert resolution in [5, 10, 15, 20, 30, 60]
     steps = resolution // 5
-    o = load_flow('O').astype(float).as_matrix()
-    d = load_flow('D').astype(float).as_matrix()
-    flow = np.concatenate((o, d), -1)
+    origin = load_flow('O').astype(float).as_matrix()
+    destination = load_flow('D').astype(float).as_matrix()
+    flow = np.concatenate((origin, destination), -1)
 
     # sum up steps interval
     flow = flow.reshape((DAYS, -1, flow.shape[-1]))
