@@ -8,32 +8,14 @@ from Utils import aeq
 from UtilClass import *
 
 
-class AttentionBase(nn.Module):
-    def __init__(self, dim, dropout=0.2):
-        super(AttentionBase, self).__init__()
-        self.dim = dim
-        self.activation = nn.Tanh()
-        self.dropout = nn.Dropout(dropout)
-        self.layer_norm = BottleLayerNorm(dim)
-        self.softmax = nn.Softmax(2)
-
-
 class AttentionInterface(nn.Module):
-    def __init__(self, dim, attn_type, value_proj=False, head=1, dropout=0.2):
+    def __init__(self, dim, attn_type, value_proj=False, dropout=0.2):
         super(AttentionInterface, self).__init__()
         self.attn_type = attn_type
-        if attn_type == 'dot':
-            attn = DotAttention(dim, dropout)
-        elif attn_type == 'general':
+        if attn_type == 'general':
             attn = GeneralAttention(dim, dropout)
         elif attn_type == 'mlp':
             attn = MLPAttention(dim, dropout)
-        elif attn_type == 'context':
-            attn = ContextAttention(dim, dropout)
-        elif attn_type == 'self':
-            attn = SelfAttention(dim, dropout)
-        elif attn_type == 'head':
-            attn = MultiHeadedAttention(dim, head, dropout)
         self.attn = attn
         self.value_proj = value_proj
         if value_proj:
@@ -42,12 +24,7 @@ class AttentionInterface(nn.Module):
     def forward(self, inp, mask=None):
         inp = inp.contiguous()
         batch, length, dim = inp.size()
-        if self.attn_type == 'head':
-            return self.attn(inp, mask)
-        elif self.attn_type == 'self':
-            attn = self.attn(inp)
-        else:
-            attn = self.attn(inp, mask)
+        attn = self.attn(inp, mask)
         out = torch.bmm(attn, inp)
         if self.attn_type == 'self':
             out = out.view(batch, dim)
@@ -56,38 +33,12 @@ class AttentionInterface(nn.Module):
         return out, attn
 
 
-class SelfAttention(AttentionBase):
+class GeneralAttention(nn.Module):
     def __init__(self, dim, dropout=0.2):
-        super(SelfAttention, self).__init__(dim, dropout)
-        self.w_1 = BottleLinear(self.dim, self.dim)
-        self.w_2 = BottleLinear(self.dim, 1)
-
-    def forward(self, inp):
-        '''
-        inp: batch x length x dim
-        attn: batch x 1 x length
-        out: batch x dim
-        '''
-        batch, length, dim = inp.size()
-        aeq(dim, self.dim)
-        hid = self.activation(self.w_1(inp))
-        score = self.w_2(self.dropout(hid)).transpose(1, 2)
-        attn = self.softmax(score)
-        return attn
-
-
-class DotAttention(AttentionBase):
-    def forward(self, inp, mask):
-        attn = torch.bmm(inp, inp.transpose(1, 2)) / math.sqrt(self.dim)
-        if mask is not None:
-            attn.data.masked_fill_(mask, -float('inf'))
-        attn = self.softmax(attn)
-        return attn
-
-
-class GeneralAttention(AttentionBase):
-    def __init__(self, dim, dropout=0.2):
-        super(GeneralAttention, self).__init__(dim, dropout)
+        super(GeneralAttention, self).__init__()
+        self.dim = dim
+        self.dropout = nn.Dropout(dropout)
+        self.softmax = nn.Softmax(2)
         self.w = BottleLinear(dim, dim, bias=False)
 
     def forward(self, inp, mask=None):
@@ -100,9 +51,13 @@ class GeneralAttention(AttentionBase):
         return attn
 
 
-class MLPAttention(AttentionBase):
+class MLPAttention(nn.Module):
     def __init__(self, dim, dropout=0.2):
-        super(MLPAttention, self).__init__(dim, dropout)
+        super(MLPAttention, self).__init__()
+        self.dim = dim
+        self.activation = nn.Tanh()
+        self.dropout = nn.Dropout(dropout)
+        self.softmax = nn.Softmax(2)
         self.w_k = BottleLinear(dim, dim, bias=False)
         self.w_q = BottleLinear(dim, dim, bias=True)
         self.v = BottleLinear(dim, 1, bias=False)
@@ -123,7 +78,7 @@ class MLPAttention(AttentionBase):
         return attn
 
 
-class MultiHeadedAttention(AttentionBase):
+class MultiHeadedAttention(nn.Module):
     def __init__(self, dim, head=1, dropout=0.2):
         '''
         Args:
@@ -133,7 +88,12 @@ class MultiHeadedAttention(AttentionBase):
         '''
         pad = head - dim % head
         dim += pad
-        super(MultiHeadedAttention, self).__init__(dim, dropout)
+        super(MultiHeadedAttention, self).__init__()
+        self.dim = dim
+        self.activation = nn.Tanh()
+        self.dropout = nn.Dropout(dropout)
+        self.layer_norm = BottleLayerNorm(dim)
+        self.softmax = nn.Softmax(2)
         self.pad = (pad // 2, pad // 2 + pad % 2)
         self.head = head
         self.w_k = BottleLinear(dim, dim, bias=False)
@@ -180,3 +140,27 @@ class MultiHeadedAttention(AttentionBase):
         if self.pad[1]:
             out = out[:, :, self.pad[0]:-self.pad[1]]
         return out.contiguous(), attn
+
+
+class SelfAttention(nn.Module):
+    def __init__(self, dim, hop=1, dropout=0.2):
+        super(SelfAttention, self).__init__()
+        self.dim = dim
+        self.activation = nn.Tanh()
+        self.dropout = nn.Dropout(dropout)
+        self.softmax = nn.Softmax(2)
+        self.hop = hop
+        self.w_1 = BottleLinear(dim, dim)
+        self.w_2 = BottleLinear(dim, hop)
+
+    def forward(self, inp):
+        '''
+        inp: -1 x length x dim
+        attn: -1 x hop x length
+        out: -1 x hop x dim
+        '''
+        hid = self.activation(self.w_1(inp))
+        score = self.w_2(self.dropout(hid)).transpose(1, 2)
+        attn = self.softmax(score)
+        out = torch.bmm(attn, inp)
+        return out, attn

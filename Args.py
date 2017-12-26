@@ -51,10 +51,7 @@ def add_run(args):
 
 
 def add_model(args):
-    args.add_argument('-model', type=str, default='HeadAttn',
-                      choices=['RNN', 'ConvAttn', 'HeadAttn', 'Linear',
-                               'LinearTemporal', 'LinearSpatial',
-                               'LinearSpatialTemporal'])
+    args.add_argument('-model', type=str, default='LinearAttn')
     # general
     args.add_argument('-input_size', type=int)
     args.add_argument('-output_size', type=int)
@@ -70,7 +67,7 @@ def add_model(args):
                       choices=['RNN', 'GRU', 'LSTM'])
     # Attention
     args.add_argument('-attn_type', type=str, default='general',
-                      choices=['dot', 'general', 'mlp', 'context'])
+                      choices=['general', 'mlp'])
     args.add_argument('-value_proj', action='store_true')
     args.add_argument('-dilated', action='store_true')
     args.add_argument('-dilation', type=int, default=[], nargs='+')
@@ -80,7 +77,7 @@ def add_model(args):
 
 def _dataset(args):
     if args.data_type == 'highway':
-        args.dim = 286
+        args.dim = 284
         args.days = 184
         args.days_train = 120
         args.days_test = 30

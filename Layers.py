@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 
-from Attention import AttentionInterface, SelfAttention
+from Attention import AttentionInterface, SelfAttention, MultiHeadedAttention
 from Utils import aeq
 from UtilClass import *
 
@@ -54,7 +54,7 @@ class HeadAttnLayer(nn.Module):
         super(HeadAttnLayer, self).__init__()
         self.channel = channel
         self.attn = nn.ModuleList([
-            AttentionInterface(dim, 'head', head=head, dropout=dropout)
+            MultiHeadedAttention(dim, head=head, dropout=dropout)
             for _ in range(channel)])
         self.feed_forward = PointwiseMLP(dim, dropout=dropout)
 
@@ -77,15 +77,15 @@ class ConvAttnLayer(nn.Module):
         super(ConvAttnLayer, self).__init__()
         self.in_channel = in_channel
         self.out_channel = out_channel
-        self.attn_conv = nn.ModuleList([
-            nn.ModuleList([
-                AttentionInterface(dim, attn_type, value_proj=value_proj, dropout=dropout)
+        self.attn = nn.ModuleList([
+            nn.ModuleList([AttentionInterface(
+                dim, attn_type, value_proj=value_proj, dropout=dropout)
                 for _ in range(in_channel)])
             for _ in range(out_channel)])
-        self.linear_pool = nn.ModuleList([
+        self.linear_aggr = nn.ModuleList([
             BottleLinear(in_channel, 1) for _ in range(out_channel)])
-        self.attn_pool = nn.ModuleList([
-            AttentionInterface(dim, 'self', value_proj=value_proj, dropout=dropout)])
+        self.attn_aggr = nn.ModuleList([
+            SelfAttention(dim, dropout=dropout) for _ in range(out_channel)])
 
     def forward(self, inp, mask=None):
         '''
@@ -94,32 +94,34 @@ class ConvAttnLayer(nn.Module):
         mask: length x length
         OUT
         out: batch x length x out_channel x dim
-        attn_conv: out_channel x in_channel x batch x length x length
+        attn: out_channel x in_channel x batch x length x length
         '''
         batch, length, in_channel, dim = inp.size()
 
         out = []
-        attn_conv = []
+        attn = []
         for i in range(self.out_channel):
             out_i = []
             attn_i = []
             for j in range(self.in_channel):
-                out_j, attn_j = self.attn_conv[i][j](inp[:, :, j], mask)
+                out_j, attn_j = self.attn[i][j](inp[:, :, j], mask)
                 out_i.append(out_j)
                 attn_i.append(attn_j)
             attn_i = torch.stack(attn_i, 0)
+            # linear pool
             out_i = torch.stack(out_i, -1)
-            # out_i = torch.sum(out_i, -1)
-            out_i = self.linear_pool[i](out_i).squeeze(-1)
-            out.append(out_i)
-            attn_conv.append(attn_i)
+            out_i = self.linear_aggr[i](out_i)
+            # attn pool
+            out_i = self.attn_aggr[i](out_i)
+            out.append(out_i.squeeze(-1))
+            attn.append(attn_i)
         out = torch.stack(out, -2)
-        attn_conv = torch.stack(attn_conv, 0)
-        return out, attn_conv
+        attn = torch.stack(attn, 0)
+        return out, attn
 
 
 class LinearLayer(nn.Module):
-    def __init__(self, dim, past, channel, dropout=0.2):
+    def __init__(self, dim, past, channel):
         super(LinearLayer, self).__init__()
         self.past = past
         self.channel = channel
@@ -129,13 +131,31 @@ class LinearLayer(nn.Module):
             BottleLinear(dim, dim) for _ in range(channel)])
 
     def forward(self, inp):
+        '''
+        inp: batch x length x dim
+        out: batch x length - past x channel x dim
+        '''
         length = inp.size(1)
         out = []
         for i in range(self.channel):
             out_i = self.spatial[i](inp)
             out_t = []
             for t in range(length - self.past):
-                inp_t = out_i[:, t:t + past].transpose(1, 2).contiguous()
+                inp_t = out_i[:, t:t + self.past].transpose(1, 2).contiguous()
                 out_t.append(self.temporal[i](inp_t).transpose(1, 2))
             out.append(torch.cat(out_t, -2))
         return torch.stack(out, -2)
+
+
+class LinearAttnLayer(LinearLayer):
+    def __init__(self, dim, past, channel, hop, dropout=0.2):
+        super(LinearAttnLayer, self).__init__(dim, past, channel)
+        self.attn = SelfAttention(dim, hop=hop, dropout=dropout)
+
+    def forward(self, inp):
+        out = super(LinearAttnLayer, self).forward(inp)
+        batch, length, channel, dim = out.size()
+        out, attn = self.attn(out.view(-1, channel, dim))
+        out = out.view(batch, length, -1, dim)
+        attn = attn.view(batch, length, -1, channel)
+        return out, attn

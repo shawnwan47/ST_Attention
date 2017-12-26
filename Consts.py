@@ -6,7 +6,7 @@ FIG_PATH = './fig/' + DATA_FOLDER
 MODEL_PATH = './model/' + DATA_FOLDER
 
 if DATA_TYPE == 'highway':
-    DIM = 286
+    DIM = 284
     DAYS = 184
     DAYS_TRAIN = 120
     DAYS_TEST = 30

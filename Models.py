@@ -180,7 +180,7 @@ class Linear(ModelBase):
         super(Linear, self).__init__(args)
         self.channel = args.channel
         self.layer = Layers.LinearLayer(
-            self.input_size, self.past, self.channel, dropout=args.dropout)
+            self.input_size, self.past, self.channel)
         self.linear_out = nn.Linear(self.channel, self.future)
 
     def forward(self, inp, daytime=None):
@@ -188,6 +188,18 @@ class Linear(ModelBase):
         out = self.layer(inp)
         out = self.linear_out(out.transpose(2, 3).contiguous()).transpose(2, 3)
         return out
+
+
+class LinearAttn(ModelBase):
+    def __init__(self, args):
+        super(LinearAttn, self).__init__(args)
+        self.channel = args.channel
+        self.layer = Layers.LinearAttnLayer(
+            self.input_size, self.past, self.channel, self.future, dropout=args.dropout)
+
+    def forward(self, inp, daytime=None):
+        inp = super(LinearAttn, self).forward(inp, daytime)
+        return self.layer(inp)
 
 
 class LinearTemporal(ModelBase):
