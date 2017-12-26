@@ -127,20 +127,15 @@ def update_args(args):
 def modelname(args):
     # MODEL
     path = args.model
-    # RNN
-    if args.model == 'RNN':
-        path += args.rnn_type
-        path += 'Attn' + args.attn_type if args.attn else ''
     # Attn
-    if args.model in ['Attn', 'STAttn']:
+    if args.model in ['ConvAttn', 'HeadAttn']:
         path += 'Dilated' if args.dilated else ''
-    path += 'Chan' + str(args.channel)
+        path += 'Channel' + str(args.channel)
+        path += 'Head' + str(args.head)
     # general
     path += 'Lay' + str(args.num_layers)
-    path += 'Hid' + str(args.hidden_size)
     # Data
     if args.daytime:
-        path += 'Day' + str(args.day_size) + 'Time' + str(args.time_size)
-    path += 'Past' + str(args.past_days)
+        path += 'Daytime'
     path += 'Future' + str(args.future)
     return path

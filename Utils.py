@@ -4,8 +4,11 @@ import torch
 import Data
 
 
+def load_adj():
+    return torch.ByteTensor(Data.load_adj()).cuda() > 0.5
+
+
 def load_data_highway(args):
-    # adj = torch.ByteTensor(Data.load_adj()).cuda()
     flow, daytime, flow_mean, flow_std = Data.load_flow_highway()
     flow = torch.FloatTensor(flow).cuda()
     daytime = torch.LongTensor(daytime).cuda()

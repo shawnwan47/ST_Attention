@@ -140,7 +140,7 @@ def run():
 
     out = test_model()
     if type(out) is tuple:
-        out, out_ = out
+        out, out_ = out[0], out[1:]
         Utils.torch2npsave(modelpath + '_out', out_)
     print('Test {}: {}'.format(modelpath, out))
     np.savetxt(modelpath + '_loss.txt', out)

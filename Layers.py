@@ -57,6 +57,7 @@ class HeadAttnLayer(nn.Module):
 
     def forward(self, inp, mask):
         out, attn = self.attn(inp)
+        out = self.feed_forward(out)
         return out, attn
 
 
@@ -109,6 +110,22 @@ class ConvAttnLayer(nn.Module):
         return out, attn
 
 
+class SelfAttnLayer(nn.Module):
+    def __init__(self, dim, in_channel, out_channel, dropout):
+        super(SelfAttnLayer, self).__init__()
+        self.in_channel = in_channel
+        self.out_channel = out_channel
+        self.dim = dim
+        self.layer = SelfAttention(dim, out_channel, dropout)
+
+    def forward(self, inp):
+        assert inp.dim() < 5
+        out = inp.view(-1, self.in_channel, self.dim)
+        out, attn = self.layer(out)
+        out = out.view(inp.size(0), -1, self.out_channel, self.dim)
+        return out, attn
+
+
 class LinearLayer(nn.Module):
     def __init__(self, dim, past, channel):
         super(LinearLayer, self).__init__()
@@ -148,3 +165,19 @@ class LinearAttnLayer(LinearLayer):
         out = out.view(batch, length, -1, dim)
         attn = attn.view(batch, length, -1, channel)
         return out, attn
+
+
+class PointwiseMLP(nn.Module):
+    ''' A two-layer Feed-Forward-Network.'''
+
+    def __init__(self, dim, adj=None, dropout=0.1):
+        super(PointwiseMLP, self).__init__()
+        self.w_1 = BottleLinear(dim, dim)
+        self.w_2 = BottleLinear(dim, dim)
+        self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(dropout)
+        self.layer_norm = BottleLayerNorm(dim)
+
+    def forward(self, inp):
+        out = self.dropout(self.w_2(self.relu(self.w_1(inp))))
+        return self.layer_norm(out + inp)

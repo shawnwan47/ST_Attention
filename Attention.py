@@ -159,6 +159,7 @@ class SelfAttention(nn.Module):
         attn: -1 x hop x length
         out: -1 x hop x dim
         '''
+        assert inp.dim() < 4
         hid = self.activation(self.w_1(inp))
         score = self.w_2(self.dropout(hid)).transpose(1, 2)
         attn = self.softmax(score)

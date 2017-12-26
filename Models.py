@@ -125,7 +125,7 @@ class HeadAttn(ModelBase):
         out = self.linear_out(out.contiguous())
         out = out.view(batch, -1, self.future, dim)
         out = out[:, :, :, :self.dim]
-        # out += inp.unsqueeze(-2)
+        out += inp.unsqueeze(-2)
         return out, attn
 
 
@@ -137,8 +137,11 @@ class ConvAttn(ModelBase):
         self.channel = args.channel
         self.layer_in = Layers.ConvAttnLayer(
             self.input_size, 1, self.channel, args.attn_type, value_proj=args.value_proj)
-        self.layer_out = Layers.ConvAttnLayer(
-            self.input_size, self.channel, self.future, args.attn_type, args.dropout)
+        # self.layer_out = Layers.ConvAttnLayer(
+        #     self.input_size, self.channel, self.future, args.attn_type, args.dropout)
+        self.layer_out = Layers.SelfAttnLayer(
+            self.input_size, self.channel, self.future, args.dropout
+        )
         self.linear_out = BottleLinear(self.channel, self.future, bias=False)
         self.layers = nn.ModuleList([Layers.ConvAttnLayer(
             self.input_size, self.channel, self.channel, args.attn_type, args.dropout)
@@ -165,7 +168,19 @@ class ConvAttn(ModelBase):
         # out = self.linear_out(out.transpose(2, 3).contiguous()).transpose(2, 3)
         out, attn_out = self.layer_out(out)
         out = out[:, self.past:, :, :self.dim]
-        return out, attn
+        return out, attn_in, attn_out
+
+
+class SpatialAttn(ModelBase):
+    def __init__(self, args):
+        super(SpatialAttn, self).__init__(args)
+        self.adj = args.adj
+        self.channel = args.channel
+
+    def forward(self, inp):
+        batch, length, dim = inp.size()
+        out = inp.transpose(1, 2).contiguous()
+        return out
 
 
 class Linear(ModelBase):
