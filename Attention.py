@@ -19,7 +19,7 @@ class AttentionInterface(nn.Module):
         self.attn = attn
         self.value_proj = value_proj
         if value_proj:
-            self.w = BottleLinear(dim, dim)
+            self.w = BottleSparseLinear(dim, dim)
 
     def forward(self, inp, mask=None):
         inp = inp.contiguous()
@@ -133,9 +133,7 @@ class MultiHeadedAttention(nn.Module):
 
         out = torch.bmm(self.dropout(attn), value)
         out = unshape_projection(out)
-        # out = self.layer_norm(out)
-        out = self.layer_norm(self.dropout(out) + inp)
-        # out = self.layer_norm(out)
+        # out = self.layer_norm(self.dropout(out) + inp)
         attn = attn.view(batch, self.head, length, length)
         if self.pad[1]:
             out = out[:, :, self.pad[0]:-self.pad[1]]
@@ -145,13 +143,13 @@ class MultiHeadedAttention(nn.Module):
 class SelfAttention(nn.Module):
     def __init__(self, dim, hop=1, dropout=0.2):
         super(SelfAttention, self).__init__()
-        self.dim = dim
         self.activation = nn.Tanh()
         self.dropout = nn.Dropout(dropout)
         self.softmax = nn.Softmax(2)
         self.hop = hop
-        self.w_1 = BottleLinear(dim, dim)
-        self.w_2 = BottleLinear(dim, hop)
+        hid = int(math.sqrt(dim * hop))
+        self.w_1 = BottleLinear(dim, hid)
+        self.w_2 = BottleLinear(hid, hop)
 
     def forward(self, inp):
         '''

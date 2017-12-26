@@ -1,11 +1,13 @@
 import numpy as np
 import torch
+from torch.autograd import Variable
 
 import Data
 
 
 def load_adj():
-    return torch.ByteTensor(Data.load_adj()).cuda() > 0.5
+    adj = torch.ByteTensor(Data.load_adj()).cuda() == 0
+    return Variable(adj)
 
 
 def load_data_highway(args):
@@ -148,16 +150,16 @@ def denormalize(flow, flow_mean, flow_std):
     return flow * flow_std + flow_mean
 
 
-def _var2np(x):
-    return x.data.cpu().numpy()
+def torch2npsave(filename, data):
+    def _var2np(x):
+        return x.data.cpu().numpy()
 
-
-def torch2npsave(file, data):
     if type(data) in [tuple, list]:
         for i, d in enumerate(data):
-            np.save(file + '_' + str(i), _var2np(d))
+            print(d)
+            np.save(filename + '_' + str(i), _var2np(d))
     else:
-        np.save(file, _var2np(data))
+        np.save(filename, _var2np(data))
 
 
 def Frobenius(mat):

@@ -82,13 +82,13 @@ def train_model():
         dt = dt_train[idx] if args.daytime else None
         out = model(inp, dt)
         if type(out) is tuple:
-            out = out[0]
+            out, attn = out[0], out[1]
         out = Utils.denormalize(out, flow_mean, flow_std).contiguous()
         loss = criterion(out, tgt)
+        loss_train.append(loss.data[0])
         loss.backward()
         clip_grad_norm(model.parameters(), args.max_grad_norm)
         optimizer.step()
-        loss_train.append(loss.data[0])
     return sum(loss_train) / len(loss_train)
 
 

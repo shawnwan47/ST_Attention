@@ -57,7 +57,7 @@ class HeadAttnLayer(nn.Module):
 
     def forward(self, inp, mask):
         out, attn = self.attn(inp)
-        out = self.feed_forward(out)
+        # out = self.feed_forward(out)
         return out, attn
 
 
@@ -71,8 +71,6 @@ class ConvAttnLayer(nn.Module):
                 dim, attn_type, value_proj=value_proj, dropout=dropout)
                 for _ in range(in_channel)])
             for _ in range(out_channel)])
-        self.linear_aggr = nn.ModuleList([
-            BottleLinear(in_channel, 1) for _ in range(out_channel)])
         self.attn_aggr = nn.ModuleList([
             SelfAttention(dim, dropout=dropout) for _ in range(out_channel)])
 
@@ -89,6 +87,7 @@ class ConvAttnLayer(nn.Module):
 
         out = []
         attn = []
+        attn_aggr = []
         for i in range(self.out_channel):
             out_i = []
             attn_i = []
@@ -97,11 +96,10 @@ class ConvAttnLayer(nn.Module):
                 out_i.append(out_j)
                 attn_i.append(attn_j)
             attn_i = torch.stack(attn_i, 0)
-            out_i = torch.stack(out_i, -2)
-            # linear pool
-            # out_i = self.linear_aggr[i](out_i).squeeze(-1)
+            out_i = torch.stack(out_i, -1)
             # attn pool
             out_i, attn_aggr_i = self.attn_aggr[i](out_i.view(-1, in_channel, dim))
+            # attn_aggr.append(attn_aggr_i)
             out_i = out_i.view(batch, length, dim)
             out.append(out_i)
             attn.append(attn_i)
@@ -134,7 +132,7 @@ class LinearLayer(nn.Module):
         self.temporal = nn.ModuleList([
             BottleLinear(past, 1) for _ in range(channel)])
         self.spatial = nn.ModuleList([
-            BottleLinear(dim, dim) for _ in range(channel)])
+            BottleSparseLinear(dim, dim) for _ in range(channel)])
 
     def forward(self, inp):
         '''

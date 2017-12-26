@@ -125,27 +125,16 @@ class HeadAttn(ModelBase):
         out = self.linear_out(out.contiguous())
         out = out.view(batch, -1, self.future, dim)
         out = out[:, :, :, :self.dim]
-        out += inp.unsqueeze(-2)
+        out += inp[:, self.past:].unsqueeze(-2)
         return out, attn
 
 
 class ConvAttn(ModelBase):
     def __init__(self, args):
         super(ConvAttn, self).__init__(args)
-        self.dilated = args.dilated
-        self.dilation = args.dilation[:self.num_layers + 1]
         self.channel = args.channel
-        self.layer_in = Layers.ConvAttnLayer(
-            self.input_size, 1, self.channel, args.attn_type, value_proj=args.value_proj)
-        # self.layer_out = Layers.ConvAttnLayer(
-        #     self.input_size, self.channel, self.future, args.attn_type, args.dropout)
-        self.layer_out = Layers.SelfAttnLayer(
-            self.input_size, self.channel, self.future, args.dropout
-        )
-        self.linear_out = BottleLinear(self.channel, self.future, bias=False)
-        self.layers = nn.ModuleList([Layers.ConvAttnLayer(
-            self.input_size, self.channel, self.channel, args.attn_type, args.dropout)
-            for _ in range(self.num_layers - 1)])
+        self.layer = Layers.ConvAttnLayer(
+            self.input_size, self.channel, self.future, args.attn_type, value_proj=args.value_proj)
         self.register_buffer('mask', get_mask_trim(args.input_length, self.past))
 
     def forward(self, inp, daytime=None):
@@ -156,19 +145,12 @@ class ConvAttn(ModelBase):
         '''
         inp = super(ConvAttn, self).forward(inp, daytime)
         batch, length, dim = inp.size()
-        out = inp.unsqueeze(2)
+        out = inp.unsqueeze(2).expand(batch, length, self.channel, dim)
         mask = self.mask[:length, :length]
-
-        out, attn_in = self.layer_in(out, mask)
-        attn = []
-        for i in range(self.num_layers - 1):
-            out, attn_i = self.layers[i](out)
-            attn.append(attn_i)
-        attn = torch.stack(attn, 1) if attn else []
-        # out = self.linear_out(out.transpose(2, 3).contiguous()).transpose(2, 3)
-        out, attn_out = self.layer_out(out)
+        out, attn = self.layer(out, mask)
+        # out = out + inp.unsqueeze(2)
         out = out[:, self.past:, :, :self.dim]
-        return out, attn_in, attn_out
+        return out, attn
 
 
 class SpatialAttn(ModelBase):
