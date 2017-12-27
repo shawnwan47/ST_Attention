@@ -55,7 +55,7 @@ modelpath = MODEL_PATH + Args.modelname(args)
 print('Model: {}'.format(modelpath))
 
 model = getattr(Models, args.model)(args)
-if args.test or args.retrain or args.tune:
+if args.test or args.retrain:
     model = torch.load(modelpath + '.pt')
     print('Loaded models from file.')
 model.cuda()

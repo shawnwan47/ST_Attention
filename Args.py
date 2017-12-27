@@ -40,11 +40,7 @@ def add_optim(args):
 
 
 def add_run(args):
-    args.add_argument('-pretrain', action='store_true')
-    args.add_argument('-eval_layers', type=int, default=0)
     args.add_argument('-retrain', action='store_true')
-    args.add_argument('-fix_layers', type=int, default=0)
-    args.add_argument('-tune', action='store_true')
     args.add_argument('-test', action='store_true')
     args.add_argument('-epoches', type=int, default=500)
     args.add_argument('-batch', type=int, default=5)
@@ -55,7 +51,7 @@ def add_model(args):
     # general
     args.add_argument('-input_size', type=int)
     args.add_argument('-output_size', type=int)
-    args.add_argument('-hidden_size', type=int, default=64)
+    args.add_argument('-hidden_size', type=int, default=16)
     args.add_argument('-num_layers', type=int, default=1)
     args.add_argument('-dropout', type=float, default=0.2)
     # Day Time size
@@ -71,7 +67,7 @@ def add_model(args):
     args.add_argument('-value_proj', action='store_true')
     args.add_argument('-dilated', action='store_true')
     args.add_argument('-dilation', type=int, default=[], nargs='+')
-    args.add_argument('-head', type=int, default=16)
+    args.add_argument('-head', type=int, default=4)
 
 
 def _dataset(args):
@@ -111,16 +107,9 @@ def _model(args):
         args.input_size += args.day_size + args.time_size
 
 
-def _optim(args):
-    assert args.fix_layers <= args.num_layers
-    if args.tune:
-        args.lr = 1e-4
-
-
 def update_args(args):
     _dataset(args)
     _model(args)
-    _optim(args)
 
 
 def modelname(args):
@@ -133,6 +122,8 @@ def modelname(args):
     # General
     path += 'Hid' + str(args.hidden_size)
     # Data
+    if args.adj:
+        path += 'adj'
     if args.daytime:
         path += 'Daytime'
     path += 'Future' + str(args.future)

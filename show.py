@@ -10,57 +10,17 @@ import Visual
 from Consts import MODEL_PATH, FIG_PATH
 
 
-# CONFIG
-args = argparse.ArgumentParser('Traffic Forecasting')
-Args.add_gpu(args)
-Args.add_data(args)
-Args.add_loss(args)
-Args.add_optim(args)
-Args.add_run(args)
-Args.add_model(args)
-args = args.parse_args()
-Args.update_args(args)
-print(args)
-
 # LOAD DATA
 
 
-def get_loss(model):
-    return np.genfromtxt(MODEL_PATH + model + '_loss.txt')
-
-
-def get_attn(model):
-    return np.load(MODEL_PATH + model + '_attn.npy')
-
-
-def get_attns(model):
+def get_outs(model):
     ret = []
     for i in range(10):
         try:
             ret.append(np.load(
-                MODEL_PATH + model + '_attn_' + str(i) + '.npy'))
+                MODEL_PATH + model + '_out_' + str(i) + '.npy'))
         except FileNotFoundError:
             return ret
-
-
-def load_attns():
-    attns = {}
-    args.model = 'STAttn'
-    args.daytime = True
-    modelname = Args.modelname(args)
-    try:
-        attns[modelname] = get_attns(modelname)
-    except FileNotFoundError:
-        pass
-    return attns
-
-
-
-# attn
-def plot_attn():
-    for model, attn in attns.items():
-        path_model = FIG_PATH + model + '/'
-        attn.shape
 
 
 def dict_name(errs):
@@ -70,14 +30,23 @@ def dict_name(errs):
     return name
 
 
-if __name__ == '__main__':
-    plt.clf()
-    reload(Visual)
+def plot_attn_head_time_day(attn, modelname):
+    head, time, day, length, _ = attn.shape
+    for d in range(1):
+        for h in range(head):
+            for t in range(time):
+                att = attn[h, t, d]
+                plt.imshow(att, cmap='rainbow')
+                plt.axis('off')
+                Visual.saveclf(path.join(FIG_PATH, modelname,
+                                         str(d), str(h), str(t)))
 
-    attns = {'Attn'        : get_attns('STAttnChan1Lay1Hid1024Day16Time64Past1Future4'),
-             'AttnDilemb'  : get_attns('STAttnDilatedChan1Lay3Hid1024Day16Time64Past1Future4'),
-             'AttnDilC4emb': get_attns('STAttnDilatedChan4Lay3Hid1024Day16Time64Past1Future4'),
-             'AttnDilC4'   : get_attns('STAttnDilatedChan4Lay3Hid1024Past1Future4')}
+
+def plot_dilated():
+    attns = {'Attn'        : get_outs('STAttnChan1Lay1Hid1024Day16Time64Past1Future4'),
+             'AttnDilemb'  : get_outs('STAttnDilatedChan1Lay3Hid1024Day16Time64Past1Future4'),
+             'AttnDilC4emb': get_outs('STAttnDilatedChan4Lay3Hid1024Day16Time64Past1Future4'),
+             'AttnDilC4'   : get_outs('STAttnDilatedChan4Lay3Hid1024Past1Future4')}
 
     for key, val in attns.items():
         path_model = FIG_PATH + key + '/'
@@ -105,3 +74,11 @@ if __name__ == '__main__':
                         Visual.saveclf(path_channel + 'chancont' + str(layer))
                         layer -= 1
 
+
+if __name__ == '__main__':
+    plt.clf()
+    reload(Visual)
+    modelname = 'SpatialAttnHead4Hid64Future4'
+    # out = get_outs('GraphAttnHead4Future4')
+    out = get_outs(modelname)
+    plot_attn_head_time_day(out[0], modelname)

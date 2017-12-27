@@ -21,8 +21,6 @@ class ModelBase(nn.Module):
         self.embedding_day = nn.Embedding(7, args.day_size)
         self.embedding_time = nn.Embedding(args.daily_times, args.time_size)
         self.adj = args.adj
-        # self.longlat = args.longlat
-        self.eval_layers = self.num_layers
 
     def forward(self, inp, daytime=None):
         if daytime is not None:
@@ -35,19 +33,6 @@ class ModelBase(nn.Module):
             time = self.dropout(self.embedding_time(daytime[:, :, 1]))
             inp = torch.cat((inp, day, time), -1)
         return inp.contiguous()
-
-    def fix_layers(self):
-        self.embedding_day.require_grad = False
-        self.embedding_time.require_grad = False
-
-    def set_layers(self, eval_layers=None):
-        if eval_layers is not None:
-            self.eval_layers = eval_layers
-
-    def reset(self):
-        self.eval_layers = self.num_layers
-        self.embedding_day.require_grad = True
-        self.embedding_time.require_grad = True
 
 
 class RNN(ModelBase):
@@ -178,9 +163,9 @@ class TemporalAttn(ModelBase):
         return out, attn, weight
 
 
-class SptialAttn(ModelBase):
+class SpatialAttn(ModelBase):
     def __init__(self, args):
-        super(SptialAttn, self).__init__(args)
+        super(SpatialAttn, self).__init__(args)
         self.attn = Layers.WAttnLayer(
             self.past, self.future, attn_type=args.attn_type,
             head=args.head, merge='mean', dropout=args.dropout)
@@ -198,14 +183,15 @@ class SptialAttn(ModelBase):
         attn = torch.stack(attn, 1)
         return out, attn, weight
 
-class SptialAttn2(ModelBase):
+
+class SpatialAttn2(ModelBase):
     def __init__(self, args):
-        super(SptialAttn2, self).__init__(args)
+        super(SpatialAttn2, self).__init__(args)
         self.layer1 = Layers.WAttnLayer(
-            self.past, args.future, attn_type=args.attn_type,
+            self.past, args.hidden_size, attn_type=args.attn_type,
             head=args.head, merge='cat', dropout=args.dropout)
         self.layer2 = Layers.WAttnLayer(
-            args.future * args.head, self.future, attn_type=args.attn_type,
+            args.head * args.hidden_size, self.future, attn_type=args.attn_type,
             head=1, merge='mean', dropout=args.dropout)
         self.adj = args.adj
         self.mask = load_adj() if args.adj else None
@@ -231,11 +217,10 @@ class Linear(ModelBase):
         super(Linear, self).__init__(args)
         self.head = args.head
         self.layer = Layers.LinearLayer(
-            self.input_size, self.past, self.head)
+            self.dim, self.past, self.head)
         self.linear_out = nn.Linear(self.head, self.future)
 
     def forward(self, inp, daytime=None):
-        inp = super(Linear, self).forward(inp, daytime)
         out = self.layer(inp)
         out = self.linear_out(out.transpose(2, 3).contiguous()).transpose(2, 3)
         return out
@@ -249,7 +234,6 @@ class LinearAttn(ModelBase):
             self.input_size, self.past, self.head, self.future, dropout=args.dropout)
 
     def forward(self, inp, daytime=None):
-        inp = super(LinearAttn, self).forward(inp, daytime)
         return self.layer(inp)
 
 
