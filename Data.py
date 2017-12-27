@@ -65,13 +65,12 @@ def load_od():
 
 
 def load_adj(jump=5, contrib=0.01):
-    dist = load_dist() < jump
-    od = load_od() > contrib
+    dist = load_dist() <= jump
+    od = load_od() >= contrib
     adj = dist + od
     adj = np.vstack([adj, adj])
     adj = np.hstack([adj, adj])
     return adj.astype(int)
-
 
 
 def load_flow_highway():

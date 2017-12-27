@@ -10,9 +10,9 @@ from UtilClass import *
 
 
 
-class RNNBase(nn.Module):
+class RNN(nn.Module):
     def __init__(self, rnn_type, input_size, hidden_size, num_layers, dropout):
-        super(RNNBase, self).__init__()
+        super(RNN, self).__init__()
         assert rnn_type in ['RNN', 'GRU', 'LSTM']
         self.rnn_type = rnn_type
         self.input_size = input_size
@@ -34,19 +34,28 @@ class RNNBase(nn.Module):
         else:
             return h
 
+class AttnLayer(nn.Module):
+    def __init__(self, in_features, out_features,
+                 attn_type='mul', head=1, merge='cat', dropout=0.2):
+        super(AttnLayer, self).__init__()
+        self.head = head
+        self.merge = merge
+        self.attn = nn.ModuleList([
+            LinearAttn(in_features, out_features, attn_type, dropout)
+            for _ in range(head)])
 
-class RNNAttn(RNNBase):
-    def __init__(self, rnn_type, input_size, hidden_size, num_layers, dropout,
-                 attn_type):
-        super(RNNAttn, self).__init__(
-            rnn_type, input_size, hidden_size, num_layers, dropout)
-        self.attn_type = attn_type
-        self.attn = GlobalAttention(hidden_size, attn_type)
-
-    def forward(self, inp, hid, mask):
-        out, hid = self.rnn(inp, hid)
-        out, attn = self.attn(out, mask)
-        return out, hid, attn
+    def forward(self, inp, mask=None):
+        out, attn = [], []
+        for i in range(self.head):
+            out_i, attn_i, weight_i = self.attn[i](inp, mask)
+            out.append(out_i)
+            attn.append(attn_i)
+        attn = torch.stack(attn, 0)
+        if self.merge == 'cat':
+            out = torch.cat(out, -1)
+        elif self.merge == 'mean':
+            out = torch.mean(torch.stack(out), 0)
+        return out, attn
 
 
 class HeadAttnLayer(nn.Module):
@@ -57,90 +66,7 @@ class HeadAttnLayer(nn.Module):
 
     def forward(self, inp, mask):
         out, attn = self.attn(inp)
-        # out = self.feed_forward(out)
-        return out, attn
-
-
-class ConvAttnLayer(nn.Module):
-    def __init__(self, dim, head_in, head_out, attn_type, dropout=0.2):
-        super(ConvAttnLayer, self).__init__()
-        self.head_in = head_in
-        self.head_out = head_out
-        self.attn = nn.ModuleList([
-            nn.ModuleList([AttnInterface(
-                dim, attn_type, dropout=dropout)
-                for _ in range(head_in)])
-            for _ in range(head_out)])
-
-    def forward(self, inp, mask=None):
-        '''
-        IN
-        inp: batch x length x head_in x dim
-        mask: length x length
-        OUT
-        out: batch x length x head_out x dim
-        attn: head_out x head_in x batch x length x length
-        '''
-        batch, length, head_in, dim = inp.size()
-
-        out = []
-        attn = []
-        for i in range(self.head_out):
-            out_i = []
-            attn_i = []
-            for j in range(self.head_in):
-                out_j, attn_j = self.attn[i][j](inp[:, :, j], mask)
-                out_i.append(out_j)
-                attn_i.append(attn_j)
-            attn_i = torch.stack(attn_i, 0)
-            attn.append(attn_i)
-            out_i = torch.mean(torch.stack(out_i), 0)
-            out.append(out_i)
-        out = torch.stack(out, -2)
-        attn = torch.stack(attn, 0)
-        return out, attn
-
-
-class WAttnLayer(nn.Module):
-    def __init__(self, in_features, out_features,
-                 attn_type='mul', head=1, merge='cat', dropout=0.2):
-        super(WAttnLayer, self).__init__()
-        self.head = head
-        self.attn = nn.ModuleList([
-            WAttnInterface(in_features, out_features, attn_type, dropout)
-            for _ in range(head)])
-        self.merge = merge
-
-    def forward(self, inp, mask=None):
-        out, attn, weight = [], [], []
-        for i in range(self.head):
-            out_i, attn_i, weight_i = self.attn[i](inp)
-            out.append(out_i)
-            attn.append(attn_i)
-            weight.append(weight_i)
-        attn = torch.stack(attn, 0)
-        weight = torch.stack(weight, 0)
-        if self.merge == 'cat':
-            out = torch.cat(out, -1)
-        elif self.merge == 'mean':
-            out = torch.stack(out)
-            out = torch.mean(out, 0)
-        return out, attn, weight
-
-
-class SelfAttnLayer(nn.Module):
-    def __init__(self, dim, head_in, head_out, dropout):
-        super(SelfAttnLayer, self).__init__()
-        self.head_in = head_in
-        self.head_out = head_out
-        self.dim = dim
-        self.layer = SelfAttention(dim, head_out, dropout)
-
-    def forward(self, inp):
-        assert inp.dim() < 5
-        out = inp.view(-1, self.head_in, self.dim)
-        out, attn = self.layer(out)
-        out = out.view(inp.size(0), -1, self.head_out, self.dim)
+        out = self.feed_forward(out)
         return out, attn
 
 
@@ -169,20 +95,6 @@ class LinearLayer(nn.Module):
                 out_t.append(self.temporal[i](inp_t).transpose(1, 2))
             out.append(torch.cat(out_t, -2))
         return torch.stack(out, -2)
-
-
-class LinearAttnLayer(LinearLayer):
-    def __init__(self, dim, past, head, hop, dropout=0.2):
-        super(LinearAttnLayer, self).__init__(dim, past, head)
-        self.attn = SelfAttention(dim, hop=hop, dropout=dropout)
-
-    def forward(self, inp):
-        out = super(LinearAttnLayer, self).forward(inp)
-        batch, length, head, dim = out.size()
-        out, attn = self.attn(out.view(-1, head, dim))
-        out = out.view(batch, length, -1, dim)
-        attn = attn.view(batch, length, -1, head)
-        return out, attn
 
 
 class PointwiseMLP(nn.Module):

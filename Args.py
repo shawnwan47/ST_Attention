@@ -51,7 +51,7 @@ def add_model(args):
     # general
     args.add_argument('-input_size', type=int)
     args.add_argument('-output_size', type=int)
-    args.add_argument('-hidden_size', type=int, default=16)
+    args.add_argument('-hidden_size', type=int, default=256)
     args.add_argument('-num_layers', type=int, default=1)
     args.add_argument('-dropout', type=float, default=0.2)
     # Day Time size

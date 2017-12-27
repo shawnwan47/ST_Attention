@@ -18,7 +18,7 @@ def get_outs(model):
     for i in range(10):
         try:
             ret.append(np.load(
-                MODEL_PATH + model + '_out_' + str(i) + '.npy'))
+                MODEL_PATH + model + '_out_0_' + str(i) + '.npy'))
         except FileNotFoundError:
             return ret
 
@@ -38,8 +38,20 @@ def plot_attn_head_time_day(attn, modelname):
                 att = attn[h, t, d]
                 plt.imshow(att, cmap='rainbow')
                 plt.axis('off')
-                Visual.saveclf(path.join(FIG_PATH, modelname,
-                                         str(d), str(h), str(t)))
+                Visual.saveclf(path.join(
+                    FIG_PATH, modelname,
+                    'day' + str(d),
+                    'head' + str(h),
+                    str(t)))
+
+def plot_attn_head_day(attn, modelname):
+    head, day, _, _ = attn.shape
+    for d in range(day):
+        for h in range(head):
+            att = attn[h, d]
+            plt.imshow(att, cmap='rainbow')
+            plt.axis('off')
+            Visual.saveclf(path.join(FIG_PATH, modelname, str(h), str(d)))
 
 
 def plot_dilated():
@@ -79,6 +91,8 @@ if __name__ == '__main__':
     plt.clf()
     reload(Visual)
     modelname = 'SpatialAttnHead4Hid64Future4'
+    temporal = 'TemporalAttnHead4Hid256Future4'
     # out = get_outs('GraphAttnHead4Future4')
-    out = get_outs(modelname)
-    plot_attn_head_time_day(out[0], modelname)
+    out = get_outs(temporal)
+    plot_attn_head_day(out[0], temporal)
+    # plot_attn_head_time_day(out[0], modelname)

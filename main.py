@@ -71,6 +71,7 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True)
 
 # TRAINING
 def train_model():
+    model.train()
     loss_train = []
     size = inp_train.size(0)
     days = torch.randperm(size).cuda()
@@ -93,6 +94,7 @@ def train_model():
 
 
 def valid_model():
+    model.eval()
     inp = inp_valid
     tgt = tgt_valid
     dt = dt_valid if args.daytime else None
@@ -108,6 +110,7 @@ def test_model():
     def percent_err(out, tgt):
         return float(criterion(out, tgt).data[0] / tgt.mean())
 
+    model.eval()
     inp = inp_test
     tgt = tgt_test
     dt = dt_test if args.daytime else None
