@@ -132,18 +132,17 @@ class HeadAttn(ModelBase):
 class ConvAttn(ModelBase):
     def __init__(self, args):
         super(ConvAttn, self).__init__(args)
-        channel = args.channel
-        self.layer_in = Layers.ConvAttnLayer(
-            self.input_size, 1, channel, args.attn_type)
+        self.layer = Layers.ConvAttnLayer(
+            self.input_size, 1, args.head, args.attn_type)
         self.layer_out = Layers.ConvAttnLayer(
-            self.input_size, channel, self.future, args.attn_type)
+            self.input_size, args.head, self.future, args.attn_type)
         self.register_buffer('mask', get_mask_trim(args.input_length, self.past))
 
     def forward(self, inp, daytime=None):
         '''
         inp: batch x length x dim
         out: batch x length - past x future x dim
-        attn: num_layers x out_channel x in_channel x batch x length x length
+        attn: num_layers x head_out x head_in x batch x length x length
         '''
         inp = super(ConvAttn, self).forward(inp, daytime)
         batch, length, dim = inp.size()
@@ -156,10 +155,33 @@ class ConvAttn(ModelBase):
         return out, attn_in, attn_out
 
 
-class GraphAttn(ModelBase):
+class TemporalAttn(ModelBase):
     def __init__(self, args):
-        super(GraphAttn, self).__init__(args)
-        self.layer = Layers.WAttnLayer(
+        super(TemporalAttn, self).__init__(args)
+        self.attn = Layers.WAttnLayer(
+            self.input_size, self.hidden_size, attn_type=args.attn_type,
+            head=args.head, merge='cat', dropout=args.dropout
+        )
+        self.dropout = nn.Dropout(args.dropout)
+        self.linear = BottleLinear(args.head * self.hidden_size,
+                                   self.future * self.dim)
+        mask = get_mask_trim(args.input_length, self.past)
+        self.register_buffer('mask', mask)
+
+    def forward(self, inp, daytime=None):
+        inp = super(TemporalAttn, self).forward(inp, daytime)
+        batch, length, _ = inp.size()
+        out, attn, weight = self.attn(inp, self.mask[:length, :length])
+        out = self.dropout(out[:, self.past:]).contiguous()
+        out = self.linear(out)
+        out = out.view(batch, length - self.past, self.future, -1)
+        return out, attn, weight
+
+
+class SptialAttn(ModelBase):
+    def __init__(self, args):
+        super(SptialAttn, self).__init__(args)
+        self.attn = Layers.WAttnLayer(
             self.past, self.future, attn_type=args.attn_type,
             head=args.head, merge='mean', dropout=args.dropout)
         self.mask = load_adj() if args.adj else None
@@ -169,32 +191,32 @@ class GraphAttn(ModelBase):
         out, attn = [], []
         for i in range(length - self.past):
             out_i = inp[:, i:i + self.past].transpose(1, 2).contiguous()
-            out_i, attn_i, weight = self.layer(out_i, self.mask)
+            out_i, attn_i, weight = self.attn(out_i, self.mask)
             out.append(out_i.transpose(1, 2))
             attn.append(attn_i)
         out = torch.stack(out, 1)
         attn = torch.stack(attn, 1)
         return out, attn, weight
 
-class GraphAttn2(ModelBase):
+class SptialAttn2(ModelBase):
     def __init__(self, args):
-        super(GraphAttn2, self).__init__(args)
+        super(SptialAttn2, self).__init__(args)
         self.layer1 = Layers.WAttnLayer(
-            self.past, args.hidden_size, attn_type=args.attn_type,
+            self.past, args.future, attn_type=args.attn_type,
             head=args.head, merge='cat', dropout=args.dropout)
         self.layer2 = Layers.WAttnLayer(
-            args.hidden_size * args.head, self.future, attn_type=args.attn_type,
+            args.future * args.head, self.future, attn_type=args.attn_type,
             head=1, merge='mean', dropout=args.dropout)
         self.adj = args.adj
         self.mask = load_adj() if args.adj else None
 
-    def forward(self, inp):
+    def forward(self, inp, daytime=None):
         batch, length, dim = inp.size()
         out, attn1, attn2 = [], [], []
         for i in range(length - self.past):
             out_i = inp[:, i:i + self.past].transpose(1, 2).contiguous()
             out_i, attn1_i, weight1 = self.layer1(out_i, self.mask)
-            out_i, attn2_i, weight1 = self.layer2(out_i, self.mask)
+            out_i, attn2_i, weight2 = self.layer2(out_i, self.mask)
             out.append(out_i.transpose(1, 2))
             attn1.append(attn1_i)
             attn2.append(attn2_i)
@@ -207,10 +229,10 @@ class GraphAttn2(ModelBase):
 class Linear(ModelBase):
     def __init__(self, args):
         super(Linear, self).__init__(args)
-        self.channel = args.channel
+        self.head = args.head
         self.layer = Layers.LinearLayer(
-            self.input_size, self.past, self.channel)
-        self.linear_out = nn.Linear(self.channel, self.future)
+            self.input_size, self.past, self.head)
+        self.linear_out = nn.Linear(self.head, self.future)
 
     def forward(self, inp, daytime=None):
         inp = super(Linear, self).forward(inp, daytime)
@@ -222,9 +244,9 @@ class Linear(ModelBase):
 class LinearAttn(ModelBase):
     def __init__(self, args):
         super(LinearAttn, self).__init__(args)
-        self.channel = args.channel
+        self.head = args.head
         self.layer = Layers.LinearAttnLayer(
-            self.input_size, self.past, self.channel, self.future, dropout=args.dropout)
+            self.input_size, self.past, self.head, self.future, dropout=args.dropout)
 
     def forward(self, inp, daytime=None):
         inp = super(LinearAttn, self).forward(inp, daytime)

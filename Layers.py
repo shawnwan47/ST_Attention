@@ -62,46 +62,40 @@ class HeadAttnLayer(nn.Module):
 
 
 class ConvAttnLayer(nn.Module):
-    def __init__(self, dim, in_channel, out_channel, attn_type, dropout=0.2):
+    def __init__(self, dim, head_in, head_out, attn_type, dropout=0.2):
         super(ConvAttnLayer, self).__init__()
-        self.in_channel = in_channel
-        self.out_channel = out_channel
+        self.head_in = head_in
+        self.head_out = head_out
         self.attn = nn.ModuleList([
             nn.ModuleList([AttnInterface(
                 dim, attn_type, dropout=dropout)
-                for _ in range(in_channel)])
-            for _ in range(out_channel)])
-        self.merge = nn.ModuleList([
-            SelfAttention(dim, dropout=dropout) for _ in range(out_channel)])
-        # self.merge = nn.ModuleList([
-        #     BottleLinear(in_channel, 1) for _ in range(out_channel)])
+                for _ in range(head_in)])
+            for _ in range(head_out)])
 
     def forward(self, inp, mask=None):
         '''
         IN
-        inp: batch x length x in_channel x dim
+        inp: batch x length x head_in x dim
         mask: length x length
         OUT
-        out: batch x length x out_channel x dim
-        attn: out_channel x in_channel x batch x length x length
+        out: batch x length x head_out x dim
+        attn: head_out x head_in x batch x length x length
         '''
-        batch, length, in_channel, dim = inp.size()
+        batch, length, head_in, dim = inp.size()
 
         out = []
         attn = []
-        for i in range(self.out_channel):
+        for i in range(self.head_out):
             out_i = []
             attn_i = []
-            for j in range(self.in_channel):
+            for j in range(self.head_in):
                 out_j, attn_j = self.attn[i][j](inp[:, :, j], mask)
                 out_i.append(out_j)
                 attn_i.append(attn_j)
             attn_i = torch.stack(attn_i, 0)
-            # out_i = self.merge[i](torch.stack(out_i, -1))
-            out_i, attn_aggr_i = self.merge[i](torch.stack(out_i, -2).view(-1, in_channel, dim))
-            out_i = out_i.view(batch, length, dim)
-            out.append(out_i)
             attn.append(attn_i)
+            out_i = torch.mean(torch.stack(out_i), 0)
+            out.append(out_i)
         out = torch.stack(out, -2)
         attn = torch.stack(attn, 0)
         return out, attn
@@ -109,7 +103,7 @@ class ConvAttnLayer(nn.Module):
 
 class WAttnLayer(nn.Module):
     def __init__(self, in_features, out_features,
-                 attn_type='add', head=1, merge='cat', dropout=0.2):
+                 attn_type='mul', head=1, merge='cat', dropout=0.2):
         super(WAttnLayer, self).__init__()
         self.head = head
         self.attn = nn.ModuleList([
@@ -135,39 +129,39 @@ class WAttnLayer(nn.Module):
 
 
 class SelfAttnLayer(nn.Module):
-    def __init__(self, dim, in_channel, out_channel, dropout):
+    def __init__(self, dim, head_in, head_out, dropout):
         super(SelfAttnLayer, self).__init__()
-        self.in_channel = in_channel
-        self.out_channel = out_channel
+        self.head_in = head_in
+        self.head_out = head_out
         self.dim = dim
-        self.layer = SelfAttention(dim, out_channel, dropout)
+        self.layer = SelfAttention(dim, head_out, dropout)
 
     def forward(self, inp):
         assert inp.dim() < 5
-        out = inp.view(-1, self.in_channel, self.dim)
+        out = inp.view(-1, self.head_in, self.dim)
         out, attn = self.layer(out)
-        out = out.view(inp.size(0), -1, self.out_channel, self.dim)
+        out = out.view(inp.size(0), -1, self.head_out, self.dim)
         return out, attn
 
 
 class LinearLayer(nn.Module):
-    def __init__(self, dim, past, channel):
+    def __init__(self, dim, past, head):
         super(LinearLayer, self).__init__()
         self.past = past
-        self.channel = channel
+        self.head = head
         self.temporal = nn.ModuleList([
-            BottleLinear(past, 1) for _ in range(channel)])
+            BottleLinear(past, 1) for _ in range(head)])
         self.spatial = nn.ModuleList([
-            BottleSparseLinear(dim, dim) for _ in range(channel)])
+            BottleSparseLinear(dim, dim) for _ in range(head)])
 
     def forward(self, inp):
         '''
         inp: batch x length x dim
-        out: batch x length - past x channel x dim
+        out: batch x length - past x head x dim
         '''
         length = inp.size(1)
         out = []
-        for i in range(self.channel):
+        for i in range(self.head):
             out_i = self.spatial[i](inp)
             out_t = []
             for t in range(length - self.past):
@@ -178,16 +172,16 @@ class LinearLayer(nn.Module):
 
 
 class LinearAttnLayer(LinearLayer):
-    def __init__(self, dim, past, channel, hop, dropout=0.2):
-        super(LinearAttnLayer, self).__init__(dim, past, channel)
+    def __init__(self, dim, past, head, hop, dropout=0.2):
+        super(LinearAttnLayer, self).__init__(dim, past, head)
         self.attn = SelfAttention(dim, hop=hop, dropout=dropout)
 
     def forward(self, inp):
         out = super(LinearAttnLayer, self).forward(inp)
-        batch, length, channel, dim = out.size()
-        out, attn = self.attn(out.view(-1, channel, dim))
+        batch, length, head, dim = out.size()
+        out, attn = self.attn(out.view(-1, head, dim))
         out = out.view(batch, length, -1, dim)
-        attn = attn.view(batch, length, -1, channel)
+        attn = attn.view(batch, length, -1, head)
         return out, attn
 
 

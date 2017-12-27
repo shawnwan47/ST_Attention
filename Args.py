@@ -55,7 +55,7 @@ def add_model(args):
     # general
     args.add_argument('-input_size', type=int)
     args.add_argument('-output_size', type=int)
-    args.add_argument('-hidden_size', type=int, default=128)
+    args.add_argument('-hidden_size', type=int, default=64)
     args.add_argument('-num_layers', type=int, default=1)
     args.add_argument('-dropout', type=float, default=0.2)
     # Day Time size
@@ -66,13 +66,12 @@ def add_model(args):
     args.add_argument('-rnn_type', type=str, default='RNN',
                       choices=['RNN', 'GRU', 'LSTM'])
     # Attention
-    args.add_argument('-attn_type', type=str, default='add',
+    args.add_argument('-attn_type', type=str, default='mul',
                       choices=['add', 'mul', 'mlp'])
     args.add_argument('-value_proj', action='store_true')
     args.add_argument('-dilated', action='store_true')
     args.add_argument('-dilation', type=int, default=[], nargs='+')
-    args.add_argument('-head', type=int, default=1)
-    args.add_argument('-channel', type=int, default=1)
+    args.add_argument('-head', type=int, default=16)
 
 
 def _dataset(args):
@@ -128,12 +127,11 @@ def modelname(args):
     # MODEL
     path = args.model
     # Attn
-    if args.model in ['ConvAttn', 'HeadAttn']:
+    if 'Attn' in args.model:
         path += 'Dilated' if args.dilated else ''
-        path += 'Channel' + str(args.channel)
         path += 'Head' + str(args.head)
-    # general
-    path += 'Lay' + str(args.num_layers)
+    # General
+    path += 'Hid' + str(args.hidden_size)
     # Data
     if args.daytime:
         path += 'Daytime'

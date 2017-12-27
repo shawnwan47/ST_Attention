@@ -27,12 +27,15 @@ class AttnInterface(nn.Module):
 class WAttnInterface(AttnInterface):
     def __init__(self, in_features, out_features, attn_type, dropout=0.2):
         super(WAttnInterface, self).__init__(out_features, attn_type, dropout)
-        self.linear = BottleLinear(in_features, out_features, bias=False)
+        self.linear_key = BottleLinear(in_features, out_features, bias=False)
+        self.linear_val = BottleLinear(in_features, out_features, bias=False)
 
     def forward(self, inp, mask=None):
-        out = self.linear(inp)
-        out, attn = self.attn(out, mask)
-        return out, attn, self.linear.weight
+        key = self.linear_key(inp)
+        val = self.linear_val(inp)
+        attn = self.attn(key, mask)
+        out = torch.bmm(attn, val)
+        return out, attn, self.linear_val.weight
 
 
 class AddAttention(nn.Module):
@@ -53,8 +56,7 @@ class AddAttention(nn.Module):
         if mask is not None:
             score.data.masked_fill_(mask, -float('inf'))
         attn = self.softmax(score)
-        out = torch.bmm(attn, inp)
-        return out, attn
+        return attn
 
 
 class MulAttention(nn.Module):
@@ -72,8 +74,7 @@ class MulAttention(nn.Module):
         if mask is not None:
             attn.data.masked_fill_(mask, -float('inf'))
         attn = self.softmax(attn)
-        out = torch.bmm(attn, inp)
-        return out, attn
+        return attn
 
 
 class MLPAttention(nn.Module):
@@ -98,12 +99,11 @@ class MLPAttention(nn.Module):
         if mask is not None:
             score.data.masked_fill_(mask, -float('inf'))
         attn = self.softmax(score)
-        out = torch.bmm(attn, inp)
-        return out, attn
+        return attn
 
 
 class MultiHeadedAttention(nn.Module):
-    def __init__(self, dim, head=1, dropout=0.2):
+    def __init__(self, dim, head=4, dropout=0.2):
         '''
         Args:
             head(int): number of parallel heads.
