@@ -50,15 +50,20 @@ class Attn(nn.Module):
         return out, attn
 
 
-class CatAttn(Attn):
-    def __init__(self, dim, attn_type, dropout=0.1):
-        super(CatAttn, self).__init__(dim, attn_type, dropout)
-        self.linear = BottleLinear(2 * dim, dim)
+class MergeAttn(Attn):
+    def __init__(self, dim, attn_type, merge_type, dropout=0.1):
+        super(MergeAttn, self).__init__(dim, attn_type, dropout)
+        self.merge_type = merge_type
+        if merge_type == 'cat':
+            self.linear = BottleLinear(2 * dim, dim)
 
     def forward(self, inp):
-        out, attn = super(CatAttn, self).forward(inp)
-        out = torch.cat((inp, out), -1)
-        out = self.linear(self.dropout(out))
+        out, attn = super(MergeAttn, self).forward(inp)
+        if self.merge_type == 'cat':
+            out = torch.cat((inp, out), -1)
+            out = self.linear(self.dropout(out))
+        if self.merge_type == 'add':
+            out = self.dropout(out) + inp
         return out, attn
 
 
@@ -90,16 +95,15 @@ class HeadAttn(nn.Module):
         pad = head - dim % head
         dim += pad
         super(HeadAttn, self).__init__()
-        self.dim = dim
-        self.activation = nn.Tanh()
-        self.dropout = nn.Dropout(dropout)
-        self.layer_norm = BottleLayerNorm(dim)
-        self.softmax = nn.Softmax(2)
-        self.pad = (pad // 2, pad // 2 + pad % 2)
         self.head = head
+        self.dim = dim
+        self.pad = (pad // 2, pad // 2 + pad % 2)
         self.w_k = BottleLinear(dim, dim, bias=False)
         self.w_v = BottleLinear(dim, dim, bias=False)
         self.w_q = BottleLinear(dim, dim, bias=False)
+        self.softmax = nn.Softmax(2)
+        self.dropout = nn.Dropout(dropout)
+        self.layer_norm = BottleLayerNorm(dim - pad)
 
     def forward(self, inp, mask=None):
         '''
@@ -125,8 +129,7 @@ class HeadAttn(nn.Module):
         value = shape_projection(self.w_v(inp))
         query = shape_projection(self.w_q(inp))
 
-        score = torch.bmm(query, key.transpose(1, 2))
-        score = score / math.sqrt(dim_head)
+        score = torch.bmm(query, key.transpose(1, 2)) / math.sqrt(dim_head)
         if mask is not None:
             score = score.view(batch, self.head, length, length)
             score.data.masked_fill_(mask, -float('inf'))
@@ -134,12 +137,13 @@ class HeadAttn(nn.Module):
 
         out = torch.bmm(self.dropout(attn), value)
         out = unshape_projection(out)
-        out = self.dropout(out) + inp
-        out = self.layer_norm(out)
+        # out = self.dropout(out) + inp
+        out = out + inp
         attn = attn.view(batch, self.head, length, length)
         if self.pad[1]:
-            out = out[:, :, self.pad[0]:-self.pad[1]]
-        return out.contiguous(), attn
+            out = out[:, :, self.pad[0]:-self.pad[1]].contiguous()
+        # out = self.layer_norm(out)
+        return out, attn
 
 
 class SelfAttn(nn.Module):

@@ -36,14 +36,16 @@ class RNNLayer(nn.Module):
 
 
 class AttnLayer(nn.Module):
-    def __init__(self, in_features, out_features,
-                 attn_type='mul', head=1, merge='mean', dropout=0.2):
+    def __init__(self, in_features, out_features, head=1,
+                 attn_type='mul', merge_type='add',
+                 merge='mean', dropout=0.2):
         super(AttnLayer, self).__init__()
         self.head = head
         self.merge = merge
         self.linear = BottleLinear(in_features, out_features, bias=False)
-        self.attn = nn.ModuleList([Attn(out_features, attn_type, dropout)
-                                   for _ in range(head)])
+        self.attn = nn.ModuleList([
+            MergeAttn(out_features, attn_type, merge_type, dropout)
+            for _ in range(head)])
 
     def forward(self, inp, mask=None):
         out, attn = [], []

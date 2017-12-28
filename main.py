@@ -144,7 +144,7 @@ def run():
             loss_train = train_model()
             loss_valid = valid_model()
 
-            if not epoch % 10:
+            if not epoch % args.print_epoches:
                 print('Epoch: %d train: %.4f valid: %.4f' % (
                     epoch, loss_train, loss_valid))
 

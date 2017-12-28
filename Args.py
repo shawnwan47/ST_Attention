@@ -44,6 +44,7 @@ def add_run(args):
     args.add_argument('-test', action='store_true')
     args.add_argument('-epoches', type=int, default=1000)
     args.add_argument('-batch', type=int, default=10)
+    args.add_argument('-print_epoches', type=int, default=10)
 
 
 def add_model(args):
@@ -53,7 +54,7 @@ def add_model(args):
     args.add_argument('-output_size', type=int)
     args.add_argument('-hidden_size', type=int, default=256)
     args.add_argument('-num_layers', type=int, default=1)
-    args.add_argument('-dropout', type=float, default=0.5)
+    args.add_argument('-dropout', type=float, default=0.1)
     # Day Time size
     args.add_argument('-daytime', action='store_true')
     args.add_argument('-day_size', type=int, default=16)

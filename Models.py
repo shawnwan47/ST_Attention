@@ -97,7 +97,7 @@ class HeadAttn(ModelBase):
         self.layers = nn.ModuleList([Layers.HeadAttnLayer(
             self.input_size, self.head, args.dropout)
             for _ in range(self.num_layers)])
-        self.linear_out = BottleLinear(self.dim, self.dim * self.future)
+        self.linear = BottleLinear(self.input_size, self.dim * self.future)
         if self.dilated:
             mask = get_mask_dilated(args.input_length, self.dilation)
         else:
@@ -115,8 +115,8 @@ class HeadAttn(ModelBase):
             attn.append(attn_i)
         attn = torch.cat(attn, 1)
         out = out[:, self.past:].contiguous()
-        out = self.linear_out(out).view(batch, -1, self.future, dim)
-        out = out[:, :, :, :self.dim] + inp[:, self.past:].unsqueeze(-2)
+        out = self.linear(out).view(batch, -1, self.future, self.dim)
+        # out = out + inp[:, self.past:].unsqueeze(-2)
         return out, attn
 
 
@@ -125,9 +125,9 @@ class TemporalAttn(ModelBase):
         super(TemporalAttn, self).__init__(args)
         hidden_size = self.input_size // args.head
         self.attn = Layers.AttnLayer(
-            self.input_size, hidden_size, attn_type=args.attn_type,
-            head=args.head, merge='cat', dropout=args.dropout
-        )
+            self.input_size, hidden_size, head=args.head,
+            attn_type=args.attn_type, merge_type=args.merge_type,
+            merge='cat', dropout=args.dropout)
         self.dropout = nn.Dropout(args.dropout)
         self.linear = BottleLinear(args.head * hidden_size,
                                    self.future * self.dim)
