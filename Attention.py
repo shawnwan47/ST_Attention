@@ -9,10 +9,11 @@ from UtilClass import *
 
 
 class Attn(nn.Module):
-    def __init__(self, dim, attn_type, dropout=0.2):
+    def __init__(self, dim, attn_type, dropout=0.1):
         super(Attn, self).__init__()
         assert attn_type in ['add', 'mul', 'mlp']
         self.dim = dim
+        self.tanh = nn.Tanh()
         self.dropout = nn.Dropout(dropout)
         self.softmax = nn.Softmax(2)
         self.attn_type = attn_type
@@ -25,13 +26,12 @@ class Attn(nn.Module):
             self.u = BottleLinear(dim, dim, bias=False)
             self.v = BottleLinear(dim, dim, bias=False)
             self.a = BottleLinear(dim, 1, bias=False)
-            self.tanh = nn.Tanh()
 
     def score(self, inp):
         batch, length, dim = inp.size()
         inp = inp.contiguous()
         if self.attn_type == 'mul':
-            key = self.dropout(self.w(inp)).transpose(1, 2)
+            key = self.w(inp).transpose(1, 2)
             score = torch.bmm(inp, key) / math.sqrt(self.dim)
         else:
             query = self.u(inp).unsqueeze(1).expand(batch, length, length, -1)
@@ -50,32 +50,46 @@ class Attn(nn.Module):
         return out, attn
 
 
-class LinearAttn(Attn):
-    def __init__(self, in_features, out_features, attn_type, dropout=0.2):
-        super(LinearAttn, self).__init__(out_features, attn_type, dropout)
-        self.linear = BottleLinear(in_features, out_features, bias=False)
+class CatAttn(Attn):
+    def __init__(self, dim, attn_type, dropout=0.1):
+        super(CatAttn, self).__init__(dim, attn_type, dropout)
+        self.linear = BottleLinear(2 * dim, dim)
 
-    def forward(self, inp, mask=None):
-        out = self.linear(inp)
-        score = self.score(out)
-        if mask is not None:
-            score.data.masked_fill_(mask, -float('inf'))
-        attn = self.softmax(score)
-        out = torch.bmm(attn, out)
+    def forward(self, inp):
+        out, attn = super(CatAttn, self).forward(inp)
+        out = torch.cat((inp, out), -1)
+        out = self.linear(self.dropout(out))
         return out, attn
 
 
-class MultiHeadedAttention(nn.Module):
-    def __init__(self, dim, head=4, dropout=0.2):
+class LinearAttn(Attn):
+    def __init__(self, in_features, out_features, attn_type, dropout=0.1):
+        super(LinearAttn, self).__init__(out_features, attn_type, dropout)
+        self.linear_key = BottleLinear(in_features, out_features, bias=False)
+        self.linear_val = BottleLinear(in_features, out_features, bias=False)
+
+    def forward(self, inp, mask=None):
+        key = self.linear_key(inp)
+        val = self.linear_val(inp)
+        score = self.score(key)
+        if mask is not None:
+            score.data.masked_fill_(mask, -float('inf'))
+        attn = self.softmax(score)
+        out = torch.bmm(attn, val)
+        return out, attn
+
+
+class HeadAttn(nn.Module):
+    def __init__(self, dim, head=4, dropout=0.1):
         '''
         Args:
             head(int): number of parallel heads.
             dim(int): the dimension of keys/values/queries in this
-                MultiHeadedAttention, must be divisible by head.
+                HeadAttn, must be divisible by head.
         '''
         pad = head - dim % head
         dim += pad
-        super(MultiHeadedAttention, self).__init__()
+        super(HeadAttn, self).__init__()
         self.dim = dim
         self.activation = nn.Tanh()
         self.dropout = nn.Dropout(dropout)
@@ -120,16 +134,17 @@ class MultiHeadedAttention(nn.Module):
 
         out = torch.bmm(self.dropout(attn), value)
         out = unshape_projection(out)
-        out = self.layer_norm(self.dropout(out) + inp)
+        out = self.dropout(out) + inp
+        out = self.layer_norm(out)
         attn = attn.view(batch, self.head, length, length)
         if self.pad[1]:
             out = out[:, :, self.pad[0]:-self.pad[1]]
         return out.contiguous(), attn
 
 
-class SelfAttention(nn.Module):
-    def __init__(self, dim, hop=1, dropout=0.2):
-        super(SelfAttention, self).__init__()
+class SelfAttn(nn.Module):
+    def __init__(self, dim, hop=1, dropout=0.1):
+        super(SelfAttn, self).__init__()
         self.activation = nn.Tanh()
         self.dropout = nn.Dropout(dropout)
         self.softmax = nn.Softmax(2)

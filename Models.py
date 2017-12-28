@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 import Layers
-from Attention import Attn
+from Attention import Attn, LinearAttn
 
 from Utils import get_mask_trim, get_mask_dilated, aeq, load_adj
 from UtilClass import *
@@ -15,7 +15,6 @@ class ModelBase(nn.Module):
         self.future = args.future
         self.dim = args.dim
         self.input_size = args.input_size
-        self.hidden_size = args.hidden_size
         self.output_size = args.output_size
         self.num_layers = args.num_layers
         self.dropout = nn.Dropout(args.dropout)
@@ -53,10 +52,10 @@ class TemporalLinear(ModelBase):
 class RNN(ModelBase):
     def __init__(self, args):
         super(RNN, self).__init__(args)
-        self.rnn = Layers.RNN(
-            args.rnn_type, args.input_size, args.hidden_size,
+        self.rnn = Layers.RNNLayer(
+            args.rnn_type, args.input_size, args.input_size,
             args.num_layers, args.dropout)
-        self.linear_out = BottleLinear(args.hidden_size, args.output_size)
+        self.linear_out = BottleLinear(args.input_size, args.output_size)
 
     def forward_rnn(self, inp, daytime=None):
         inp = super(RNN, self).forward(inp, daytime)
@@ -75,12 +74,12 @@ class RNN(ModelBase):
 class RNNAttn(RNN):
     def __init__(self, args):
         super(RNNAttn, self).__init__(args)
-        self.attn = Attn(self.hidden_size, args.attn_type, args.dropout)
+        self.attn = Attn(self.input_size, args.attn_type, args.dropout)
         mask = get_mask_trim(args.input_length, self.past)
         self.register_buffer('mask', mask)
 
     def forward(self, inp, daytime=None):
-        out = self.forward_rnn(inp, daytime)
+        out = self.forward_rnn(inp, daytime).contiguous()
         batch, length, dim = out.size()
         mask = self.mask[:length, :length]
         out, attn = self.attn(out, mask)
@@ -124,12 +123,13 @@ class HeadAttn(ModelBase):
 class TemporalAttn(ModelBase):
     def __init__(self, args):
         super(TemporalAttn, self).__init__(args)
+        hidden_size = self.input_size // args.head
         self.attn = Layers.AttnLayer(
-            self.input_size, self.hidden_size, attn_type=args.attn_type,
+            self.input_size, hidden_size, attn_type=args.attn_type,
             head=args.head, merge='cat', dropout=args.dropout
         )
         self.dropout = nn.Dropout(args.dropout)
-        self.linear = BottleLinear(args.head * self.hidden_size,
+        self.linear = BottleLinear(args.head * hidden_size,
                                    self.future * self.dim)
         mask = get_mask_trim(args.input_length, self.past)
         self.register_buffer('mask', mask)
@@ -139,16 +139,16 @@ class TemporalAttn(ModelBase):
         batch, length, _ = inp.size()
         out, attn = self.attn(inp, self.mask[:length, :length])
         out = self.dropout(out[:, self.past:]).contiguous()
-        out = self.linear(out)
-        out = out.view(batch, length - self.past, self.future, -1)
+        out = self.linear(out).view(batch, -1, self.future, self.dim)
         return out, attn
 
 
 class SpatialAttn(ModelBase):
     def __init__(self, args):
         super(SpatialAttn, self).__init__(args)
+        hidden_size = self.past // self.head
         self.attn = Layers.AttnLayer(
-            self.past, self.hidden_size, attn_type=args.attn_type,
+            self.past, hidden_size, attn_type=args.attn_type,
             head=args.head, merge='mean', dropout=args.dropout)
         self.linear = BottleLinear(hidden_size, self.future)
         self.mask = load_adj() if args.adj else None
@@ -169,11 +169,12 @@ class SpatialAttn(ModelBase):
 class SpatialAttn2(ModelBase):
     def __init__(self, args):
         super(SpatialAttn2, self).__init__(args)
+        hidden_size = self.past // args.head
         self.layer1 = Layers.AttnLayer(
-            self.past, args.hidden_size, attn_type=args.attn_type,
+            self.past, hidden_size, attn_type=args.attn_type,
             head=args.head, merge='cat', dropout=args.dropout)
         self.layer2 = Layers.AttnLayer(
-            args.head * args.hidden_size, self.future, attn_type=args.attn_type,
+            args.head * hidden_size, self.future, attn_type=args.attn_type,
             head=1, merge='mean', dropout=args.dropout)
         self.adj = args.adj
         self.mask = load_adj() if args.adj else None

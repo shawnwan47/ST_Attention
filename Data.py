@@ -91,12 +91,15 @@ def load_flow_highway():
     flow_mean = flow.mean(0)
     flow_std = flow.std(0) + EPS
     flow = (flow - flow_mean) / flow_std
+    flow_diff = np.diff(flow, axis=0)
+    flow_diff = np.append(flow_diff[[0]], flow_diff, 0)
 
     # reshape
     flow = flow.reshape(-1, 96, flow.shape[-1])
+    flow_diff = flow_diff.reshape(-1, 96, flow_diff.shape[-1])
     daytime = daytime.reshape(-1, 96, 2)
 
-    return flow, daytime, flow_mean, flow_std
+    return flow, flow_diff, flow_mean, flow_std, daytime
 
 
 def load_flow_metro(resolution=15, start_time=5, end_time=23):

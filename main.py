@@ -31,24 +31,31 @@ if args.seed > 0:
     torch.cuda.manual_seed(args.seed)
 
 # DATA
-data = getattr(Utils, 'load_data_' + args.data_type)(args)
-(inp_train, inp_valid, inp_test,
+(flow_train, flow_valid, flow_test,
+ diff_train, diff_valid, diff_test,
  tgt_train, tgt_valid, tgt_test,
- dt_train, dt_valid, dt_test,
- flow_mean, flow_std) = data
+ daytime_train, daytime_valid, daytime_test,
+ flow_mean, flow_std) = getattr(Utils, 'load_data_' + args.data_type)(args)
 
-
-inp_train = Variable(inp_train)
-inp_valid = Variable(inp_valid, volatile=True)
-inp_test = Variable(inp_test, volatile=True)
-dt_train = Variable(dt_train)
-dt_valid = Variable(dt_valid, volatile=True)
-dt_test = Variable(dt_test, volatile=True)
+diff_train = Variable(diff_train)
+diff_valid = Variable(diff_valid, volatile=True)
+diff_test = Variable(diff_test, volatile=True)
+flow_train = Variable(flow_train)
+flow_valid = Variable(flow_valid, volatile=True)
+flow_test = Variable(flow_test, volatile=True)
+flow_mean = Variable(flow_mean)
+flow_std = Variable(flow_std)
 tgt_train = Variable(tgt_train)
 tgt_valid = Variable(tgt_valid, volatile=True)
 tgt_test = Variable(tgt_test, volatile=True)
-flow_mean = Variable(flow_mean)
-flow_std = Variable(flow_std)
+daytime_train = Variable(daytime_train)
+daytime_valid = Variable(daytime_valid, volatile=True)
+daytime_test = Variable(daytime_test, volatile=True)
+
+def recover_flow(diff, flow):
+    flow_cum = flow[:, args.past:].unsqueeze(-2) + diff.cumsum(-2)
+    return flow_cum * flow_std + flow_mean
+
 
 # MODEL
 modelpath = MODEL_PATH + Args.modelname(args)
@@ -73,18 +80,19 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True)
 def train_model():
     model.train()
     loss_train = []
-    size = inp_train.size(0)
+    size = diff_train.size(0)
     days = torch.randperm(size).cuda()
     iters = size // args.batch
     for day in range(iters):
         idx = days[day::iters]
-        inp = inp_train[idx]
+        flow = flow_train[idx]
+        diff = diff_train[idx]
         tgt = tgt_train[idx]
-        dt = dt_train[idx] if args.daytime else None
-        out = model(inp, dt)
+        daytime = daytime_train[idx] if args.daytime else None
+        out = model(diff, daytime)
         if type(out) is tuple:
             out, attn = out[0], out[1]
-        out = Utils.denormalize(out, flow_mean, flow_std).contiguous()
+        out = recover_flow(out, flow)
         loss = criterion(out, tgt)
         loss_train.append(loss.data[0])
         loss.backward()
@@ -95,13 +103,14 @@ def train_model():
 
 def valid_model():
     model.eval()
-    inp = inp_valid
+    flow = flow_valid
+    diff = diff_valid
     tgt = tgt_valid
-    dt = dt_valid if args.daytime else None
-    out = model(inp, dt)
+    daytime = daytime_valid if args.daytime else None
+    out = model(diff, daytime)
     if type(out) is tuple:
         out = out[0]
-    out = Utils.denormalize(out, flow_mean, flow_std)
+    out = recover_flow(out, flow)
     loss = criterion(out, tgt).data[0]
     return loss
 
@@ -111,15 +120,16 @@ def test_model():
         return float(criterion(out, tgt).data[0] / tgt.mean())
 
     model.eval()
-    inp = inp_test
+    flow = flow_test
+    diff = diff_test
     tgt = tgt_test
-    dt = dt_test if args.daytime else None
-    out = model(inp, dt)
+    daytime = daytime_test if args.daytime else None
+    out = model(diff, daytime)
     ret_more = False
     if type(out) is tuple:
         out, out_ = out[0], out[1:]
         ret_more = True
-    out = Utils.denormalize(out, flow_mean, flow_std)
+    out = recover_flow(out, flow)
     loss = [percent_err(out[:, :, i], tgt[:, :, i])
             for i in range(args.future)]
     if ret_more:
@@ -134,8 +144,9 @@ def run():
             loss_train = train_model()
             loss_valid = valid_model()
 
-            print('Epoch: %d train: %.4f valid: %.4f' % (
-                epoch, loss_train, loss_valid))
+            if not epoch % 10:
+                print('Epoch: %d train: %.4f valid: %.4f' % (
+                    epoch, loss_train, loss_valid))
 
             scheduler.step(loss_valid)
             if optimizer.param_groups[0]['lr'] < args.lr_min:

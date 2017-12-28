@@ -42,8 +42,8 @@ def add_optim(args):
 def add_run(args):
     args.add_argument('-retrain', action='store_true')
     args.add_argument('-test', action='store_true')
-    args.add_argument('-epoches', type=int, default=500)
-    args.add_argument('-batch', type=int, default=5)
+    args.add_argument('-epoches', type=int, default=1000)
+    args.add_argument('-batch', type=int, default=10)
 
 
 def add_model(args):
@@ -53,7 +53,7 @@ def add_model(args):
     args.add_argument('-output_size', type=int)
     args.add_argument('-hidden_size', type=int, default=256)
     args.add_argument('-num_layers', type=int, default=1)
-    args.add_argument('-dropout', type=float, default=0.2)
+    args.add_argument('-dropout', type=float, default=0.5)
     # Day Time size
     args.add_argument('-daytime', action='store_true')
     args.add_argument('-day_size', type=int, default=16)
@@ -62,7 +62,7 @@ def add_model(args):
     args.add_argument('-rnn_type', type=str, default='RNN',
                       choices=['RNN', 'GRU', 'LSTM'])
     # Attention
-    args.add_argument('-attn_type', type=str, default='mul',
+    args.add_argument('-attn_type', type=str, default='add',
                       choices=['add', 'mul', 'mlp'])
     args.add_argument('-value_proj', action='store_true')
     args.add_argument('-dilated', action='store_true')
@@ -89,7 +89,6 @@ def _dataset(args):
     args.daily_times = (args.end_time - args.start_time) * 60
     args.daily_times //= args.resolution
     assert args.past_days > 0
-    assert args.num_layers < 5
     if args.dilated and args.num_layers == 3:
         args.past_days = 7
     args.past = args.past_days * args.daily_times
@@ -115,12 +114,20 @@ def update_args(args):
 def modelname(args):
     # MODEL
     path = args.model
+    if 'RNN' in args.model:
+        path += args.rnn_type
+    if args.model == 'RNNAttn':
+        path += args.attn_type
     # Attn
-    if 'Attn' in args.model:
+    if args.model == 'HeadAttn':
+        path += 'Head' + str(args.head)
+    if args.model == 'TemporalAttn':
+        path += args.attn_type
         path += 'Dilated' if args.dilated else ''
         path += 'Head' + str(args.head)
     # General
-    path += 'Hid' + str(args.hidden_size)
+    path += 'Lay' + str(args.num_layers)
+    # path += 'Hid' + str(args.hidden_size)
     # Data
     if args.adj:
         path += 'adj'

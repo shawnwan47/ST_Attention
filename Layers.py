@@ -10,9 +10,9 @@ from UtilClass import *
 
 
 
-class RNN(nn.Module):
+class RNNLayer(nn.Module):
     def __init__(self, rnn_type, input_size, hidden_size, num_layers, dropout):
-        super(RNN, self).__init__()
+        super(RNNLayer, self).__init__()
         assert rnn_type in ['RNN', 'GRU', 'LSTM']
         self.rnn_type = rnn_type
         self.input_size = input_size
@@ -34,20 +34,22 @@ class RNN(nn.Module):
         else:
             return h
 
+
 class AttnLayer(nn.Module):
     def __init__(self, in_features, out_features,
-                 attn_type='mul', head=1, merge='cat', dropout=0.2):
+                 attn_type='mul', head=1, merge='mean', dropout=0.2):
         super(AttnLayer, self).__init__()
         self.head = head
         self.merge = merge
-        self.attn = nn.ModuleList([
-            LinearAttn(in_features, out_features, attn_type, dropout)
-            for _ in range(head)])
+        self.linear = BottleLinear(in_features, out_features, bias=False)
+        self.attn = nn.ModuleList([Attn(out_features, attn_type, dropout)
+                                   for _ in range(head)])
 
     def forward(self, inp, mask=None):
         out, attn = [], []
+        inp = self.linear(inp)
         for i in range(self.head):
-            out_i, attn_i, weight_i = self.attn[i](inp, mask)
+            out_i, attn_i = self.attn[i](inp, mask)
             out.append(out_i)
             attn.append(attn_i)
         attn = torch.stack(attn, 0)
@@ -61,7 +63,7 @@ class AttnLayer(nn.Module):
 class HeadAttnLayer(nn.Module):
     def __init__(self, dim, head, dropout=0.2):
         super(HeadAttnLayer, self).__init__()
-        self.attn = MultiHeadedAttention(dim, head=head, dropout=dropout)
+        self.attn = HeadAttn(dim, head=head, dropout=dropout)
         self.feed_forward = PointwiseMLP(dim, dropout=dropout)
 
     def forward(self, inp, mask):
@@ -100,7 +102,7 @@ class LinearLayer(nn.Module):
 class PointwiseMLP(nn.Module):
     ''' A two-layer Feed-Forward-Network.'''
 
-    def __init__(self, dim, adj=None, dropout=0.1):
+    def __init__(self, dim, dropout=0.1):
         super(PointwiseMLP, self).__init__()
         self.w_1 = BottleLinear(dim, dim)
         self.w_2 = BottleLinear(dim, dim)
