@@ -52,9 +52,11 @@ daytime_train = Variable(daytime_train)
 daytime_valid = Variable(daytime_valid, volatile=True)
 daytime_test = Variable(daytime_test, volatile=True)
 
-def recover_flow(diff, flow):
-    flow_cum = flow[:, args.past:].unsqueeze(-2) + diff.cumsum(-2)
-    return flow_cum * flow_std + flow_mean
+def recover_flow(flow):
+    return flow * flow_std + flow_mean
+
+def recover_diff(diffs, flow):
+    return recover_flow(flow[:, args.past:].unsqueeze(-2) + diffs.cumsum(-2))
 
 
 # MODEL
@@ -92,7 +94,7 @@ def train_model():
         out = model(diff, daytime)
         if type(out) is tuple:
             out, out_ = out[0], out[1:]
-        out = recover_flow(out, flow)
+        out = recover_diff(out, flow)
         loss = criterion(out, tgt)
         loss_train.append(loss.data[0])
         # if args.reg and hasattr(model, 'regularizer'):
@@ -113,7 +115,7 @@ def valid_model():
     out = model(diff, daytime)
     if type(out) is tuple:
         out = out[0]
-    out = recover_flow(out, flow)
+    out = recover_diff(out, flow)
     loss = criterion(out, tgt).data[0]
     return loss
 
@@ -132,7 +134,7 @@ def test_model():
     if type(out) is tuple:
         out, out_ = out[0], out[1:]
         ret_more = True
-    out = recover_flow(out, flow)
+    out = recover_diff(out, flow)
     loss = [percent_err(out[:, :, i], tgt[:, :, i])
             for i in range(args.future)]
     if ret_more:

@@ -227,12 +227,12 @@ class EnTempAttn(ModelBase):
     def __init__(self, args):
         super(EnTempAttn, self).__init__(args)
         assert not args.submodel.startswith('Ens')
-        self.count_submodel = args.count_submodel
+        self.subnum = args.subnum
         self.models = nn.ModuleList([
             globals()[args.submodel](args)
-            for _ in range(self.count_submodel)])
+            for _ in range(self.subnum)])
         self.attn = BottleLinear(args.day_size + args.time_size,
-                                 self.count_submodel)
+                                 self.subnum)
         self.softmax = nn.Softmax(2)
 
     def forward(self, inp, daytime):
@@ -241,18 +241,18 @@ class EnTempAttn(ModelBase):
         batch, length, dim = inp.size()
         out = []
         weight = []
-        for i in range(self.count_submodel):
+        for i in range(self.subnum):
             out_i = self.models[i](inp, daytime)
             out_i, weight_i = out_i[0], out_i[1]
             out.append(out_i)
             weight.append(weight_i)
         attn = self.softmax(self.attn(embedding[:, self.past:].contiguous()))
         length -= self.past
-        out = torch.stack(out, 2).view(batch * length, self.count_submodel, -1)
-        attn = attn.view(batch * length, 1, self.count_submodel)
+        out = torch.stack(out, 2).view(batch * length, self.subnum, -1)
+        attn = attn.view(batch * length, 1, self.subnum)
         out = torch.bmm(attn, out).view(batch, length, self.future, self.dim)
         weight = torch.stack(weight, 0)
-        attn = attn.view(batch, length, self.count_submodel)
+        attn = attn.view(batch, length, self.subnum)
         return out, attn, weight
 
     def regularizer(self, *params):

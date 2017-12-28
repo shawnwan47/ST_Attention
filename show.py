@@ -11,6 +11,15 @@ from Consts import MODEL_PATH, FIG_PATH
 
 
 # LOAD DATA
+args = argparse.ArgumentParser()
+Args.add_gpu(args)
+Args.add_data(args)
+Args.add_loss(args)
+Args.add_optim(args)
+Args.add_run(args)
+Args.add_model(args)
+args = args.parse_args()
+Args.update_args(args)
 
 
 def get_outs(model):
@@ -18,7 +27,7 @@ def get_outs(model):
     for i in range(10):
         try:
             ret.append(np.load(
-                MODEL_PATH + model + '_out_0_' + str(i) + '.npy'))
+                MODEL_PATH + model + '_out_' + str(i) + '.npy'))
         except FileNotFoundError:
             return ret
 
@@ -90,9 +99,9 @@ def plot_dilated():
 if __name__ == '__main__':
     plt.clf()
     reload(Visual)
-    modelname = 'SpatialAttnHead4Hid64Future4'
-    temporal = 'TemporalAttnHead4Hid256Future4'
-    # out = get_outs('GraphAttnHead4Future4')
-    out = get_outs(temporal)
-    plot_attn_head_day(out[0], temporal)
+    modelname = 'EnTempAttnHead4Head4addLay1TimeFuture4'
+    out = get_outs(modelname)
+    attn, weight = out
+    weight = weight.squeeze()  # model x day x head x time x time
+    # plot_attn_head_day(out[0], temporal)
     # plot_attn_head_time_day(out[0], modelname)
