@@ -11,35 +11,20 @@ from UtilClass import *
 class Attn(nn.Module):
     def __init__(self, dim, attn_type, dropout=0.1):
         super(Attn, self).__init__()
-        assert attn_type in ['add', 'mul', 'mlp']
+        assert attn_type in ['dot', 'add', 'general', 'mlp']
         self.dim = dim
-        self.tanh = nn.Tanh()
         self.dropout = nn.Dropout(dropout)
         self.softmax = nn.Softmax(2)
         self.attn_type = attn_type
-        if attn_type == 'add':
+        if attn_type == 'general':
+            self.w = BottleLinear(dim, dim, bias=False)
+        elif attn_type == 'add':
             self.u = BottleLinear(dim, 1, bias=False)
             self.v = BottleLinear(dim, 1, bias=False)
-        elif attn_type == 'mul':
-            self.w = BottleLinear(dim, dim, bias=False)
         elif attn_type == 'mlp':
             self.u = BottleLinear(dim, dim, bias=False)
             self.v = BottleLinear(dim, dim, bias=False)
             self.a = BottleLinear(dim, 1, bias=False)
-
-    def score(self, query, context):
-        batch, length, dim = query.size()
-        query = query.contiguous()
-        if self.attn_type == 'mul':
-            key = self.w(context).transpose(1, 2)
-            score = torch.bmm(query, key) / math.sqrt(self.dim)
-        else:
-            query = self.u(query).unsqueeze(1).expand(batch, length, length, -1)
-            context = self.v(context).unsqueeze(2).expand(batch, length, length, -1)
-            score = query + context
-            if self.attn_type == 'mlp':
-                score = self.a(self.dropout(self.tanh(score)).view(-1, dim))
-        return score.view(batch, length, length)
 
     def forward(self, query, context, mask=None):
         score = self.score(query, context)
@@ -48,6 +33,21 @@ class Attn(nn.Module):
         attn = self.softmax(score)
         out = torch.bmm(attn, context)
         return out, attn
+
+    def score(self, query, context):
+        batch, length, dim = query.size()
+        query = query.contiguous()
+        if self.attn_type in ['dot', 'general']:
+            if self.attn_type == 'general':
+                context = self.w(context).transpose(1, 2)
+            score = torch.bmm(query, context) / math.sqrt(self.dim)
+        else:
+            query = self.u(query).unsqueeze(1).expand(batch, length, length, -1)
+            context = self.v(context).unsqueeze(2).expand(batch, length, length, -1)
+            score = query + context
+            if self.attn_type == 'mlp':
+                score = self.a(self.dropout(F.tanh(score)).view(-1, dim))
+        return score.view(batch, length, length)
 
 
 class MergeAttn(Attn):
@@ -68,15 +68,17 @@ class MergeAttn(Attn):
 
 
 class LinearAttn(Attn):
-    def __init__(self, in_features, out_features, attn_type, dropout=0.1):
+    def __init__(self, in_features, out_features, attn_type='dot', dropout=0.1):
         super(LinearAttn, self).__init__(out_features, attn_type, dropout)
-        self.linear_key = BottleLinear(in_features, out_features, bias=False)
-        self.linear_val = BottleLinear(in_features, out_features, bias=False)
+        self.linear_q = BottleLinear(in_features, out_features, bias=False)
+        self.linear_k = BottleLinear(in_features, out_features, bias=False)
+        self.linear_v = BottleLinear(in_features, out_features, bias=False)
 
-    def forward(self, inp, mask=None):
-        key = self.linear_key(inp)
-        val = self.linear_val(inp)
-        score = self.score(key)
+    def forward(self, query, context, mask=None):
+        query = self.linear_q(query)
+        key = self.linear_k(context)
+        val = self.linear_v(context)
+        score = self.score(query, key)
         if mask is not None:
             score.data.masked_fill_(mask, -float('inf'))
         attn = self.softmax(score)
@@ -103,7 +105,6 @@ class HeadAttn(nn.Module):
         self.w_q = BottleLinear(dim, dim, bias=False)
         self.softmax = nn.Softmax(2)
         self.dropout = nn.Dropout(dropout)
-        self.layer_norm = BottleLayerNorm(dim - pad)
 
     def forward(self, inp, mask=None):
         '''
@@ -136,13 +137,10 @@ class HeadAttn(nn.Module):
         attn = self.softmax(score.view(-1, length, length))
 
         out = torch.bmm(self.dropout(attn), value)
-        out = unshape_projection(out)
-        # out = self.dropout(out) + inp
-        out = out + inp
+        out = self.dropout(unshape_projection(out))
         attn = attn.view(batch, self.head, length, length)
         if self.pad[1]:
             out = out[:, :, self.pad[0]:-self.pad[1]].contiguous()
-        # out = self.layer_norm(out)
         return out, attn
 
 

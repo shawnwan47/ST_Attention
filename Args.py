@@ -50,7 +50,7 @@ def add_run(args):
 def add_model(args):
     args.add_argument('-model', type=str, default='HeadAttn')
     args.add_argument('-submodel', type=str, default='Linear')
-    args.add_argument('-count_submodel', type=int, default=4)
+    args.add_argument('-subnum', type=int, default=4)
     # general
     args.add_argument('-input_size', type=int)
     args.add_argument('-output_size', type=int)
@@ -59,7 +59,7 @@ def add_model(args):
     args.add_argument('-dropout', type=float, default=0.1)
     # regularization
     args.add_argument('-reg', action='store_true')
-    args.add_argument('-reg_weight', type=float, default=5e-5)
+    args.add_argument('-reg_weight', type=float, default=0.1)
     # Day Time
     args.add_argument('-daytime', action='store_true')
     args.add_argument('-day_size', type=int, default=16)
@@ -70,7 +70,7 @@ def add_model(args):
     # Attention
     args.add_argument('-attn_type', type=str, default='add',
                       choices=['add', 'mul', 'mlp'])
-    args.add_argument('-head', type=int, default=1)
+    args.add_argument('-head', type=int, default=4)
     args.add_argument('-merge_type', type=str, default='add',
                       choices=['add', 'cat'])
     args.add_argument('-dilated', action='store_true')
@@ -103,14 +103,14 @@ def _dataset(args):
 
 
 def _model(args):
-    if args.model == 'Attention':
-        args.attn = False
     # dilations for up to 4 layers
     args.dilation = [1, 8, args.daily_times, args.daily_times * 7]
+    if args.model.startswith('En'):
+        args.daytime = True
     args.input_size = args.dim
-    args.output_size = args.dim * args.future
     if args.daytime:
         args.input_size += args.day_size + args.time_size
+    args.output_size = args.dim * args.future
 
 
 def update_args(args):
@@ -121,24 +121,24 @@ def update_args(args):
 def modelname(args):
     # MODEL
     path = args.model
+    if args.model.startswith('En'):
+        path += str(args.subnum) + args.submodel
     if 'RNN' in args.model:
         path += args.rnn_type
     if args.model == 'RNNAttn':
         path += args.attn_type
+    if args.reg:
+        path += 'Reg' + str(args.reg_weight)
     # Attn
-    if args.model == 'HeadAttn':
+    if 'Attn' in args.model:
         path += 'Head' + str(args.head)
-    if args.model == 'TemporalAttn':
         path += args.attn_type
-        path += 'Dilated' if args.dilated else ''
-        path += 'Head' + str(args.head)
     # General
     path += 'Lay' + str(args.num_layers)
-    # path += 'Hid' + str(args.hidden_size)
     # Data
     if args.adj:
         path += 'adj'
     if args.daytime:
-        path += 'Daytime'
+        path += 'Time'
     path += 'Future' + str(args.future)
     return path

@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
+from torch.nn import functional as F
 
 import Layers
 from Attention import Attn
 
-from Utils import get_mask_trim, get_mask_dilated, aeq, load_adj
+import Utils
 from UtilClass import *
 from Regularizer import *
 
@@ -20,42 +21,44 @@ class ModelBase(nn.Module):
         self.output_size = args.output_size
         self.num_layers = args.num_layers
         self.dropout = nn.Dropout(args.dropout)
-        self.embedding_day = nn.Embedding(7, args.day_size)
-        self.embedding_time = nn.Embedding(args.daily_times, args.time_size)
+        self.embed_day = nn.Embedding(7, args.day_size)
+        self.embed_time = nn.Embedding(args.daily_times, args.time_size)
         self.adj = args.adj
 
     def forward(self, inp, daytime=None):
         if daytime is not None:
-            daytime = self.embedding(daytime)
+            daytime = self.embed(daytime)
             return torch.cat((inp, daytime), -1)
         return inp
 
-    def embedding(self, daytime):
+    def embed(self, daytime):
         if daytime is not None:
-            day = self.dropout(self.embedding_day(daytime[:, :, 0]))
-            time = self.dropout(self.embedding_time(daytime[:, :, 1]))
+            day = self.dropout(self.embed_day(daytime[:, :, 0]))
+            time = self.dropout(self.embed_time(daytime[:, :, 1]))
             return torch.cat((day, time), -1)
         return None
 
 
-class TemporalLinear(ModelBase):
+class TempLinear(ModelBase):
     def __init__(self, args):
-        super(TemporalLinear, self).__init__(args)
-        self.linear = BottleLinear(self.past, self.future)
+        super(TempLinear, self).__init__(args)
+        self.temporal = BottleLinear(self.past, self.future)
 
     def forward(self, inp, daytime=None):
         out = []
         for i in range(inp.size(1) - self.past):
             inp_i = inp[:, i:i + self.past].transpose(1, 2).contiguous()
-            out.append(self.linear(inp_i).transpose(1, 2))
+            out.append(self.temporal(inp_i).transpose(1, 2))
         out = torch.stack(out, 1)
-        return out, self.linear.weight
+        return out, self.temporal.weight
+
+    def pack_weight(self, weight):
+        return weight.view(1, -1)
 
 
-class STLinear(ModelBase):
+class STLinear(TempLinear):
     def __init__(self, args):
         super(STLinear, self).__init__(args)
-        self.temporal = BottleLinear(self.past, self.future)
         self.spatial = BottleSparseLinear(self.dim)
 
     def forward(self, inp, daytime=None):
@@ -68,7 +71,7 @@ class STLinear(ModelBase):
             out_t = self.temporal(inp_t).transpose(1, 2)
             out.append(out_t)
         out = torch.stack(out, 1)
-        return out, self.temporal.weight, self.spatial.weight
+        return out, self.temporal.weight
 
 
 class RNN(ModelBase):
@@ -97,7 +100,7 @@ class RNNAttn(RNN):
     def __init__(self, args):
         super(RNNAttn, self).__init__(args)
         self.attn = Attn(self.hidden_size, args.attn_type, args.dropout)
-        mask = get_mask_trim(args.input_length, self.past)
+        mask = Utils.get_mask_trim(args.input_length, self.past)
         self.register_buffer('mask', mask)
 
     def forward(self, inp, daytime=None):
@@ -114,16 +117,11 @@ class HeadAttn(ModelBase):
     def __init__(self, args):
         super(HeadAttn, self).__init__(args)
         self.head = args.head
-        self.dilated = args.dilated
-        self.dilation = args.dilation[:self.num_layers + 1]
         self.layers = nn.ModuleList([Layers.HeadAttnLayer(
             self.input_size, self.head, args.dropout)
             for _ in range(self.num_layers)])
-        self.linear_out = BottleLinear(self.dim, self.dim * self.future)
-        if self.dilated:
-            mask = get_mask_dilated(args.input_length, self.dilation)
-        else:
-            mask = get_mask_trim(args.input_length, self.past)
+        self.linear_out = BottleLinear(self.input_size, self.dim * self.future)
+        mask = Utils.get_mask_trim(args.input_length, self.past)
         self.register_buffer('mask', mask)
 
     def forward(self, inp, daytime=None):
@@ -131,37 +129,48 @@ class HeadAttn(ModelBase):
         batch, length, dim = out.size()
         attn = []
         for i in range(self.num_layers):
-            mask = self.mask[i] if self.dilated else self.mask
-            out, attn_i = self.layers[i](out, mask[:length, :length])
+            out, attn_i = self.layers[i](out, self.mask[:length, :length])
             attn.append(attn_i)
         attn = torch.stack(attn, 1)
         out = out[:, self.past:].contiguous()
-        out = self.linear_out(out).view(batch, -1, self.future, dim)
-        out = out[:, :, :, :self.dim] + inp[:, self.past:].unsqueeze(-2)
+        out = self.linear_out(out).view(batch, -1, self.future, self.dim)
         return out, attn
 
+    def pack_weight(self, weight):
+        return weight.sum(1).view(-1, weight.size(-1))
 
-class TemporalAttn(ModelBase):
+
+class TempAttn(ModelBase):
     def __init__(self, args):
-        super(TemporalAttn, self).__init__(args)
-        self.attn = Layers.AttnLayer(
-            self.input_size, self.hidden_size, attn_type=args.attn_type,
-            head=args.head, merge='cat', dropout=args.dropout
-        )
-        self.dropout = nn.Dropout(args.dropout)
-        self.linear = BottleLinear(args.head * self.hidden_size,
-                                   self.future * self.dim)
-        mask = get_mask_trim(args.input_length, self.past)
+        super(TempAttn, self).__init__(args)
+        dim, self.pad = Utils.pad_head(self.input_size, args.head)
+        hidden_size = dim // args.head
+        self.layers = nn.ModuleList([
+            Layers.AttnLayer(
+                dim, hidden_size, attn_type=args.attn_type,
+                head=args.head, merge='cat', dropout=args.dropout
+            ) for _ in range(self.num_layers)
+        ])
+        self.linear = BottleLinear(dim, self.future * self.dim)
+        mask = Utils.get_mask_trim(args.input_length, self.past)
         self.register_buffer('mask', mask)
 
     def forward(self, inp, daytime=None):
-        inp = super(TemporalAttn, self).forward(inp, daytime)
-        batch, length, _ = inp.size()
-        out, attn = self.attn(inp, self.mask[:length, :length])
-        out = self.dropout(out[:, self.past:]).contiguous()
-        out = self.linear(out)
-        out = out.view(batch, length - self.past, self.future, -1)
+        out = super(TempAttn, self).forward(inp, daytime)
+        if self.pad[1]:
+            out = F.pad(out, self.pad)
+        batch, length, _ = out.size()
+        attn = []
+        for i in range(self.num_layers):
+            out, attn_i = self.layers[i](out, self.mask[:length, :length])
+            attn.append(attn_i)
+        out = self.linear(out[:, self.past:].contiguous())
+        out = out.view(batch, -1, self.future, self.dim)
+        attn = torch.stack(attn, 1)
         return out, attn
+
+    def pack_weight(self, weight):
+        return weight.sum(1).sum(1).view(-1, weight.size(-1))
 
 
 class SpatialAttn(ModelBase):
@@ -171,14 +180,14 @@ class SpatialAttn(ModelBase):
             self.past, self.hidden_size, attn_type=args.attn_type,
             head=args.head, merge='mean', dropout=args.dropout)
         self.linear = BottleLinear(hidden_size, self.future)
-        self.mask = load_adj() if args.adj else None
+        self.mask = Utils.load_adj() if args.adj else None
 
     def forward(self, inp, daytime=None):
         batch, length, dim = inp.size()
         out, attn = [], []
         for i in range(length - self.past):
             out_i = inp[:, i:i + self.past].transpose(1, 2).contiguous()
-            out_i, attn_i = self.attn(out_i, self.mask)
+            out_i, attn_i = self.attn(out_i, out_i, self.mask)
             out.append(out_i.transpose(1, 2))
             attn.append(attn_i)
         out = torch.stack(out, 1)
@@ -196,7 +205,7 @@ class SpatialAttn2(ModelBase):
             args.head * args.hidden_size, self.future, attn_type=args.attn_type,
             head=1, merge='mean', dropout=args.dropout)
         self.adj = args.adj
-        self.mask = load_adj() if args.adj else None
+        self.mask = Utils.load_adj() if args.adj else None
 
     def forward(self, inp, daytime=None):
         batch, length, dim = inp.size()
@@ -214,10 +223,10 @@ class SpatialAttn2(ModelBase):
         return out, attn1, attn2, weight1, weight2
 
 
-class EnsembleAttn(ModelBase):
+class EnTempAttn(ModelBase):
     def __init__(self, args):
-        super(EnsembleAttn, self).__init__(args)
-        assert args.submodel is not 'EnsembleAttn'
+        super(EnTempAttn, self).__init__(args)
+        assert not args.submodel.startswith('Ens')
         self.count_submodel = args.count_submodel
         self.models = nn.ModuleList([
             globals()[args.submodel](args)
@@ -228,16 +237,16 @@ class EnsembleAttn(ModelBase):
 
     def forward(self, inp, daytime):
         assert daytime is not None
-        daytime = super(EnsembleAttn, self).embedding(daytime)
+        embedding = super(EnTempAttn, self).embed(daytime)
         batch, length, dim = inp.size()
         out = []
         weight = []
         for i in range(self.count_submodel):
-            out_i = self.models[i](inp, daytime=None)
+            out_i = self.models[i](inp, daytime)
             out_i, weight_i = out_i[0], out_i[1]
             out.append(out_i)
             weight.append(weight_i)
-        attn = self.softmax(self.attn(daytime[:, self.past:].contiguous()))
+        attn = self.softmax(self.attn(embedding[:, self.past:].contiguous()))
         length -= self.past
         out = torch.stack(out, 2).view(batch * length, self.count_submodel, -1)
         attn = attn.view(batch * length, 1, self.count_submodel)
@@ -248,5 +257,9 @@ class EnsembleAttn(ModelBase):
 
     def regularizer(self, *params):
         attn, weight = params
-        orth = orthogonal(weight.view(self.count_submodel, -1))
+        A = []
+        for i in range(weight.size(0)):
+            A.append(self.models[0].pack_weight(weight[i]))
+        A = torch.stack(A, 1)
+        orth = orthogonal(A)
         return orth

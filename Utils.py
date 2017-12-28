@@ -127,6 +127,11 @@ def aeq(*args):
         "Not all arguments have the same value: " + str(args)
 
 
+def pad_head(dim, head):
+    pad = head - dim % head
+    dim += pad
+    return dim, (pad // 2, pad // 2 + pad % 2)
+
 def get_mask_trim(length, past):
     attn_shape = (length, length)
     mask_past = np.tril(np.ones(attn_shape), k=-past).astype('uint8')

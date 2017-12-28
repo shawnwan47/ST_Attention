@@ -37,24 +37,27 @@ class RNNLayer(nn.Module):
 
 class AttnLayer(nn.Module):
     def __init__(self, in_features, out_features, head=1,
-                 attn_type='mul', merge_type='add',
-                 merge='mean', dropout=0.2):
+                 attn_type='dot', merge_type='add',
+                 merge='cat', dropout=0.1):
         super(AttnLayer, self).__init__()
         self.head = head
         self.merge = merge
         self.linear = BottleLinear(in_features, out_features, bias=False)
+        # self.attn = nn.ModuleList([
+        #     MergeAttn(out_features, attn_type, merge_type, dropout)
+        #     for _ in range(head)])
         self.attn = nn.ModuleList([
-            MergeAttn(out_features, attn_type, merge_type, dropout)
+            Attn(out_features, attn_type, dropout)
             for _ in range(head)])
 
     def forward(self, inp, mask=None):
         out, attn = [], []
         inp = self.linear(inp)
         for i in range(self.head):
-            out_i, attn_i = self.attn[i](inp, mask)
+            out_i, attn_i = self.attn[i](inp, inp, mask)
             out.append(out_i)
             attn.append(attn_i)
-        attn = torch.stack(attn, 0)
+        attn = torch.stack(attn, 1)
         if self.merge == 'cat':
             out = torch.cat(out, -1)
         elif self.merge == 'mean':
@@ -63,12 +66,10 @@ class AttnLayer(nn.Module):
 
 
 class HeadAttnLayer(nn.Module):
-    def __init__(self, dim, head, dropout=0.2):
+    def __init__(self, dim, head, dropout=0.1):
         super(HeadAttnLayer, self).__init__()
         self.attn = HeadAttn(dim, head=head, dropout=dropout)
-        self.feed_forward = PointwiseMLP(dim, dropout=dropout)
 
     def forward(self, inp, mask):
         out, attn = self.attn(inp)
-        out = self.feed_forward(out)
         return out, attn
