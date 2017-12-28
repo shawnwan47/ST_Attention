@@ -9,6 +9,10 @@ def load_adj():
     return torch.ByteTensor(Data.load_adj()).cuda() == 0
 
 
+def denormalize(flow, flow_mean, flow_std):
+    return flow * flow_std + flow_mean
+
+
 def load_data_highway(args):
     flow, diff, flow_mean, flow_std, daytime = Data.load_flow_highway()
     flow = torch.FloatTensor(flow).cuda()
@@ -117,9 +121,6 @@ def load_data_metro(args):
 
 
 def aeq(*args):
-    """
-    Assert all arguments have the same value
-    """
     arguments = (arg for arg in args)
     first = next(arguments)
     assert all(arg == first for arg in arguments), \
@@ -154,11 +155,6 @@ def get_mask_dilated(length, dilations):
     return torch.stack(masks, 0)
 
 
-def denormalize(flow, flow_mean, flow_std):
-    return flow * flow_std + flow_mean
-
-
-
 def torch2npsave(filename, data):
     def _var2np(x):
         return x.data.cpu().numpy()
@@ -168,12 +164,3 @@ def torch2npsave(filename, data):
             torch2npsave(filename + '_' + str(i), d)
     else:
         np.save(filename, _var2np(data))
-
-
-def Frobenius(mat):
-    size = mat.size()
-    if len(size) == 3:  # batched matrix
-        ret = (torch.sum(torch.sum((mat ** 2), 1), 2).squeeze() + 1e-10) ** 0.5
-        return torch.sum(ret) / size[0]
-    else:
-        raise Exception('dim sould be 3!')

@@ -91,10 +91,12 @@ def train_model():
         daytime = daytime_train[idx] if args.daytime else None
         out = model(diff, daytime)
         if type(out) is tuple:
-            out, attn = out[0], out[1]
+            out, out_ = out[0], out[1:]
         out = recover_flow(out, flow)
         loss = criterion(out, tgt)
         loss_train.append(loss.data[0])
+        if type(out) is tuple and args.reg:
+            loss += args.reg_weight * model.regularizer(out_)
         loss.backward()
         clip_grad_norm(model.parameters(), args.max_grad_norm)
         optimizer.step()

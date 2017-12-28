@@ -50,7 +50,7 @@ class SparseLinear(nn.Linear):
 
     def forward(self, inp):
         if self.adj is not None:
-            sparse_weight = self.weight.data.masked_fill(self.adj, 0)
+            sparse_weight = self.weight.data.masked_fill_(self.adj, 0)
             self.weight = nn.Parameter(sparse_weight)
         return super(SparseLinear, self).forward(inp)
 
@@ -65,3 +65,19 @@ class BottleSparseLinear(Bottle, SparseLinear):
 
 class BottleLayerNorm(Bottle, LayerNorm):
     pass
+
+
+class PointwiseMLP(nn.Module):
+    ''' A two-layer Feed-Forward-Network.'''
+
+    def __init__(self, dim, dropout=0.1):
+        super(PointwiseMLP, self).__init__()
+        self.w_1 = BottleLinear(dim, dim)
+        self.w_2 = BottleLinear(dim, dim)
+        self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(dropout)
+        self.layer_norm = BottleLayerNorm(dim)
+
+    def forward(self, inp):
+        out = self.dropout(self.w_2(self.relu(self.w_1(inp))))
+        return self.layer_norm(out + inp)

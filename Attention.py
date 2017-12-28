@@ -27,26 +27,26 @@ class Attn(nn.Module):
             self.v = BottleLinear(dim, dim, bias=False)
             self.a = BottleLinear(dim, 1, bias=False)
 
-    def score(self, inp):
-        batch, length, dim = inp.size()
-        inp = inp.contiguous()
+    def score(self, query, context):
+        batch, length, dim = query.size()
+        query = query.contiguous()
         if self.attn_type == 'mul':
-            key = self.w(inp).transpose(1, 2)
-            score = torch.bmm(inp, key) / math.sqrt(self.dim)
+            key = self.w(context).transpose(1, 2)
+            score = torch.bmm(query, key) / math.sqrt(self.dim)
         else:
-            query = self.u(inp).unsqueeze(1).expand(batch, length, length, -1)
-            key = self.v(inp).unsqueeze(2).expand(batch, length, length, -1)
-            score = query + key
+            query = self.u(query).unsqueeze(1).expand(batch, length, length, -1)
+            context = self.v(context).unsqueeze(2).expand(batch, length, length, -1)
+            score = query + context
             if self.attn_type == 'mlp':
                 score = self.a(self.dropout(self.tanh(score)).view(-1, dim))
         return score.view(batch, length, length)
 
-    def forward(self, inp, mask=None):
-        score = self.score(inp)
+    def forward(self, query, context, mask=None):
+        score = self.score(query, context)
         if mask is not None:
             score.data.masked_fill_(mask, -float('inf'))
         attn = self.softmax(score)
-        out = torch.bmm(attn, inp)
+        out = torch.bmm(attn, context)
         return out, attn
 
 
@@ -57,13 +57,13 @@ class MergeAttn(Attn):
         if merge_type == 'cat':
             self.linear = BottleLinear(2 * dim, dim)
 
-    def forward(self, inp):
-        out, attn = super(MergeAttn, self).forward(inp)
-        if self.merge_type == 'cat':
-            out = torch.cat((inp, out), -1)
-            out = self.linear(self.dropout(out))
+    def forward(self, query, context, mask):
+        out, attn = super(MergeAttn, self).forward(query, context, mask)
         if self.merge_type == 'add':
-            out = self.dropout(out) + inp
+            out = self.dropout(out) + query
+        elif self.merge_type == 'cat':
+            out = torch.cat((query, out), -1)
+            out = self.linear(self.dropout(out))
         return out, attn
 
 

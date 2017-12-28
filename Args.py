@@ -35,7 +35,7 @@ def add_optim(args):
     args.add_argument('-lr', type=float, default=0.1)
     args.add_argument('-patience', type=int, default=10)
     args.add_argument('-lr_min', type=float, default=1e-5)
-    args.add_argument('-weight_decay', type=float, default=1e-5)
+    args.add_argument('-weight_decay', type=float, default=5e-5)
     args.add_argument('-max_grad_norm', type=float, default=1)
 
 
@@ -48,14 +48,19 @@ def add_run(args):
 
 
 def add_model(args):
-    args.add_argument('-model', type=str, default='LinearAttn')
+    args.add_argument('-model', type=str, default='HeadAttn')
+    args.add_argument('-submodel', type=str, default='Linear')
+    args.add_argument('-count_submodel', type=int, default=4)
     # general
     args.add_argument('-input_size', type=int)
     args.add_argument('-output_size', type=int)
     args.add_argument('-hidden_size', type=int, default=256)
     args.add_argument('-num_layers', type=int, default=1)
     args.add_argument('-dropout', type=float, default=0.1)
-    # Day Time size
+    # regularization
+    args.add_argument('-reg', action='store_true')
+    args.add_argument('-reg_weight', type=float, default=5e-5)
+    # Day Time
     args.add_argument('-daytime', action='store_true')
     args.add_argument('-day_size', type=int, default=16)
     args.add_argument('-time_size', type=int, default=64)
@@ -65,10 +70,11 @@ def add_model(args):
     # Attention
     args.add_argument('-attn_type', type=str, default='add',
                       choices=['add', 'mul', 'mlp'])
-    args.add_argument('-value_proj', action='store_true')
+    args.add_argument('-head', type=int, default=1)
+    args.add_argument('-merge_type', type=str, default='add',
+                      choices=['add', 'cat'])
     args.add_argument('-dilated', action='store_true')
     args.add_argument('-dilation', type=int, default=[], nargs='+')
-    args.add_argument('-head', type=int, default=4)
 
 
 def _dataset(args):
