@@ -96,12 +96,42 @@ def plot_dilated():
                         layer -= 1
 
 
+def array_imshow(im, path_im, func, dim=3, mean=False):
+    assert dim < 4 and dim >= 3
+    if len(im.shape) == dim:
+        if not mean:
+            for i in range(im.shape[0]):
+                getattr(Visual, func)(im[i, -92:], args)
+                Visual.saveclf(path_im + str(i))
+        else:
+            while len(mean.shape) > 2:
+                im = im.mean(0)
+            getattr(Visual, func)(im[-92:], args)
+            Visual.saveclf(path_im + 'mean')
+    else:
+        for i in range(im.shape[0]):
+            array_imshow(im[i], path_im + str(i) + '/', func)
+
+
+def array_mean(arr, keepdims):
+    pass
+
+
 if __name__ == '__main__':
     plt.clf()
     reload(Visual)
-    modelname = 'EnTempAttnHead4Head4addLay1TimeFuture4'
-    out = get_outs(modelname)
-    attn, weight = out
-    weight = weight.squeeze()  # model x day x head x time x time
-    # plot_attn_head_day(out[0], temporal)
-    # plot_attn_head_time_day(out[0], modelname)
+    modelnames = ['EnTempAttn8HeadAttnHead1addLay1TimeFuture4',
+                  'EnTempAttn16HeadAttnHead1addLay1TimeFuture4']
+
+    for modelname in modelnames:
+        path_model = FIG_PATH + modelname + '/'
+        out = get_outs(modelname)
+        attn, weight = out
+        weight = weight.squeeze()
+        array_imshow(attn, path_model + 'attn/', 'show_attn_merge', 3)
+        # array_imshow(weight, path_model + 'weight/', 'show_linear_weight', 3)
+        array_imshow(weight, path_model + 'weight/', 'show_attn', 3)
+
+        for future in range(weight.shape[1]):
+            attn_merge = np.matmul(attn, weight)
+            array_imshow(attn_merge, path_model + 'merge/' + str(future) + '/', 'show_attn', 3)

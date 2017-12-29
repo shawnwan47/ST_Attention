@@ -39,15 +39,31 @@ class Attn(nn.Module):
         query = query.contiguous()
         if self.attn_type in ['dot', 'general']:
             if self.attn_type == 'general':
-                context = self.w(context).transpose(1, 2)
-            score = torch.bmm(query, context) / math.sqrt(self.dim)
+                context = self.w(context)
+            score = torch.bmm(query, context.transpose(1, 2))
+            score /= math.sqrt(self.dim)
         else:
             query = self.u(query).unsqueeze(1).expand(batch, length, length, -1)
             context = self.v(context).unsqueeze(2).expand(batch, length, length, -1)
             score = query + context
             if self.attn_type == 'mlp':
-                score = self.a(self.dropout(F.tanh(score)).view(-1, dim))
+                score = self.a(F.tanh(score).view(batch, length, length))
         return score.view(batch, length, length)
+
+
+class MixAttn(nn.Module):
+    def __init__(self, dim, attn_types, dropout=0.1):
+        super(MixAttn, self).__init__()
+        self.attn = nn.ModuleList([Attn(dim, attn_type, dropout)
+                                   for attn_type in attn_types])
+        self.softmax = nn.Softmax(2)
+
+    def forward(self, query, context, mask=None):
+        score = [attn.score(query, context) for attn in self.attn]
+        score = torch.sum(torch.stack(score), 0)
+        if mask is not None:
+            score.masked_fill_(mask, -float('inf'))
+        return self.softmax(score)
 
 
 class MergeAttn(Attn):
@@ -95,16 +111,16 @@ class HeadAttn(nn.Module):
                 HeadAttn, must be divisible by head.
         '''
         pad = head - dim % head
-        dim += pad
         super(HeadAttn, self).__init__()
         self.head = head
-        self.dim = dim
+        self.dim = dim + pad
         self.pad = (pad // 2, pad // 2 + pad % 2)
-        self.w_k = BottleLinear(dim, dim, bias=False)
-        self.w_v = BottleLinear(dim, dim, bias=False)
-        self.w_q = BottleLinear(dim, dim, bias=False)
+        self.w_k = BottleLinear(self.dim, self.dim, bias=False)
+        self.w_v = BottleLinear(self.dim, self.dim, bias=False)
+        self.w_q = BottleLinear(self.dim, self.dim, bias=False)
         self.softmax = nn.Softmax(2)
         self.dropout = nn.Dropout(dropout)
+        self.layer_norm = BottleLayerNorm(dim)
 
     def forward(self, inp, mask=None):
         '''
@@ -139,8 +155,10 @@ class HeadAttn(nn.Module):
         out = torch.bmm(self.dropout(attn), value)
         out = self.dropout(unshape_projection(out))
         attn = attn.view(batch, self.head, length, length)
+        out = out + inp
         if self.pad[1]:
             out = out[:, :, self.pad[0]:-self.pad[1]].contiguous()
+        out = self.layer_norm(out)
         return out, attn
 
 

@@ -69,7 +69,13 @@ class HeadAttnLayer(nn.Module):
     def __init__(self, dim, head, dropout=0.1):
         super(HeadAttnLayer, self).__init__()
         self.attn = HeadAttn(dim, head=head, dropout=dropout)
+        self.feedforward = PointwiseMLP(dim, dropout)
 
     def forward(self, inp, mask):
         out, attn = self.attn(inp)
+        out = self.feedforward(out)
         return out, attn
+
+
+class GenMat(nn.Module):
+    pass

@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 import Layers
-from Attention import Attn
+import Attention
 
 import Utils
 from UtilClass import *
@@ -17,26 +17,33 @@ class ModelBase(nn.Module):
         self.future = args.future
         self.dim = args.dim
         self.input_size = args.input_size
-        self.hidden_size = args.hidden_size
         self.output_size = args.output_size
         self.num_layers = args.num_layers
         self.dropout = nn.Dropout(args.dropout)
-        self.embed_day = nn.Embedding(7, args.day_size)
-        self.embed_time = nn.Embedding(args.daily_times, args.time_size)
-        self.adj = args.adj
+        self.daytime_size = args.daytime_size
+        self.station_size = args.station_size
+        if args.daytime:
+            self.embed_day = nn.Embedding(7, args.day_size)
+            self.embed_time = nn.Embedding(args.daily_times, args.time_size)
+            self.embed_station = nn.Embedding(args.dim, args.station_size)
 
-    def forward(self, inp, daytime=None):
-        if daytime is not None:
-            daytime = self.embed(daytime)
-            return torch.cat((inp, daytime), -1)
-        return inp
-
-    def embed(self, daytime):
+    def embed_daytime(self, daytime):
         if daytime is not None:
             day = self.dropout(self.embed_day(daytime[:, :, 0]))
             time = self.dropout(self.embed_time(daytime[:, :, 1]))
             return torch.cat((day, time), -1)
         return None
+
+    def embed_station(self, *sizes):
+        idx = torch.arange(self.dim).type(torch.LongTensor)
+        station = self.dropout(self.embed_station(idx))
+        for _ in range(len(sizes)):
+            station = station.unsqueeze(0)
+        return station.expand(*sizes, 1, 1)
+
+    def forward(self, inp, daytime):
+        if daytime is not None:
+            return torch.cat((inp, self.embed_daytime(daytime)), -1)
 
 
 class TempLinear(ModelBase):
@@ -99,8 +106,8 @@ class RNN(ModelBase):
 class RNNAttn(RNN):
     def __init__(self, args):
         super(RNNAttn, self).__init__(args)
-        self.attn = Attn(self.hidden_size, args.attn_type, args.dropout)
-        mask = Utils.get_mask_trim(args.input_length, self.past)
+        self.attn = Attention.Attn(self.hidden_size, args.attn_type, args.dropout)
+        mask = Utils.get_mask_trim(args.max_len, self.past)
         self.register_buffer('mask', mask)
 
     def forward(self, inp, daytime=None):
@@ -121,7 +128,7 @@ class HeadAttn(ModelBase):
             self.input_size, self.head, args.dropout)
             for _ in range(self.num_layers)])
         self.linear_out = BottleLinear(self.input_size, self.dim * self.future)
-        mask = Utils.get_mask_trim(args.input_length, self.past)
+        mask = Utils.get_mask_trim(args.max_len, self.past)
         self.register_buffer('mask', mask)
 
     def forward(self, inp, daytime=None):
@@ -134,6 +141,7 @@ class HeadAttn(ModelBase):
         attn = torch.stack(attn, 1)
         out = out[:, self.past:].contiguous()
         out = self.linear_out(out).view(batch, -1, self.future, self.dim)
+        out = out + inp[:, self.past:].unsqueeze(-2)
         return out, attn
 
     def pack_weight(self, weight):
@@ -152,11 +160,11 @@ class TempAttn(ModelBase):
             ) for _ in range(self.num_layers)
         ])
         self.linear = BottleLinear(dim, self.future * self.dim)
-        mask = Utils.get_mask_trim(args.input_length, self.past)
+        mask = Utils.get_mask_trim(args.max_len, self.past)
         self.register_buffer('mask', mask)
 
     def forward(self, inp, daytime=None):
-        out = super(TempAttn, self).forward(inp, daytime)
+        daytime = super(TempAttn, self).embed_daytime(daytime)
         if self.pad[1]:
             out = F.pad(out, self.pad)
         batch, length, _ = out.size()
@@ -171,6 +179,38 @@ class TempAttn(ModelBase):
 
     def pack_weight(self, weight):
         return weight.sum(1).sum(1).view(-1, weight.size(-1))
+
+
+class STAttn(ModelBase):
+    def __init__(self, args):
+        super(STAttn, self).__init__(args)
+        self.attn_temporal = Attention.MixAttn(
+            self.daytime_size, ['general', 'mlp'], dropout=args.dropout)
+        self.attn_spatial = Attention.MixAttn(
+            self.station_size, ['general', 'mlp'], dropout=args.dropout)
+        self.attn_st = Attention.MixAttn(self.daytime_size + self.station_size,
+                                         ['general', 'mlp'],
+                                         dropout=args.dropout)
+        self.register_buffer('mask', Utils.get_mask_trim(args.max_len))
+
+    def forward(self, flow, daytime):
+        '''
+        flow: batch x length x dim
+            tmp_embedding: batch x length x daytime_size
+            spa_embedding: batch x length x dim x station_size
+            tmp_linear: batch x length x
+        out: batch x length - past x future x dim
+        '''
+        batch, length, dim = flow.size()
+        tmp_embedding = self.embed_daytime(daytime)
+        spa_embedding = self.embed_station(batch, length)
+        st_embedding = torch.cat((spa_embedding, tmp_embedding.unsqueeze(-2)), -1)
+        # batch x length x length
+        attn_tmp = self.attn_temporal(
+            tmp_embedding, tmp_embedding, self.mask[:length, :length])
+        # dim x dim
+        attn_spa = self.attn_spatial(spa_embedding, spa_embedding)
+
 
 
 class SpatialAttn(ModelBase):
@@ -223,9 +263,9 @@ class SpatialAttn2(ModelBase):
         return out, attn1, attn2, weight1, weight2
 
 
-class EnTempAttn(ModelBase):
+class EnsTemp(ModelBase):
     def __init__(self, args):
-        super(EnTempAttn, self).__init__(args)
+        super(EnsTemp, self).__init__(args)
         assert not args.submodel.startswith('Ens')
         self.subnum = args.subnum
         self.models = nn.ModuleList([
@@ -237,7 +277,7 @@ class EnTempAttn(ModelBase):
 
     def forward(self, inp, daytime):
         assert daytime is not None
-        embedding = super(EnTempAttn, self).embed(daytime)
+        embedding = super(EnsTemp, self).embed_daytime(daytime)
         batch, length, dim = inp.size()
         out = []
         weight = []

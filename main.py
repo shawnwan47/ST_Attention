@@ -91,10 +91,10 @@ def train_model():
         diff = diff_train[idx]
         tgt = tgt_train[idx]
         daytime = daytime_train[idx] if args.daytime else None
-        out = model(diff, daytime)
+        out = model(flow, daytime)
         if type(out) is tuple:
             out, out_ = out[0], out[1:]
-        out = recover_diff(out, flow)
+        out = recover_flow(out)
         loss = criterion(out, tgt)
         loss_train.append(loss.data[0])
         # if args.reg and hasattr(model, 'regularizer'):
@@ -112,10 +112,10 @@ def valid_model():
     diff = diff_valid
     tgt = tgt_valid
     daytime = daytime_valid if args.daytime else None
-    out = model(diff, daytime)
+    out = model(flow, daytime)
     if type(out) is tuple:
         out = out[0]
-    out = recover_diff(out, flow)
+    out = recover_flow(out)
     loss = criterion(out, tgt).data[0]
     return loss
 
@@ -129,12 +129,12 @@ def test_model():
     diff = diff_test
     tgt = tgt_test
     daytime = daytime_test if args.daytime else None
-    out = model(diff, daytime)
+    out = model(flow, daytime)
     ret_more = False
     if type(out) is tuple:
         out, out_ = out[0], out[1:]
         ret_more = True
-    out = recover_diff(out, flow)
+    out = recover_flow(out)
     loss = [percent_err(out[:, :, i], tgt[:, :, i])
             for i in range(args.future)]
     if ret_more:

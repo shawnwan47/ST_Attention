@@ -30,6 +30,7 @@ def load_idx():
 
 def load_dist():
     filepath = DATA_PATH + 'DIST.csv'
+    ret_idx = load_idx()
     if os.path.exists(filepath):
         dist = pd.read_csv(filepath, index_col=0)
         dist.columns = list(map(int, dist.columns))
@@ -38,7 +39,11 @@ def load_dist():
         idx = np.unique(link)
         dist = pd.DataFrame(100, index=idx, columns=idx)
         for i in range(link.shape[0]):
-            dist.loc[link[i, 0], link[i, 1]] = 1
+            d = 1
+            if link[i, 0] not in ret_idx or link[i, 1] not in ret_idx:
+                d = 0.5
+            dist.loc[link[i, 0], link[i, 1]] = d
+            dist.loc[link[i, 1], link[i, 0]] = d
         for i in idx:
             dist.loc[i, i] = 0
         for k in idx:
@@ -48,8 +53,7 @@ def load_dist():
                     if dist.loc[i, j] > tmp:
                         dist.loc[i, j] = tmp
         dist.to_csv(filepath, index=True)
-    idx = load_idx()
-    return dist.loc[idx, idx].as_matrix()
+    return dist.loc[ret_idx, ret_idx].as_matrix()
 
 
 def load_od():
@@ -58,8 +62,8 @@ def load_od():
     od.index.name = ''
     od.columns = list(map(int, od.columns))
     od = od.loc[idx, idx].as_matrix()
-    od = od + od.transpose()
-    od = od / (od.sum(0) + EPS)
+    od += od.transpose()
+    od /= (od.sum(0) + EPS)
     od = (od + od.transpose()) / 2
     return od
 
@@ -71,6 +75,18 @@ def load_adj(jump=5, contrib=0.01):
     adj = np.vstack([adj, adj])
     adj = np.hstack([adj, adj])
     return adj.astype(int)
+
+
+def gen_adj(adj_type):
+    adj = load_adj()
+    length = len(adj)
+    if adj_type == 'identity':
+        return np.eye(length)
+    if adj_type == 'reverse':
+        ret = np.eye(length)
+        return np.vstack((ret[length // 2:], ret[:length // 2]))
+    if adj_type == 'diffuse':
+        return adj / adj.sum(0)
 
 
 def load_flow_highway():

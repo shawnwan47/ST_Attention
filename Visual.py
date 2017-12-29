@@ -76,7 +76,7 @@ def show_attn(attn, args):
     mask_l = np.tril(np.ones_like(attn_copy), w - h - 96) > 0
     attn_copy[mask_u] = np.nan
     attn_copy[mask_l] = np.nan
-    plt.imshow(attn_copy, cmap='rainbow')
+    plt.imshow(attn_copy, cmap='rainbow', vmin=0, vmax=1)
     ylen, xlen = attn_copy.shape
     plotTimeTicks(args, xlen, axis='x', offset=False)
     plotTimeTicks(args, ylen, axis='y', offset=True)
@@ -84,11 +84,13 @@ def show_attn(attn, args):
     plt.ylabel('Future')
 
 
-def show_attns(attns, args, day=7):
-    attn_merge, attn_channel, attn_context = attns
-    attn_merge = attn_merge[day]
-    attn_channel = attn_channel[day]
-    attn_context = attn_context[day]
+def show_adj(adj, args):
+    plt.axis('off')
+    plt.imshow(adj)
+    dim = args.dim
+    mid = dim // 2
+    plt.plot(mid * np.ones(dim), 'k')
+    plt.plot(mid * np.ones(dim), np.arange(dim), 'k')
 
 
 def show_attn_merge(attn_merge, args):
@@ -96,8 +98,13 @@ def show_attn_merge(attn_merge, args):
     attn_merge: length x channel
     '''
     length, channel = attn_merge.shape
-    plt.imshow(attn_merge, cmap='rainbow')
+    plt.imshow(attn_merge, cmap='rainbow', vmin=0, vmax=1)
     plotTimeTicks(args, length, axis='y')
+
+
+def show_linear_weight(weight, args=None):
+    plt.imshow(weight, vmin=0, vmax=1, cmap='rainbow')
+    plt.axis('off')
 
 
 def chain_attns(attn1, attn2):
@@ -108,9 +115,3 @@ def chain_attns(attn1, attn2):
     '''
     assert attn1.shape[1] == attn2.shape[0]
     return np.matmul(attn1, attn2)
-
-
-def show_attn_channel(attn_channel, a):
-    pass
-
-

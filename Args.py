@@ -8,7 +8,7 @@ def add_data(args):
     args.add_argument('-data_type', type=str, default='highway',
                       choices=['highway', 'metro'])
     args.add_argument('-past_days', type=int, default=1)
-    args.add_argument('-future', type=int, default=4)
+    args.add_argument('-future', type=int, default=1)
     args.add_argument('-adj', action='store_true')
     # for metro only
     args.add_argument('-resolution', type=int, default=15)
@@ -17,7 +17,7 @@ def add_data(args):
     # args to be inferred
     args.add_argument('-past', type=int)
     args.add_argument('-daily_times', type=int)
-    args.add_argument('-input_length', type=int)
+    args.add_argument('-max_len', type=int)
     args.add_argument('-dim', type=int)
     args.add_argument('-days', type=int)
     args.add_argument('-days_train', type=int)
@@ -50,7 +50,7 @@ def add_run(args):
 def add_model(args):
     args.add_argument('-model', type=str, default='HeadAttn')
     args.add_argument('-submodel', type=str, default='Linear')
-    args.add_argument('-subnum', type=int, default=4)
+    args.add_argument('-subnum', type=int, default=8)
     # general
     args.add_argument('-input_size', type=int)
     args.add_argument('-output_size', type=int)
@@ -64,13 +64,14 @@ def add_model(args):
     args.add_argument('-daytime', action='store_true')
     args.add_argument('-day_size', type=int, default=16)
     args.add_argument('-time_size', type=int, default=64)
+    args.add_argument('-station_size', type=int, default=64)
     # RNN
     args.add_argument('-rnn_type', type=str, default='RNN',
                       choices=['RNN', 'GRU', 'LSTM'])
     # Attention
     args.add_argument('-attn_type', type=str, default='add',
                       choices=['add', 'mul', 'mlp'])
-    args.add_argument('-head', type=int, default=4)
+    args.add_argument('-head', type=int, default=1)
     args.add_argument('-merge_type', type=str, default='add',
                       choices=['add', 'cat'])
     args.add_argument('-dilated', action='store_true')
@@ -99,7 +100,7 @@ def _dataset(args):
     if args.dilated and args.num_layers == 3:
         args.past_days = 7
     args.past = args.past_days * args.daily_times
-    args.input_length = args.daily_times + args.past
+    args.max_len = args.daily_times + args.past
 
 
 def _model(args):
@@ -108,8 +109,9 @@ def _model(args):
     if args.model.startswith('En'):
         args.daytime = True
     args.input_size = args.dim
+    args.daytime_size = args.day_size + args.time_size
     if args.daytime:
-        args.input_size += args.day_size + args.time_size
+        args.input_size += args.daytime_size
     args.output_size = args.dim * args.future
 
 
