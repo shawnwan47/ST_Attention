@@ -28,10 +28,10 @@ def load_idx():
     return station.intersection(link).intersection(flow)
 
 
-def load_dist():
+def load_dist(recalc=False):
     filepath = DATA_PATH + 'DIST.csv'
     ret_idx = load_idx()
-    if os.path.exists(filepath):
+    if os.path.exists(filepath) and recalc == False:
         dist = pd.read_csv(filepath, index_col=0)
         dist.columns = list(map(int, dist.columns))
     else:
@@ -77,45 +77,41 @@ def load_adj(jump=5, contrib=0.01):
     return adj.astype(int)
 
 
-def gen_adj(adj_type):
-    adj = load_adj()
-    length = len(adj)
-    if adj_type == 'identity':
-        return np.eye(length)
-    if adj_type == 'reverse':
-        ret = np.eye(length)
-        return np.vstack((ret[length // 2:], ret[:length // 2]))
-    if adj_type == 'diffuse':
-        return adj / adj.sum(0)
-
-
-def load_flow_highway():
-    idx = load_idx()
-    origin = load_flow('O').loc[:, idx]
-    destination = load_flow('D').loc[:, idx]
+def load_daytime():
+    flow = load_flow()
     day = origin.index.map(lambda x: x.weekday())
     hour = origin.index.map(lambda x: x.hour)
     minute = origin.index.map(lambda x: x.minute)
     time = hour * 4 + minute // 15
+    day = day.reshape(-1, 96, 1)
+    time = day.reshape(-1, 96, 1)
+    return day, time
 
-    origin = origin.astype(float).as_matrix()
-    destination = destination.astype(float).as_matrix()
+
+def load_space():
+    space = load_flow_data()
+    for i in range(space.shape[-1]):
+        space[:, :, i] = i
+    return space
+
+
+def load_flow_data():
+    idx = load_idx()
+    origin = load_flow('O').loc[:, idx].astype(float).as_matrix()
+    destination = load_flow('D').loc[:, idx].astype(float).as_matrix()
+
     flow = np.concatenate((origin, destination), -1)
-    daytime = np.vstack((np.array(day), np.array(time))).T
-
-    # normalization
-    flow_mean = flow.mean(0)
-    flow_std = flow.std(0) + EPS
-    flow = (flow - flow_mean) / flow_std
-    flow_diff = np.diff(flow, axis=0)
-    flow_diff = np.append(flow_diff[[0]], flow_diff, 0)
-
     # reshape
     flow = flow.reshape(-1, 96, flow.shape[-1])
-    flow_diff = flow_diff.reshape(-1, 96, flow_diff.shape[-1])
-    daytime = daytime.reshape(-1, 96, 2)
+    return flow
 
-    return flow, flow_diff, flow_mean, flow_std, daytime
+
+def load_flow_pixel(bits=64):
+    flow = load_flow_data()
+    flow -= np.min(flow, 0)
+    flow /= np.max(flow, 0) + EPS
+    flow *= bits
+    return flow.astype(int)
 
 
 def load_flow_metro(resolution=15, start_time=5, end_time=23):

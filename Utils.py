@@ -14,16 +14,13 @@ def denormalize(flow, flow_mean, flow_std):
 
 
 def load_data_highway(args):
-    flow, diff, flow_mean, flow_std, daytime = Data.load_flow_highway()
+    flow, flow_mean, flow_std, daytime = Data.load_flow_highway()
     flow = torch.FloatTensor(flow).cuda()
-    diff = torch.FloatTensor(diff).cuda()
     flow_mean = torch.FloatTensor(flow_mean).cuda()
     flow_std = torch.FloatTensor(flow_std).cuda()
     daytime = torch.LongTensor(daytime).cuda()
 
     flow = torch.cat([flow[i:args.days - args.past_days + i]
-                      for i in range(args.past_days + 1)], 1)
-    diff = torch.cat([diff[i:args.days - args.past_days + i]
                       for i in range(args.past_days + 1)], 1)
     daytime = torch.cat([daytime[i:args.days - args.past_days + i]
                          for i in range(args.past_days + 1)], 1)
@@ -34,27 +31,23 @@ def load_data_highway(args):
         data_test = data[-args.days_test:]
         return data_train, data_valid, data_test
 
-    def cat_tgt(tgt):
-        return torch.stack([tgt[:, i:tgt.size(1) - args.future + i + 1]
-                            for i in range(args.future)], -2)
+    def cat_flow(flow):
+        return torch.stack([flow[:, i:flow.size(1) - args.future + i + 1]
+                            for i in range(args.future)], -1)
 
     flow_train, flow_valid, flow_test = split_dataset(flow)
-    diff_train, diff_valid, diff_test = split_dataset(diff)
     daytime_train, daytime_valid, daytime_test = split_dataset(daytime)
 
     tgt_train = flow_train[:, args.past + 1:]
     tgt_valid = flow_valid[:, args.past + 1:]
     tgt_test = flow_test[:, args.past + 1:]
-    tgt_train = cat_tgt(denormalize(tgt_train, flow_mean, flow_std))
-    tgt_valid = cat_tgt(denormalize(tgt_valid, flow_mean, flow_std))
-    tgt_test = cat_tgt(denormalize(tgt_test, flow_mean, flow_std))
+    tgt_train = cat_flow(denormalize(tgt_train, flow_mean, flow_std))
+    tgt_valid = cat_flow(denormalize(tgt_valid, flow_mean, flow_std))
+    tgt_test = cat_flow(denormalize(tgt_test, flow_mean, flow_std))
 
     flow_train = flow_train[:, :-args.future].contiguous()
     flow_valid = flow_valid[:, :-args.future].contiguous()
     flow_test = flow_test[:, :-args.future].contiguous()
-    diff_train = diff_train[:, :-args.future].contiguous()
-    diff_valid = diff_valid[:, :-args.future].contiguous()
-    diff_test = diff_test[:, :-args.future].contiguous()
     daytime_train = daytime_train[:, :-args.future].contiguous()
     daytime_valid = daytime_valid[:, :-args.future].contiguous()
     daytime_test = daytime_test[:, :-args.future].contiguous()
@@ -62,7 +55,6 @@ def load_data_highway(args):
     print('Data loaded.\n flow: {}, target: {}, time: {}'.format(
         flow_train.size(), tgt_train.size(), daytime_train.size()))
     return (flow_train, flow_valid, flow_test,
-            diff_train, diff_valid, diff_test,
             tgt_train, tgt_valid, tgt_test,
             daytime_train, daytime_valid, daytime_test,
             flow_mean, flow_std)

@@ -60,11 +60,12 @@ def add_model(args):
     # regularization
     args.add_argument('-reg', action='store_true')
     args.add_argument('-reg_weight', type=float, default=0.1)
-    # Day Time
+    # Embedding
     args.add_argument('-daytime', action='store_true')
-    args.add_argument('-day_size', type=int, default=16)
-    args.add_argument('-time_size', type=int, default=64)
-    args.add_argument('-station_size', type=int, default=64)
+    args.add_argument('-flow_size', type=int, default=32)
+    args.add_argument('-day_size', type=int, default=32)
+    args.add_argument('-time_size', type=int, default=32)
+    args.add_argument('-loc_size', type=int, default=32)
     # RNN
     args.add_argument('-rnn_type', type=str, default='RNN',
                       choices=['RNN', 'GRU', 'LSTM'])
