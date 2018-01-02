@@ -14,9 +14,11 @@ def denormalize(flow, flow_mean, flow_std):
 
 
 def load_data_highway(args):
-    flow, flow_mean, flow_std, daytime = Data.load_flow_highway()
+    flow, flow_min, flow_scale = Data.load_flow_pixel()
+    daytime = Data.load_daytime()
+    location = Data.load_location()
     flow = torch.FloatTensor(flow).cuda()
-    flow_mean = torch.FloatTensor(flow_mean).cuda()
+    flow_min = torch.FloatTensor(flow_min).cuda()
     flow_std = torch.FloatTensor(flow_std).cuda()
     daytime = torch.LongTensor(daytime).cuda()
 
@@ -31,19 +33,15 @@ def load_data_highway(args):
         data_test = data[-args.days_test:]
         return data_train, data_valid, data_test
 
-    def cat_flow(flow):
-        return torch.stack([flow[:, i:flow.size(1) - args.future + i + 1]
-                            for i in range(args.future)], -1)
-
     flow_train, flow_valid, flow_test = split_dataset(flow)
     daytime_train, daytime_valid, daytime_test = split_dataset(daytime)
 
     tgt_train = flow_train[:, args.past + 1:]
     tgt_valid = flow_valid[:, args.past + 1:]
     tgt_test = flow_test[:, args.past + 1:]
-    tgt_train = cat_flow(denormalize(tgt_train, flow_mean, flow_std))
-    tgt_valid = cat_flow(denormalize(tgt_valid, flow_mean, flow_std))
-    tgt_test = cat_flow(denormalize(tgt_test, flow_mean, flow_std))
+    tgt_train = cat_flow(denormalize(tgt_train, flow_min, flow_std))
+    tgt_valid = cat_flow(denormalize(tgt_valid, flow_min, flow_std))
+    tgt_test = cat_flow(denormalize(tgt_test, flow_min, flow_std))
 
     flow_train = flow_train[:, :-args.future].contiguous()
     flow_valid = flow_valid[:, :-args.future].contiguous()

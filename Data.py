@@ -88,30 +88,26 @@ def load_daytime():
     return day, time
 
 
-def load_space():
-    space = load_flow_data()
-    for i in range(space.shape[-1]):
-        space[:, :, i] = i
-    return space
+def load_location():
+    location = load_flow_data()
+    for i in range(location.shape[-1]):
+        location[:, :, i] = i
+    return location
 
 
-def load_flow_data():
+def load_flow_pixel(bits=64):
     idx = load_idx()
     origin = load_flow('O').loc[:, idx].astype(float).as_matrix()
     destination = load_flow('D').loc[:, idx].astype(float).as_matrix()
 
     flow = np.concatenate((origin, destination), -1)
-    # reshape
-    flow = flow.reshape(-1, 96, flow.shape[-1])
-    return flow
-
-
-def load_flow_pixel(bits=64):
     flow = load_flow_data()
-    flow -= np.min(flow, 0)
-    flow /= np.max(flow, 0) + EPS
-    flow *= bits
-    return flow.astype(int)
+    flow_min = np.min(flow, 0)
+    flow -= flow_min
+    flow_scale = (np.max(flow, 0) + 1e-3) / bits
+    flow /= flow_scale
+    flow = flow.reshape(-1, 96, flow.shape[-1]).astype(int)
+    return flow, flow_min, flow_scale
 
 
 def load_flow_metro(resolution=15, start_time=5, end_time=23):
