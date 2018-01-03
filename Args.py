@@ -1,24 +1,27 @@
 def add_gpu(args):
-    args.add_argument('-gpuid', type=int, default=[], nargs='+')
+    args.add_argument('-gpuid', type=int, default=0)
     args.add_argument('-seed', type=int, default=47)
     args.add_argument('-eps', type=float, default=1e-8)
 
 
 def add_data(args):
+    # data attribute
     args.add_argument('-data_type', type=str, default='highway',
                       choices=['highway', 'metro'])
-    args.add_argument('-past_days', type=int, default=1)
+    args.add_argument('-num_flow', type=int, default=128)
+    args.add_argument('-num_day', type=int, default=7)
+    args.add_argument('-num_time', type=int)
+    args.add_argument('-num_loc', type=int)
+    # dataset
+    args.add_argument('-past', type=int)
     args.add_argument('-future', type=int, default=1)
-    args.add_argument('-adj', action='store_true')
+    args.add_argument('-past_day', action='store_true')
+    args.add_argument('-max_len', type=int)
     # for metro only
     args.add_argument('-resolution', type=int, default=15)
     args.add_argument('-start_time', type=int, default=6)
     args.add_argument('-end_time', type=int, default=22)
     # args to be inferred
-    args.add_argument('-past', type=int)
-    args.add_argument('-daily_times', type=int)
-    args.add_argument('-max_len', type=int)
-    args.add_argument('-dim', type=int)
     args.add_argument('-days', type=int)
     args.add_argument('-days_train', type=int)
     args.add_argument('-days_test', type=int)
@@ -31,7 +34,7 @@ def add_loss(args):
 
 def add_optim(args):
     args.add_argument('-optim', type=str, default='SGD',
-                      choices=['SGD', 'Adam', 'Adadelta', 'Adamax'])
+                      choices=['SGD', 'Adam'])
     args.add_argument('-lr', type=float, default=0.1)
     args.add_argument('-patience', type=int, default=10)
     args.add_argument('-lr_min', type=float, default=1e-5)
@@ -40,7 +43,6 @@ def add_optim(args):
 
 
 def add_run(args):
-    args.add_argument('-retrain', action='store_true')
     args.add_argument('-test', action='store_true')
     args.add_argument('-epoches', type=int, default=1000)
     args.add_argument('-batch', type=int, default=10)
@@ -48,40 +50,33 @@ def add_run(args):
 
 
 def add_model(args):
-    args.add_argument('-model', type=str, default='HeadAttn')
-    args.add_argument('-submodel', type=str, default='Linear')
-    args.add_argument('-subnum', type=int, default=8)
     # general
-    args.add_argument('-input_size', type=int)
-    args.add_argument('-output_size', type=int)
-    args.add_argument('-hidden_size', type=int, default=256)
+    args.add_argument('-model', type=str)
     args.add_argument('-num_layers', type=int, default=1)
     args.add_argument('-dropout', type=float, default=0.1)
     # regularization
     args.add_argument('-reg', action='store_true')
     args.add_argument('-reg_weight', type=float, default=0.1)
     # Embedding
-    args.add_argument('-daytime', action='store_true')
-    args.add_argument('-flow_size', type=int, default=32)
-    args.add_argument('-day_size', type=int, default=32)
-    args.add_argument('-time_size', type=int, default=32)
-    args.add_argument('-loc_size', type=int, default=32)
+    args.add_argument('-emb_flow', type=int, default=32)
+    args.add_argument('-emb_day', type=int, default=32)
+    args.add_argument('-emb_time', type=int, default=32)
+    args.add_argument('-emb_loc', type=int, default=32)
+    args.add_argument('-emb_size', type=int)
     # RNN
     args.add_argument('-rnn_type', type=str, default='RNN',
                       choices=['RNN', 'GRU', 'LSTM'])
     # Attention
     args.add_argument('-attn_type', type=str, default='add',
-                      choices=['add', 'mul', 'mlp'])
+                      choices=['add', 'dot', 'mul', 'mlp'])
     args.add_argument('-head', type=int, default=1)
     args.add_argument('-merge_type', type=str, default='add',
                       choices=['add', 'cat'])
-    args.add_argument('-dilated', action='store_true')
-    args.add_argument('-dilation', type=int, default=[], nargs='+')
 
 
 def _dataset(args):
     if args.data_type == 'highway':
-        args.dim = 284
+        args.num_loc = 284
         args.days = 184
         args.days_train = 120
         args.days_test = 30
@@ -89,31 +84,20 @@ def _dataset(args):
         args.end_time = 24
         args.resolution = 15
     elif args.data_type == 'metro':
-        args.dim = 536
+        args.num_loc = 536
         args.days = 22
         args.days_train = 14
         args.days_test = 4
     else:
         raise KeyError
-    args.daily_times = (args.end_time - args.start_time) * 60
-    args.daily_times //= args.resolution
-    assert args.past_days > 0
-    if args.dilated and args.num_layers == 3:
-        args.past_days = 7
-    args.past = args.past_days * args.daily_times
-    args.max_len = args.daily_times + args.past
+    args.num_time = (args.end_time - args.start_time) * 60 // args.resolution
+    if args.past_day:
+        args.past = args.num_time
+    args.max_len = 2 * args.num_time
 
 
 def _model(args):
-    # dilations for up to 4 layers
-    args.dilation = [1, 8, args.daily_times, args.daily_times * 7]
-    if args.model.startswith('En'):
-        args.daytime = True
-    args.input_size = args.dim
-    args.daytime_size = args.day_size + args.time_size
-    if args.daytime:
-        args.input_size += args.daytime_size
-    args.output_size = args.dim * args.future
+    args.emb_size = args.emb_flow + args.emb_day + args.emb_time + args.emb_loc
 
 
 def update_args(args):

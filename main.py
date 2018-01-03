@@ -26,37 +26,14 @@ print(args)
 
 # CUDA
 if args.gpuid:
-    torch.cuda.set_device(args.gpuid[0])
+    torch.cuda.set_device(args.gpuid)
 if args.seed > 0:
     torch.cuda.manual_seed(args.seed)
 
 # DATA
-(flow_train, flow_valid, flow_test,
- diff_train, diff_valid, diff_test,
+(inp_train, inp_valid, inp_test,
  tgt_train, tgt_valid, tgt_test,
- daytime_train, daytime_valid, daytime_test,
- flow_mean, flow_std) = getattr(Utils, 'load_data_' + args.data_type)(args)
-
-diff_train = Variable(diff_train)
-diff_valid = Variable(diff_valid, volatile=True)
-diff_test = Variable(diff_test, volatile=True)
-flow_train = Variable(flow_train)
-flow_valid = Variable(flow_valid, volatile=True)
-flow_test = Variable(flow_test, volatile=True)
-flow_mean = Variable(flow_mean)
-flow_std = Variable(flow_std)
-tgt_train = Variable(tgt_train)
-tgt_valid = Variable(tgt_valid, volatile=True)
-tgt_test = Variable(tgt_test, volatile=True)
-daytime_train = Variable(daytime_train)
-daytime_valid = Variable(daytime_valid, volatile=True)
-daytime_test = Variable(daytime_test, volatile=True)
-
-def recover_flow(flow):
-    return flow * flow_std + flow_mean
-
-def recover_diff(diffs, flow):
-    return recover_flow(flow[:, args.past:].unsqueeze(-2) + diffs.cumsum(-2))
+ flow_min, flow_scale) = Utils.load_data(args.days_train, args.days_test)
 
 
 # MODEL
@@ -64,7 +41,7 @@ modelpath = MODEL_PATH + Args.modelname(args)
 print('Model: {}'.format(modelpath))
 
 model = getattr(Models, args.model)(args)
-if args.test or args.retrain:
+if args.test:
     model = torch.load(modelpath + '.pt')
     print('Loaded models from file.')
 model.cuda()
@@ -79,26 +56,21 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True)
 
 
 # TRAINING
-def train_model():
+def train():
     model.train()
     loss_train = []
-    size = diff_train.size(0)
-    days = torch.randperm(size).cuda()
-    iters = size // args.batch
+    days = torch.randperm(args.days_train).cuda()
+    iters = args.days_train // args.batch
     for day in range(iters):
         idx = days[day::iters]
-        flow = flow_train[idx]
-        diff = diff_train[idx]
-        tgt = tgt_train[idx]
-        daytime = daytime_train[idx] if args.daytime else None
-        out = model(flow, daytime)
+        inp = inp_train[idx].cuda()
+        tgt = tgt_train[idx, args.past:].cuda()
+        out = model(inp)
         if type(out) is tuple:
-            out, out_ = out[0], out[1:]
-        out = recover_flow(out)
+            out = out[0]
         loss = criterion(out, tgt)
         loss_train.append(loss.data[0])
-        # if args.reg and hasattr(model, 'regularizer'):
-        #     loss += args.reg_weight * model.regularizer(*out_)
+        # optimization
         optimizer.zero_grad()
         loss.backward()
         clip_grad_norm(model.parameters(), args.max_grad_norm)
@@ -106,37 +78,26 @@ def train_model():
     return sum(loss_train) / len(loss_train)
 
 
-def valid_model():
+def valid():
     model.eval()
-    flow = flow_valid
-    diff = diff_valid
-    tgt = tgt_valid
-    daytime = daytime_valid if args.daytime else None
-    out = model(flow, daytime)
+    inp = inp_valid.cuda()
+    tgt = tgt_valid.cuda()
+    out = model(inp)
     if type(out) is tuple:
-        out = out[0]
-    out = recover_flow(out)
-    loss = criterion(out, tgt).data[0]
-    return loss
+        out, out_ = out[0]
+    return criterion(out, tgt).data[0]
 
 
-def test_model():
-    def percent_err(out, tgt):
-        return float(criterion(out, tgt).data[0] / tgt.mean())
-
+def test():
     model.eval()
-    flow = flow_test
-    diff = diff_test
-    tgt = tgt_test
-    daytime = daytime_test if args.daytime else None
-    out = model(flow, daytime)
+    inp = inp_test.cuda()
+    tgt = tgt_test.cuda()
+    out = model(inp)
     ret_more = False
     if type(out) is tuple:
         out, out_ = out[0], out[1:]
         ret_more = True
-    out = recover_flow(out)
-    loss = [percent_err(out[:, :, i], tgt[:, :, i])
-            for i in range(args.future)]
+    loss = criterion(out, tgt).data[0]
     if ret_more:
         return loss, out_
     else:
@@ -146,8 +107,8 @@ def test_model():
 def run():
     if not args.test:
         for epoch in range(args.epoches):
-            loss_train = train_model()
-            loss_valid = valid_model()
+            loss_train = train()
+            loss_valid = valid()
 
             if not epoch % args.print_epoches:
                 print('Epoch: %d train: %.4f valid: %.4f' % (
@@ -157,7 +118,7 @@ def run():
             if optimizer.param_groups[0]['lr'] < args.lr_min:
                 break
 
-    out = test_model()
+    out = test()
     if type(out) is tuple:
         out, out_ = out[0], out[1]
         Utils.torch2npsave(modelpath + '_out', out_)

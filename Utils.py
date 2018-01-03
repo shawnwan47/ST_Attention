@@ -13,101 +13,33 @@ def denormalize(flow, flow_mean, flow_std):
     return flow * flow_std + flow_mean
 
 
-def load_data_highway(args):
-    flow, flow_min, flow_scale = Data.load_flow_pixel()
-    daytime = Data.load_daytime()
-    location = Data.load_location()
-    flow = torch.FloatTensor(flow).cuda()
-    flow_min = torch.FloatTensor(flow_min).cuda()
-    flow_std = torch.FloatTensor(flow_std).cuda()
-    daytime = torch.LongTensor(daytime).cuda()
+def load_data(args):
+    flow, flow_min, flow_scale = Data.load_flow_pixel(args.flow_size)
+    day, time = Data.load_daytime()
+    loc = Data.load_loc()
 
-    flow = torch.cat([flow[i:args.days - args.past_days + i]
-                      for i in range(args.past_days + 1)], 1)
-    daytime = torch.cat([daytime[i:args.days - args.past_days + i]
-                         for i in range(args.past_days + 1)], 1)
+    flow = torch.LongTensor(flow)
+    day = torch.LongTensor(day)
+    time = torch.LongTensor(time)
+    loc = torch.LongTensor(loc)
 
-    def split_dataset(data):
-        data_train = data[:args.days_train]
-        data_valid = data[args.days_train:-args.days_test]
-        data_test = data[-args.days_test:]
-        return data_train, data_valid, data_test
+    inp = torch.cat((flow, day, time, loc), -1)
+    inp = torch.cat((inp[:-1], inp[1:]), 1)
+    tgt = flow[1:]
 
-    flow_train, flow_valid, flow_test = split_dataset(flow)
-    daytime_train, daytime_valid, daytime_test = split_dataset(daytime)
+    inp_train = Variable(inp[:args.days_train])
+    inp_valid = Variable(inp[args.days_train:-args.days_test], volatile=True)
+    inp_test = Variable(inp[-args.days_test:], volatile=True)
+    tgt_train = Variable(tgt[:args.days_train])
+    tgt_valid = Variable(tgt[args.days_train:-args.days_test], volatile=True)
+    tgt_test = Variable(tgt[-args.days_test:], volatile=True)
 
-    tgt_train = flow_train[:, args.past + 1:]
-    tgt_valid = flow_valid[:, args.past + 1:]
-    tgt_test = flow_test[:, args.past + 1:]
-    tgt_train = cat_flow(denormalize(tgt_train, flow_min, flow_std))
-    tgt_valid = cat_flow(denormalize(tgt_valid, flow_min, flow_std))
-    tgt_test = cat_flow(denormalize(tgt_test, flow_min, flow_std))
+    flow_min = Variable(torch.FloatTensor(flow_min), require_grad=False).cuda()
+    flow_scale = Variable(torch.FloatTensor(flow_scale), require_grad=False).cuda()
 
-    flow_train = flow_train[:, :-args.future].contiguous()
-    flow_valid = flow_valid[:, :-args.future].contiguous()
-    flow_test = flow_test[:, :-args.future].contiguous()
-    daytime_train = daytime_train[:, :-args.future].contiguous()
-    daytime_valid = daytime_valid[:, :-args.future].contiguous()
-    daytime_test = daytime_test[:, :-args.future].contiguous()
-
-    print('Data loaded.\n flow: {}, target: {}, time: {}'.format(
-        flow_train.size(), tgt_train.size(), daytime_train.size()))
-    return (flow_train, flow_valid, flow_test,
+    return (inp_train, inp_valid, inp_test,
             tgt_train, tgt_valid, tgt_test,
-            daytime_train, daytime_valid, daytime_test,
-            flow_mean, flow_std)
-
-
-def load_data_metro(args):
-    data = Data.load_flow(args.resolution, args.start_time, args.end_time)
-    flow, daytime, flow_mean, flow_std = data
-    flow = torch.FloatTensor(flow).cuda()
-    daytime = torch.LongTensor(daytime).cuda()
-    flow_mean = torch.FloatTensor(flow_mean).cuda()
-    flow_std = torch.FloatTensor(flow_std).cuda()
-
-    slices = flow.size(0) // args.days
-
-    def init_idx(batch):
-        return torch.arange(batch).long().cuda()
-
-    def generate_idx(idx, batch):
-        ret = [idx + i * batch for i in range(slices)]
-        return torch.cat(ret)
-
-    def extend_yesterday(data):
-        batch = data.size(0) // slices
-        idx = init_idx(batch)
-        idx_yesterday = generate_idx(idx[:-1], batch)
-        idx_tomorrow = generate_idx(idx[1:], batch)
-        return torch.cat((data[idx_yesterday], data[idx_tomorrow]), 1)
-
-    def split_data(data):
-        batch = data.size(0) // slices
-        idx = init_idx(batch)
-        idx_train = generate_idx(idx[:args.days_train], batch)
-        idx_valid = generate_idx(idx[args.days_train:-args.days_test], batch)
-        idx_test = generate_idx(idx[-args.days_test:], batch)
-        return data[idx_train], data[idx_valid], data[idx_test]
-
-    if args.yesterday:
-        flow = extend_yesterday(flow)
-        daytime = extend_yesterday(daytime)
-    flow_train, flow_valid, flow_test = split_data(flow)
-    daytime_train, daytime_valid, daytime_test = split_data(daytime)
-
-    flow_train = flow_train.transpose(0, 1)
-    flow_valid = flow_valid.transpose(0, 1)
-    flow_test = flow_test.transpose(0, 1)
-    daytime_train = daytime_train.transpose(0, 1)
-    daytime_valid = daytime_valid.transpose(0, 1)
-    daytime_test = daytime_test.transpose(0, 1)
-
-    print('Data loaded.\ntrain: {}, valid: {}, test: {}'.format(
-        flow_train.size(), flow_valid.size(), flow_test.size()))
-    return (flow_train, flow_valid, flow_test,
-            daytime_train, daytime_valid, daytime_test,
-            flow_mean, flow_std)
+            flow_min, flow_scale)
 
 
 def aeq(*args):

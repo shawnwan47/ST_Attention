@@ -77,22 +77,22 @@ def load_adj(jump=5, contrib=0.01):
     return adj.astype(int)
 
 
-def load_daytime():
+def load_daytime(resolution=15):
     flow = load_flow()
     day = origin.index.map(lambda x: x.weekday())
     hour = origin.index.map(lambda x: x.hour)
     minute = origin.index.map(lambda x: x.minute)
-    time = hour * 4 + minute // 15
+    time = hour * 4 + minute // resolution
     day = day.reshape(-1, 96, 1)
     time = day.reshape(-1, 96, 1)
     return day, time
 
 
-def load_location():
-    location = load_flow_data()
-    for i in range(location.shape[-1]):
-        location[:, :, i] = i
-    return location
+def load_loc():
+    loc = load_flow_pixel()
+    for i in range(loc.shape[-1]):
+        loc[:, :, i] = i
+    return loc
 
 
 def load_flow_pixel(bits=64):
