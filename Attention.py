@@ -102,63 +102,58 @@ class LinearAttn(Attn):
         return out, attn
 
 
-class HeadAttn(nn.Module):
+class MultiHeadAttn(nn.Module):
     def __init__(self, dim, head=4, dropout=0.1):
         '''
         Args:
             head(int): number of parallel heads.
             dim(int): the dimension of keys/values/queries in this
-                HeadAttn, must be divisible by head.
+                MultiHeadAttn, must be divisible by head.
         '''
-        pad = head - dim % head
-        super(HeadAttn, self).__init__()
+        assert dim % head == 0
+        super(MultiHeadAttn, self).__init__()
         self.head = head
-        self.dim = dim + pad
-        self.pad = (pad // 2, pad // 2 + pad % 2)
+        self.dim = dim
         self.w_k = BottleLinear(self.dim, self.dim, bias=False)
         self.w_v = BottleLinear(self.dim, self.dim, bias=False)
         self.w_q = BottleLinear(self.dim, self.dim, bias=False)
         self.softmax = nn.Softmax(2)
         self.dropout = nn.Dropout(dropout)
-        self.layer_norm = BottleLayerNorm(dim)
 
-    def forward(self, inp, mask=None):
+    def forward(self, query, key, value, mask=None):
         '''
-        inp: batch x length x dim
+        query: batch x length x dim
         attn: batch x head x length x dim_head
         '''
-        if self.pad[1]:
-            inp = F.pad(inp, self.pad)
-        batch, length, dim = inp.size()
+        batch, len_query, dim = query.size()
+        batch_, len_context, dim_ = key.size()
+        aeq(batch, batch_)
+        aeq(dim, dim_)
         dim_head = dim // self.head
 
         def shape_projection(x):
-            return x.view(batch, length, self.head, dim_head) \
+            return x.view(batch, -1, self.head, dim_head) \
                 .transpose(1, 2).contiguous() \
-                .view(batch * self.head, length, dim_head)
+                .view(batch * self.head, -1, dim_head)
 
         def unshape_projection(x):
-            return x.view(batch, self.head, length, dim_head) \
+            return x.view(batch, self.head, -1, dim_head) \
                     .transpose(1, 2).contiguous() \
-                    .view(batch, length, dim)
+                    .view(batch, -1, dim)
 
-        key = shape_projection(self.w_k(inp))
-        value = shape_projection(self.w_v(inp))
-        query = shape_projection(self.w_q(inp))
+        key = shape_projection(self.w_k(key))
+        value = shape_projection(self.w_v(value))
+        query = shape_projection(self.w_q(query))
 
         score = torch.bmm(query, key.transpose(1, 2)) / math.sqrt(dim_head)
         if mask is not None:
-            score = score.view(batch, self.head, length, length)
+            score = score.view(batch, self.head, len_query, len_context)
             score.data.masked_fill_(mask, -float('inf'))
-        attn = self.softmax(score.view(-1, length, length))
+        attn = self.softmax(score.view(-1, len_query, len_context))
 
         out = torch.bmm(self.dropout(attn), value)
         out = self.dropout(unshape_projection(out))
-        attn = attn.view(batch, self.head, length, length)
-        out = out + inp
-        if self.pad[1]:
-            out = out[:, :, self.pad[0]:-self.pad[1]].contiguous()
-        out = self.layer_norm(out)
+        attn = attn.view(batch, self.head, len_query, len_context)
         return out, attn
 
 

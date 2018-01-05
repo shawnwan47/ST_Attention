@@ -33,7 +33,7 @@ if args.seed > 0:
 # DATA
 (inp_train, inp_valid, inp_test,
  tgt_train, tgt_valid, tgt_test,
- flow_min, flow_scale) = Utils.load_data(args.days_train, args.days_test)
+ flow_min, flow_scale) = Utils.load_data(args)
 
 
 # MODEL
@@ -59,12 +59,13 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True)
 def train():
     model.train()
     loss_train = []
-    days = torch.randperm(args.days_train).cuda()
-    iters = args.days_train // args.batch
+    num_sample = inp_train.size(0)
+    days = torch.randperm(num_sample)
+    iters = num_sample // args.batch
     for day in range(iters):
         idx = days[day::iters]
         inp = inp_train[idx].cuda()
-        tgt = tgt_train[idx, args.past:].cuda()
+        tgt = tgt_train[idx].cuda()
         out = model(inp)
         if type(out) is tuple:
             out = out[0]
@@ -80,24 +81,32 @@ def train():
 
 def valid():
     model.eval()
-    inp = inp_valid.cuda()
-    tgt = tgt_valid.cuda()
-    out = model(inp)
-    if type(out) is tuple:
-        out, out_ = out[0]
-    return criterion(out, tgt).data[0]
+    loss = 0
+    iters = inp_valid.size(0) // args.batch
+    for i in range(iters):
+        inp = inp_valid[i::iters].cuda()
+        tgt = tgt_valid[i::iters].cuda()
+        out = model(inp)
+        if type(out) is tuple:
+            out, out_ = out[0]
+        loss += criterion(out, tgt).data[0]
+    return loss / iters
 
 
 def test():
     model.eval()
-    inp = inp_test.cuda()
-    tgt = tgt_test.cuda()
-    out = model(inp)
-    ret_more = False
-    if type(out) is tuple:
-        out, out_ = out[0], out[1:]
-        ret_more = True
-    loss = criterion(out, tgt).data[0]
+    loss = 0
+    iters = inp_valid.size(0) // args.batch
+    for i in range(iters):
+        inp = inp_test[i::iters].cuda()
+        tgt = tgt_test[i::iters].cuda()
+        out = model(inp)
+        ret_more = False
+        if type(out) is tuple:
+            out, out_ = out[0], out[1:]
+            ret_more = True
+        loss += criterion(out, tgt).data[0]
+    loss = loss / iters
     if ret_more:
         return loss, out_
     else:

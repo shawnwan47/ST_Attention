@@ -16,6 +16,10 @@ class ModelBase(nn.Module):
         self.past = args.past
         self.future = args.future
         self.num_layers = args.num_layers
+        self.num_flow = args.num_flow
+        self.num_day = args.num_day
+        self.num_time = args.num_time
+        self.num_loc = args.num_loc
         self.emb_size = args.emb_size
         self.embedding_flow = nn.Embedding(args.num_flow, args.emb_flow)
         self.embedding_day = nn.Embedding(args.num_day, args.emb_day)
@@ -25,12 +29,16 @@ class ModelBase(nn.Module):
         self.softmax = nn.Softmax(3)
 
     def embed(self, inp):
-        '''inp: day x time x loc x 4'''
-        flow = self.embedding_flow(inp[:, :, :, 0])
-        day = self.embedding_day(inp[:, :, :, 1])
-        time = self.embedding_time(inp[:, :, :, 2])
-        loc = self.embedding_loc(inp[:, :, :, 3])
-        return torch.cat((flow, day, time, loc), -1)
+        '''inp: batch x time x loc x 4'''
+        ticks = inp.size(1)
+        inp = inp.view(-1, ticks * self.num_loc, 4)
+        flow = self.embedding_flow(inp[:, :, 0])
+        day = self.embedding_day(inp[:, :, 1])
+        time = self.embedding_time(inp[:, :, 2])
+        loc = self.embedding_loc(inp[:, :, 3])
+        out = torch.cat((flow, day, time, loc), -1)
+        out = out.view(-1, ticks, self.num_loc, self.emb_size)
+        return out
 
 
 class TempLinear(ModelBase):
@@ -75,7 +83,7 @@ class RNN(ModelBase):
 class RNNAttn(RNN):
     def __init__(self, args):
         super(RNNAttn, self).__init__(args)
-        self.attn = Attention.Attn(self.hidden_size, args.attn_type, args.dropout)
+        self.att = Attention.Attn(self.hidden_size, args.att_type, args.dropout)
         mask = Utils.get_mask_trim(args.max_len, self.past)
         self.register_buffer('mask', mask)
 
@@ -83,10 +91,10 @@ class RNNAttn(RNN):
         out = self.forward_rnn(inp, daytime)
         batch, length, dim = out.size()
         mask = self.mask[:length, :length]
-        out, attn = self.attn(out, mask)
+        out, att = self.att(out, mask)
         out = self.linear_out(self.dropout(out[:, self.past:]))
         out = out.view(batch, -1, self.future, self.dim)
-        return out, attn
+        return out, att
 
 
 class HeadAttn(ModelBase):
@@ -103,15 +111,15 @@ class HeadAttn(ModelBase):
     def forward(self, inp, daytime=None):
         out = super(HeadAttn, self).forward(inp, daytime)
         batch, length, dim = out.size()
-        attn = []
+        att = []
         for i in range(self.num_layers):
-            out, attn_i = self.layers[i](out, self.mask[:length, :length])
-            attn.append(attn_i)
-        attn = torch.stack(attn, 1)
+            out, att_i = self.layers[i](out, self.mask[:length, :length])
+            att.append(att_i)
+        att = torch.stack(att, 1)
         out = out[:, self.past:].contiguous()
         out = self.linear_out(out).view(batch, -1, self.future, self.dim)
         out = out + inp[:, self.past:].unsqueeze(-2)
-        return out, attn
+        return out, att
 
     def pack_weight(self, weight):
         return weight.sum(1).view(-1, weight.size(-1))
@@ -120,23 +128,36 @@ class HeadAttn(ModelBase):
 class ST_Transformer(ModelBase):
     def __init__(self, args):
         super(ST_Transformer, self).__init__(args)
-        self.attn_st = Attention.MixAttn(self.emb_size,
-                                         ['general', 'mlp'],
-                                         dropout=args.dropout)
-        self.register_buffer('mask', Utils.get_mask_trim(args.max_len))
+        self.att = Attention.MultiHeadAttn(self.emb_size)
+        self.linear = BottleLinear(self.emb_size, self.num_flow, bias=False)
+        self.softmax = nn.Softmax(3)
+        # mask = Utils.get_mask_pixel(args.max_len)
+        # self.register_buffer('mask', mask)
 
     def forward(self, inp):
         '''
-        inp: day, time, loc, 4
-        out: batch x length - past x future x dim
+        inp: batch x time x loc x 4
+        out: batch x future x flow
         '''
-        out = self.embed(inp)
-        day, time, loc, dim = out.size()
-        tmp_embedding = self.embed_daytime(daytime)
-        spa_embedding = self.embed_station(batch, length)
-        st_embedding = torch.cat((spa_embedding, tmp_embedding.unsqueeze(-2)), -1)
-        # batch x length x length
-        attn_tmp = self.attn_temporal(
-            tmp_embedding, tmp_embedding, self.mask[:length, :length])
-        # dim x dim
-        attn_spa = self.attn_spatial(spa_embedding, spa_embedding)
+        out = self.init_out(inp)
+        inp = self.embed(inp)
+        out = self.embed(out)
+        # flatten inp out
+        inp = inp.view(-1, self.past * self.num_loc, self.emb_size)
+        out = out.view(-1, self.future * self.num_loc, self.emb_size)
+        out, att = self.att(out, inp, inp)
+        out = out.view(-1, self.future, self.num_loc, self.emb_size)
+        out = self.softmax(self.linear(out)).transpose(1, 3).transpose(2, 3)
+        att = att.view(-1, self.future, self.num_loc, self.past, self.num_loc)
+        att = att[:, 0]
+        return out, att
+
+    def init_out(self, inp):
+        out = torch.zeros((inp.size(0), self.future, self.num_loc, 4))
+        out = Variable(out.type_as(inp.data))
+        out[:, :, :, 3] = inp[:, -1, :, 3]
+        for i in range(self.future):
+            out[:, i, :, 1] = (inp[:, -1, :, 2] + i).div(self.num_time)
+            out[:, i, :, 1] = out[:, i, :, 1] + inp[:, -1, :, 1]
+            out[:, i, :, 2] = (inp[:, -1, :, 2] + i).remainder(self.num_time)
+        return out

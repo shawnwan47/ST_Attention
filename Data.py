@@ -79,17 +79,17 @@ def load_adj(jump=5, contrib=0.01):
 
 def load_daytime(resolution=15):
     flow = load_flow()
-    day = origin.index.map(lambda x: x.weekday())
-    hour = origin.index.map(lambda x: x.hour)
-    minute = origin.index.map(lambda x: x.minute)
+    day = flow.index.map(lambda x: x.weekday())
+    hour = flow.index.map(lambda x: x.hour)
+    minute = flow.index.map(lambda x: x.minute)
     time = hour * 4 + minute // resolution
-    day = day.reshape(-1, 96, 1)
-    time = day.reshape(-1, 96, 1)
+    day = np.array(day).reshape(-1, 96, 1)
+    time = np.array(day).reshape(-1, 96, 1)
     return day, time
 
 
 def load_loc():
-    loc = load_flow_pixel()
+    loc, _, _ = load_flow_pixel()
     for i in range(loc.shape[-1]):
         loc[:, :, i] = i
     return loc
@@ -101,7 +101,6 @@ def load_flow_pixel(bits=64):
     destination = load_flow('D').loc[:, idx].astype(float).as_matrix()
 
     flow = np.concatenate((origin, destination), -1)
-    flow = load_flow_data()
     flow_min = np.min(flow, 0)
     flow -= flow_min
     flow_scale = (np.max(flow, 0) + 1e-3) / bits

@@ -14,28 +14,39 @@ def denormalize(flow, flow_mean, flow_std):
 
 
 def load_data(args):
-    flow, flow_min, flow_scale = Data.load_flow_pixel(args.flow_size)
+    flow, flow_min, flow_scale = Data.load_flow_pixel(args.num_flow)
     day, time = Data.load_daytime()
     loc = Data.load_loc()
 
     flow = torch.LongTensor(flow)
-    day = torch.LongTensor(day)
-    time = torch.LongTensor(time)
+    day = torch.LongTensor(day).expand_as(flow)
+    time = torch.LongTensor(time).expand_as(flow)
     loc = torch.LongTensor(loc)
+    inp = torch.stack((flow, day, time, loc), -1)  # day x time x loc x 4
+    tgt = flow.contiguous()
 
-    inp = torch.cat((flow, day, time, loc), -1)
-    inp = torch.cat((inp[:-1], inp[1:]), 1)
-    tgt = flow[1:]
+    inp = inp.view(-1, args.num_loc, 4)
+    tgt = tgt.view(-1, args.num_loc)
+    num_sample = (args.days - 1) * args.num_time
+    inp_size = (args.days - 1, args.num_time, args.past, args.num_loc, 4)
+    tgt_size = (args.days - 1, args.num_time, args.future, args.num_loc)
+    inp = torch.stack([inp[i:i + args.past]
+                       for i in range(num_sample)], 1).view(inp_size)
+    tgt = torch.stack([tgt[i + args.past:i + args.past + args.future]
+                       for i in range(num_sample)], 1).view(tgt_size)
 
-    inp_train = Variable(inp[:args.days_train])
-    inp_valid = Variable(inp[args.days_train:-args.days_test], volatile=True)
-    inp_test = Variable(inp[-args.days_test:], volatile=True)
-    tgt_train = Variable(tgt[:args.days_train])
-    tgt_valid = Variable(tgt[args.days_train:-args.days_test], volatile=True)
-    tgt_test = Variable(tgt[-args.days_test:], volatile=True)
+    inp_size = (-1, args.past, args.num_loc, 4)
+    tgt_size = (-1, args.future, args.num_loc)
 
-    flow_min = Variable(torch.FloatTensor(flow_min), require_grad=False).cuda()
-    flow_scale = Variable(torch.FloatTensor(flow_scale), require_grad=False).cuda()
+    inp_train = Variable(inp[:args.days_train]).view(inp_size)
+    inp_valid = Variable(inp[args.days_train:-args.days_test], volatile=True).view(inp_size)
+    inp_test = Variable(inp[-args.days_test:], volatile=True).view(inp_size)
+    tgt_train = Variable(tgt[:args.days_train]).view(tgt_size)
+    tgt_valid = Variable(tgt[args.days_train:-args.days_test], volatile=True).view(tgt_size)
+    tgt_test = Variable(tgt[-args.days_test:], volatile=True).view(tgt_size)
+
+    flow_min = Variable(torch.FloatTensor(flow_min), requires_grad =False).cuda()
+    flow_scale = Variable(torch.FloatTensor(flow_scale), requires_grad =False).cuda()
 
     return (inp_train, inp_valid, inp_test,
             tgt_train, tgt_valid, tgt_test,
@@ -55,9 +66,9 @@ def pad_head(dim, head):
     return dim, (pad // 2, pad // 2 + pad % 2)
 
 def get_mask_trim(length, past):
-    attn_shape = (length, length)
-    mask_past = np.tril(np.ones(attn_shape), k=-past).astype('uint8')
-    mask_future = np.triu(np.ones(attn_shape), k=1).astype('uint8')
+    shape = (length, length)
+    mask_past = np.tril(np.ones(shape), k=-past).astype('uint8')
+    mask_future = np.triu(np.ones(shape), k=1).astype('uint8')
     mask_past = torch.from_numpy(mask_past)
     mask_future = torch.from_numpy(mask_future)
     return mask_future + mask_past
@@ -80,6 +91,11 @@ def get_mask_dilated(length, dilations):
         mask = _get_mask_dilated(length, dilation, window)
         masks.append(mask)
     return torch.stack(masks, 0)
+
+
+def get_mask_pixel(dim, past, future):
+    shape = (future * dim, (past + future) * dim)
+
 
 
 def torch2npsave(filename, data):

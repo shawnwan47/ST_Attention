@@ -13,7 +13,7 @@ def add_data(args):
     args.add_argument('-num_time', type=int)
     args.add_argument('-num_loc', type=int)
     # dataset
-    args.add_argument('-past', type=int)
+    args.add_argument('-past', type=int, default=4)
     args.add_argument('-future', type=int, default=1)
     args.add_argument('-past_day', action='store_true')
     args.add_argument('-max_len', type=int)
@@ -28,8 +28,8 @@ def add_data(args):
 
 
 def add_loss(args):
-    args.add_argument('-loss', type=str, default='L1Loss',
-                      choices=['L1Loss', 'MSELoss', 'SmoothL1Loss'])
+    args.add_argument('-loss', type=str, default='NLLLoss2d',
+                      choices=['L1Loss', 'NLLLoss2d'])
 
 
 def add_optim(args):
@@ -45,8 +45,8 @@ def add_optim(args):
 def add_run(args):
     args.add_argument('-test', action='store_true')
     args.add_argument('-epoches', type=int, default=1000)
-    args.add_argument('-batch', type=int, default=10)
-    args.add_argument('-print_epoches', type=int, default=10)
+    args.add_argument('-batch', type=int, default=100)
+    args.add_argument('-print_epoches', type=int, default=1)
 
 
 def add_model(args):
@@ -123,9 +123,5 @@ def modelname(args):
     # General
     path += 'Lay' + str(args.num_layers)
     # Data
-    if args.adj:
-        path += 'adj'
-    if args.daytime:
-        path += 'Time'
     path += 'Future' + str(args.future)
     return path
