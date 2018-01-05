@@ -35,7 +35,7 @@ def add_loss(args):
 def add_optim(args):
     args.add_argument('-optim', type=str, default='SGD',
                       choices=['SGD', 'Adam'])
-    args.add_argument('-lr', type=float, default=0.1)
+    args.add_argument('-lr', type=float, default=1)
     args.add_argument('-patience', type=int, default=10)
     args.add_argument('-lr_min', type=float, default=1e-5)
     args.add_argument('-weight_decay', type=float, default=5e-5)

@@ -74,7 +74,7 @@ def train():
         # optimization
         optimizer.zero_grad()
         loss.backward()
-        clip_grad_norm(model.parameters(), args.max_grad_norm)
+        # clip_grad_norm(model.parameters(), args.max_grad_norm)
         optimizer.step()
     return sum(loss_train) / len(loss_train)
 
@@ -88,7 +88,7 @@ def valid():
         tgt = tgt_valid[i::iters].cuda()
         out = model(inp)
         if type(out) is tuple:
-            out, out_ = out[0]
+            out = out[0]
         loss += criterion(out, tgt).data[0]
     return loss / iters
 
@@ -96,7 +96,7 @@ def valid():
 def test():
     model.eval()
     loss = 0
-    iters = inp_valid.size(0) // args.batch
+    iters = inp_test.size(0) // args.batch
     for i in range(iters):
         inp = inp_test[i::iters].cuda()
         tgt = tgt_test[i::iters].cuda()
