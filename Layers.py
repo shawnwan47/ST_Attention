@@ -36,14 +36,12 @@ class RNNLayer(nn.Module):
 
 
 class TransformerLayer(nn.Module):
-    def __init__(self, dim_key, dim_val, head, dropout=0.1):
+    def __init__(self, dim, head, dropout=0.1):
         super(TransformerLayer, self).__init__()
-        self.att = MultiHeadAttention(dim_key, dim_val, head, dropout)
-        self.layer_norm = BottleLayerNorm(dim_key)
+        self.att = MultiHeadAttention(dim, dim, head, dropout)
+        self.layer_norm = BottleLayerNorm(dim)
 
-    def forward(self, qry, key, val, mask=None):
-        out, att = self.att(qry, key, val, mask)
-        val_size = val.size(2)
-        qry[:, :, :val_size] = qry[:, :, :val_size] + out
-        out = self.layer_norm(qry)
+    def forward(self, query, context, mask=None):
+        out, att = self.att(query, context, context, mask)
+        out = self.layer_norm(query + out)
         return out, att

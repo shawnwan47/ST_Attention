@@ -51,7 +51,7 @@ def add_run(args):
 
 def add_model(args):
     # general
-    args.add_argument('-model', type=str)
+    args.add_argument('-model', type=str, default='ST_Transformer')
     args.add_argument('-num_layers', type=int, default=1)
     args.add_argument('-dropout', type=float, default=0.1)
     # regularization

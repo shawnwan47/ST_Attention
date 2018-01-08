@@ -128,7 +128,7 @@ class ST_Transformer(ModelBase):
     def __init__(self, args):
         super(ST_Transformer, self).__init__(args)
         self.layers = nn.ModuleList([Layers.TransformerLayer(
-            self.emb_size, self.emb_size, args.head, args.dropout
+            self.emb_size, args.head, args.dropout
         ) for _ in range(self.num_layers)])
         self.linear = BottleLinear(self.emb_size, self.num_flow, bias=False)
 
@@ -138,27 +138,27 @@ class ST_Transformer(ModelBase):
         st: batch x time x loc x 3
         out: batch x num_flow x time x loc
         '''
-        key = torch.cat((inp.unsqueeze(-1), st), -1)
-        out = self.init_out(key)
-        key = self.embed(key)
-        out = self.embed(out)
-        # flatten inp key
-        key = key.view(-1, self.past * self.num_loc, self.emb_size)
-        out = out.view(-1, self.future * self.num_loc, self.emb_size)
+        context = torch.cat((inp.unsqueeze(-1), st), -1)
+        query = self.init_query(context)
+        context = self.embed(context)
+        query = self.embed(query)
+        # flatten inp context
+        context = context.view(-1, self.past * self.num_loc, self.emb_size)
+        query = query.view(-1, self.future * self.num_loc, self.emb_size)
         for i in range(self.num_layers):
-            out, att = self.layers[i](out, key, key)
-        out = out.view(-1, self.future, self.num_loc, self.emb_size)
-        out = self.linear(out).view(-1, self.num_flow)
+            query, att = self.layers[i](query, context)
+        query = query.view(-1, self.future, self.num_loc, self.emb_size)
+        out = self.linear(query).view(-1, self.num_flow)
         att = att.view(-1, self.future, self.num_loc, self.past, self.num_loc)
         att = att[:, 0]
         return out, att
 
-    def init_out(self, key):
-        out = torch.zeros((key.size(0), self.future, self.num_loc, 4)).type(torch.LongTensor)
-        out[:, :, :, 1:] = key[:, -1, :, 1:].data
+    def init_query(self, context):
+        query = torch.zeros((context.size(0), self.future, self.num_loc, 4)).type(torch.LongTensor)
+        query[:, :, :, 1:] = context[:, -1, :, 1:].data
         for i in range(self.future):
-            out[:, i, :, 2] = out[:, i, :, 2] + i
-            out[:, i, :, 1] = out[:, i, :, 1] + out[:, -1, :, 2].div(self.num_time)
-            out[:, i, :, 1] = out[:, i, :, 1].remainder(self.num_day)
-            out[:, i, :, 2] = out[:, i, :, 2].remainder(self.num_time)
-        return Variable(out, volatile=key.volatile).cuda()
+            query[:, i, :, 2] = query[:, i, :, 2] + i
+            query[:, i, :, 1] = query[:, i, :, 1] + query[:, -1, :, 2].div(self.num_time)
+            query[:, i, :, 1] = query[:, i, :, 1].remainder(self.num_day)
+            query[:, i, :, 2] = query[:, i, :, 2].remainder(self.num_time)
+        return Variable(query, volatile=context.volatile).cuda()

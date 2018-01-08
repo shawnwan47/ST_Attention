@@ -71,7 +71,6 @@ def train():
         out = model(inp, st)
         if type(out) is tuple:
             out = out[0]
-        print(out[0])
         loss = criterion(out, tgt.view(-1))
         loss_train.append(loss.data[0])
         # optimization
