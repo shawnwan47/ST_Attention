@@ -30,11 +30,11 @@ def load_data(args):
     tgt_size = (args.days - 1, args.num_time, args.future, args.num_loc)
     st_size = (args.days - 1, args.num_time, args.past, args.num_loc, 3)
     inp = torch.stack([inp[i:i + args.past]
-                       for i in range(num_sample)], 1).view(inp_size)
+                       for i in range(num_sample)], 0).view(inp_size)
     tgt = torch.stack([tgt[i + args.past:i + args.past + args.future]
-                       for i in range(num_sample)], 1).view(tgt_size)
+                       for i in range(num_sample)], 0).view(tgt_size)
     st = torch.stack([st[i:i + args.past]
-                      for i in range(num_sample)], 1).view(st_size)
+                      for i in range(num_sample)], 0).view(st_size)
 
     inp_size = (-1, args.past, args.num_loc)
     tgt_size = (-1, args.future, args.num_loc)

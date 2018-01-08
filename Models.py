@@ -26,7 +26,6 @@ class ModelBase(nn.Module):
         self.embedding_time = nn.Embedding(args.num_time, args.emb_time)
         self.embedding_loc = nn.Embedding(args.num_loc, args.emb_loc)
         self.dropout = nn.Dropout(args.dropout)
-        self.softmax = nn.Softmax(3)
 
     def embed(self, inp):
         '''inp: batch x -1 x 4'''
@@ -36,23 +35,6 @@ class ModelBase(nn.Module):
         loc = self.dropout(self.embedding_loc(inp[:, :, 3]))
         out = torch.cat((flow, day, time, loc), -1)
         return out
-
-
-class TempLinear(ModelBase):
-    def __init__(self, args):
-        super(TempLinear, self).__init__(args)
-        self.temporal = BottleLinear(self.past, self.future)
-
-    def forward(self, inp, daytime=None):
-        out = []
-        for i in range(inp.size(1) - self.past):
-            inp_i = inp[:, i:i + self.past].transpose(1, 2).contiguous()
-            out.append(self.temporal(inp_i).transpose(1, 2))
-        out = torch.stack(out, 1)
-        return out, self.temporal.weight
-
-    def pack_weight(self, weight):
-        return weight.view(1, -1)
 
 
 class RNN(ModelBase):
@@ -96,7 +78,7 @@ class Transformer(ModelBase):
         atts = []
         for i in range(self.num_layers):
             query, att = self.layers[i](query, context)
-            atts.append(att)
+            atts.append(att.cpu())
         out = self.linear(query)
         return self.forward_out(out, atts)
 
@@ -108,15 +90,12 @@ class Transformer(ModelBase):
                                        self.past, self.num_loc)
         return out, att
 
-
     def embed_query_context(self, inp, st):
         context = torch.cat((inp.unsqueeze(-1), st), -1)
         query = self.init_query(context)
         context = context.view(-1, self.past * self.num_loc, 4)
         query = query.view(-1, self.future * self.num_loc, 4)
-        context = self.embed(context)
-        query = self.embed(query)
-        return query, context
+        return self.embed(query), self.embed(context)
 
     def init_query(self, context):
         query = torch.zeros((context.size(0), self.future, self.num_loc, 4))
@@ -145,6 +124,6 @@ class Transformer2(Transformer):
         atts = []
         for i in range(self.num_layers):
             qry, att = self.layers[i](qry, key, val)
-            atts.append(att)
+            atts.append(att.cpu())
         out = self.linear(qry[:, :, :self.emb_flow].contiguous())
         return self.forward_out(out, atts)
