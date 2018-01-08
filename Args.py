@@ -8,7 +8,7 @@ def add_data(args):
     # data attribute
     args.add_argument('-data_type', type=str, default='highway',
                       choices=['highway', 'metro'])
-    args.add_argument('-num_flow', type=int, default=128)
+    args.add_argument('-num_flow', type=int, default=64)
     args.add_argument('-num_day', type=int, default=7)
     args.add_argument('-num_time', type=int)
     args.add_argument('-num_loc', type=int)
@@ -28,8 +28,8 @@ def add_data(args):
 
 
 def add_loss(args):
-    args.add_argument('-loss', type=str, default='NLLLoss2d',
-                      choices=['L1Loss', 'NLLLoss2d'])
+    args.add_argument('-loss', type=str, default='CrossEntropyLoss',
+                      choices=['L1Loss', 'CrossEntropyLoss'])
 
 
 def add_optim(args):
@@ -58,10 +58,10 @@ def add_model(args):
     args.add_argument('-reg', action='store_true')
     args.add_argument('-reg_weight', type=float, default=0.1)
     # Embedding
-    args.add_argument('-emb_flow', type=int, default=32)
-    args.add_argument('-emb_day', type=int, default=32)
-    args.add_argument('-emb_time', type=int, default=32)
-    args.add_argument('-emb_loc', type=int, default=32)
+    args.add_argument('-emb_flow', type=int, default=16)
+    args.add_argument('-emb_day', type=int, default=16)
+    args.add_argument('-emb_time', type=int, default=16)
+    args.add_argument('-emb_loc', type=int, default=16)
     args.add_argument('-emb_size', type=int)
     # RNN
     args.add_argument('-rnn_type', type=str, default='RNN',
@@ -69,7 +69,7 @@ def add_model(args):
     # Attention
     args.add_argument('-attn_type', type=str, default='add',
                       choices=['add', 'dot', 'mul', 'mlp'])
-    args.add_argument('-head', type=int, default=1)
+    args.add_argument('-head', type=int, default=8)
     args.add_argument('-merge_type', type=str, default='add',
                       choices=['add', 'cat'])
 

@@ -8,9 +8,9 @@ from Utils import aeq
 from UtilClass import *
 
 
-class Attn(nn.Module):
+class Attention(nn.Module):
     def __init__(self, dim, attn_type, dropout=0.1):
-        super(Attn, self).__init__()
+        super(Attention, self).__init__()
         assert attn_type in ['dot', 'add', 'general', 'mlp']
         self.dim = dim
         self.dropout = nn.Dropout(dropout)
@@ -30,9 +30,9 @@ class Attn(nn.Module):
         score = self.score(query, context)
         if mask is not None:
             score.data.masked_fill_(mask, -float('inf'))
-        attn = self.softmax(score)
-        out = torch.bmm(attn, context)
-        return out, attn
+        att = self.softmax(score)
+        out = torch.bmm(att, context)
+        return out, att
 
     def score(self, query, context):
         batch, length, dim = query.size()
@@ -51,115 +51,104 @@ class Attn(nn.Module):
         return score.view(batch, length, length)
 
 
-class MixAttn(nn.Module):
+class MixAttention(nn.Module):
     def __init__(self, dim, attn_types, dropout=0.1):
-        super(MixAttn, self).__init__()
-        self.attn = nn.ModuleList([Attn(dim, attn_type, dropout)
+        super(MixAttention, self).__init__()
+        self.att = nn.ModuleList([Attention(dim, attn_type, dropout)
                                    for attn_type in attn_types])
         self.softmax = nn.Softmax(2)
 
     def forward(self, query, context, mask=None):
-        score = [attn.score(query, context) for attn in self.attn]
+        score = [att.score(query, context) for att in self.att]
         score = torch.sum(torch.stack(score), 0)
         if mask is not None:
             score.masked_fill_(mask, -float('inf'))
         return self.softmax(score)
 
 
-class MergeAttn(Attn):
+class MergeAttention(Attention):
     def __init__(self, dim, attn_type, merge_type, dropout=0.1):
-        super(MergeAttn, self).__init__(dim, attn_type, dropout)
+        super(MergeAttention, self).__init__(dim, attn_type, dropout)
         self.merge_type = merge_type
         if merge_type == 'cat':
             self.linear = BottleLinear(2 * dim, dim)
 
     def forward(self, query, context, mask):
-        out, attn = super(MergeAttn, self).forward(query, context, mask)
+        out, att = super(MergeAttention, self).forward(query, context, mask)
         if self.merge_type == 'add':
             out = self.dropout(out) + query
         elif self.merge_type == 'cat':
             out = torch.cat((query, out), -1)
             out = self.linear(self.dropout(out))
-        return out, attn
+        return out, att
 
 
-class LinearAttn(Attn):
-    def __init__(self, in_features, out_features, attn_type='dot', dropout=0.1):
-        super(LinearAttn, self).__init__(out_features, attn_type, dropout)
-        self.linear_q = BottleLinear(in_features, out_features, bias=False)
-        self.linear_k = BottleLinear(in_features, out_features, bias=False)
-        self.linear_v = BottleLinear(in_features, out_features, bias=False)
-
-    def forward(self, query, context, mask=None):
-        query = self.linear_q(query)
-        key = self.linear_k(context)
-        val = self.linear_v(context)
-        score = self.score(query, key)
-        if mask is not None:
-            score.data.masked_fill_(mask, -float('inf'))
-        attn = self.softmax(score)
-        out = torch.bmm(attn, val)
-        return out, attn
-
-
-class MultiHeadAttn(nn.Module):
-    def __init__(self, dim, head=4, dropout=0.1):
+class MultiHeadAttention(nn.Module):
+    def __init__(self, dim_key, dim_val, head=4, dropout=0.1):
         '''
         Args:
             head(int): number of parallel heads.
             dim(int): the dimension of keys/values/queries in this
-                MultiHeadAttn, must be divisible by head.
+                MultiHeadAttention, must be divisible by head.
         '''
-        assert dim % head == 0
-        super(MultiHeadAttn, self).__init__()
+        assert dim_key % head == 0 and dim_val % head == 0
+        super(MultiHeadAttention, self).__init__()
         self.head = head
-        self.dim = dim
-        self.w_k = BottleLinear(self.dim, self.dim, bias=False)
-        self.w_v = BottleLinear(self.dim, self.dim, bias=False)
-        self.w_q = BottleLinear(self.dim, self.dim, bias=False)
+        self.dim_key = dim_key
+        self.dim_val = dim_val
+        self.w_q = BottleLinear(self.dim_key, self.dim_key, bias=False)
+        self.w_k = BottleLinear(self.dim_key, self.dim_key, bias=False)
+        self.w_v = BottleLinear(self.dim_val, self.dim_val, bias=False)
         self.softmax = nn.Softmax(2)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, query, key, value, mask=None):
+    def forward(self, qry, key, val, mask=None):
         '''
-        query: batch x length x dim
-        attn: batch x head x length x dim_head
+        qry: batch x length_q x dim_key
+        key: batch x length_c x dim_key
+        val: batch x length_c x dim_val
+        att: batch x head x length x dim_head
         '''
-        batch, len_query, dim = query.size()
-        batch_, len_context, dim_ = key.size()
-        aeq(batch, batch_)
-        aeq(dim, dim_)
-        dim_head = dim // self.head
+        batch, len_qry, dim_key = qry.size()
+        batch_key, len_ctx, dim_key_ = key.size()
+        batch_val, len_ctx_, dim_val = val.size()
 
-        def shape_projection(x):
+        aeq(batch, batch_key, batch_val)
+        aeq(dim_key, dim_key_, self.dim_key)
+        aeq(dim_val, self.dim_val)
+        aeq(len_ctx, len_ctx_)
+        dim_key = dim_key // self.head
+        dim_val = dim_val // self.head
+
+        def shape_projection(x, dim_head):
             return x.view(batch, -1, self.head, dim_head) \
                 .transpose(1, 2).contiguous() \
                 .view(batch * self.head, -1, dim_head)
 
-        def unshape_projection(x):
+        def unshape_projection(x, dim_head):
             return x.view(batch, self.head, -1, dim_head) \
                     .transpose(1, 2).contiguous() \
-                    .view(batch, -1, dim)
+                    .view(batch, -1, self.head * dim_head)
 
-        key = shape_projection(self.w_k(key))
-        value = shape_projection(self.w_v(value))
-        query = shape_projection(self.w_q(query))
+        qry = shape_projection(self.w_q(qry), dim_key)
+        key = shape_projection(self.w_k(key), dim_key)
+        val = shape_projection(self.w_v(val), dim_val)
 
-        score = torch.bmm(query, key.transpose(1, 2)) / math.sqrt(dim_head)
+        score = torch.bmm(qry, key.transpose(1, 2)) / math.sqrt(dim_key)
         if mask is not None:
-            score = score.view(batch, self.head, len_query, len_context)
+            score = score.view(batch, self.head, len_qry, len_ctx)
             score.data.masked_fill_(mask, -float('inf'))
-        attn = self.softmax(score.view(-1, len_query, len_context))
+        att = self.softmax(score.view(-1, len_qry, len_ctx))
 
-        out = torch.bmm(self.dropout(attn), value)
-        out = self.dropout(unshape_projection(out))
-        attn = attn.view(batch, self.head, len_query, len_context)
-        return out, attn
+        out = torch.bmm(self.dropout(att), val)
+        out = self.dropout(unshape_projection(out, dim_val))
+        att = att.view(batch, self.head, len_qry, len_ctx)
+        return out, att
 
 
-class SelfAttn(nn.Module):
+class SelfAtt(nn.Module):
     def __init__(self, dim, hop=1, dropout=0.1):
-        super(SelfAttn, self).__init__()
+        super(SelfAtt, self).__init__()
         self.activation = nn.Tanh()
         self.dropout = nn.Dropout(dropout)
         self.softmax = nn.Softmax(2)
@@ -171,12 +160,12 @@ class SelfAttn(nn.Module):
     def forward(self, inp):
         '''
         inp: -1 x length x dim
-        attn: -1 x hop x length
+        att: -1 x hop x length
         out: -1 x hop x dim
         '''
         assert inp.dim() < 4
         hid = self.activation(self.w_1(inp))
         score = self.w_2(self.dropout(hid)).transpose(1, 2)
-        attn = self.softmax(score)
-        out = torch.bmm(attn, inp)
-        return out, attn
+        att = self.softmax(score)
+        out = torch.bmm(att, inp)
+        return out, att

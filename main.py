@@ -33,6 +33,7 @@ if args.seed > 0:
 # DATA
 (inp_train, inp_valid, inp_test,
  tgt_train, tgt_valid, tgt_test,
+ st_train, st_valid, st_test,
  flow_min, flow_scale) = Utils.load_data(args)
 
 
@@ -66,10 +67,12 @@ def train():
         idx = days[day::iters]
         inp = inp_train[idx].cuda()
         tgt = tgt_train[idx].cuda()
-        out = model(inp)
+        st = st_train[idx].cuda()
+        out = model(inp, st)
         if type(out) is tuple:
             out = out[0]
-        loss = criterion(out, tgt)
+        print(out[0])
+        loss = criterion(out, tgt.view(-1))
         loss_train.append(loss.data[0])
         # optimization
         optimizer.zero_grad()
@@ -86,10 +89,11 @@ def valid():
     for i in range(iters):
         inp = inp_valid[i::iters].cuda()
         tgt = tgt_valid[i::iters].cuda()
-        out = model(inp)
+        st = st_valid[i::iters].cuda()
+        out = model(inp, st)
         if type(out) is tuple:
             out = out[0]
-        loss += criterion(out, tgt).data[0]
+        loss += criterion(out, tgt.view(-1)).data[0]
     return loss / iters
 
 
@@ -100,12 +104,13 @@ def test():
     for i in range(iters):
         inp = inp_test[i::iters].cuda()
         tgt = tgt_test[i::iters].cuda()
-        out = model(inp)
+        st = st_test[i::iters].cuda()
+        out = model(inp, st)
         ret_more = False
         if type(out) is tuple:
             out, out_ = out[0], out[1:]
             ret_more = True
-        loss += criterion(out, tgt).data[0]
+        loss += criterion(out, tgt.view(-1)).data[0]
     loss = loss / iters
     if ret_more:
         return loss, out_

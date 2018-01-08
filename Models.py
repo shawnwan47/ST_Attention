@@ -30,15 +30,14 @@ class ModelBase(nn.Module):
 
     def embed(self, inp):
         '''inp: batch x time x loc x 4'''
-        ticks = inp.size(1)
-        inp = inp.view(-1, ticks * self.num_loc, 4)
-        flow = self.embedding_flow(inp[:, :, 0])
-        day = self.embedding_day(inp[:, :, 1])
-        time = self.embedding_time(inp[:, :, 2])
-        loc = self.embedding_loc(inp[:, :, 3])
+        times = inp.size(1)
+        inp = inp.view(-1, times * self.num_loc, 4)
+        flow = self.dropout(self.embedding_flow(inp[:, :, 0]))
+        day = self.dropout(self.embedding_day(inp[:, :, 1]))
+        time = self.dropout(self.embedding_time(inp[:, :, 2]))
+        loc = self.dropout(self.embedding_loc(inp[:, :, 3]))
         out = torch.cat((flow, day, time, loc), -1)
-        out = out.view(-1, ticks, self.num_loc, self.emb_size)
-        return out
+        return out.view(-1, times, self.num_loc, self.emb_size)
 
 
 class TempLinear(ModelBase):
@@ -128,36 +127,38 @@ class HeadAttn(ModelBase):
 class ST_Transformer(ModelBase):
     def __init__(self, args):
         super(ST_Transformer, self).__init__(args)
-        self.att = Attention.MultiHeadAttn(self.emb_size)
+        self.layers = nn.ModuleList([Layers.TransformerLayer(
+            self.emb_size, self.emb_size, args.head, args.dropout
+        ) for _ in range(self.num_layers)])
         self.linear = BottleLinear(self.emb_size, self.num_flow, bias=False)
-        self.softmax = nn.Softmax(3)
-        # mask = Utils.get_mask_pixel(args.max_len)
-        # self.register_buffer('mask', mask)
 
-    def forward(self, inp):
+    def forward(self, inp, st):
         '''
-        inp: batch x time x loc x 4
-        out: batch x future x flow
+        inp: batch x time x loc
+        st: batch x time x loc x 3
+        out: batch x num_flow x time x loc
         '''
-        out = self.init_out(inp)
-        inp = self.embed(inp)
+        key = torch.cat((inp.unsqueeze(-1), st), -1)
+        out = self.init_out(key)
+        key = self.embed(key)
         out = self.embed(out)
-        # flatten inp out
-        inp = inp.view(-1, self.past * self.num_loc, self.emb_size)
+        # flatten inp key
+        key = key.view(-1, self.past * self.num_loc, self.emb_size)
         out = out.view(-1, self.future * self.num_loc, self.emb_size)
-        out, att = self.att(out, inp, inp)
+        for i in range(self.num_layers):
+            out, att = self.layers[i](out, key, key)
         out = out.view(-1, self.future, self.num_loc, self.emb_size)
-        out = self.softmax(self.linear(out)).transpose(1, 3).transpose(2, 3)
+        out = self.linear(out).view(-1, self.num_flow)
         att = att.view(-1, self.future, self.num_loc, self.past, self.num_loc)
         att = att[:, 0]
         return out, att
 
-    def init_out(self, inp):
-        out = torch.zeros((inp.size(0), self.future, self.num_loc, 4))
-        out = Variable(out.type_as(inp.data))
-        out[:, :, :, 3] = inp[:, -1, :, 3]
+    def init_out(self, key):
+        out = torch.zeros((key.size(0), self.future, self.num_loc, 4)).type(torch.LongTensor)
+        out[:, :, :, 1:] = key[:, -1, :, 1:].data
         for i in range(self.future):
-            out[:, i, :, 1] = (inp[:, -1, :, 2] + i).div(self.num_time)
-            out[:, i, :, 1] = out[:, i, :, 1] + inp[:, -1, :, 1]
-            out[:, i, :, 2] = (inp[:, -1, :, 2] + i).remainder(self.num_time)
-        return out
+            out[:, i, :, 2] = out[:, i, :, 2] + i
+            out[:, i, :, 1] = out[:, i, :, 1] + out[:, -1, :, 2].div(self.num_time)
+            out[:, i, :, 1] = out[:, i, :, 1].remainder(self.num_day)
+            out[:, i, :, 2] = out[:, i, :, 2].remainder(self.num_time)
+        return Variable(out, volatile=key.volatile).cuda()
