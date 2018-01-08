@@ -13,7 +13,7 @@ def add_data(args):
     args.add_argument('-num_time', type=int)
     args.add_argument('-num_loc', type=int)
     # dataset
-    args.add_argument('-past', type=int, default=4)
+    args.add_argument('-past', type=int, default=1)
     args.add_argument('-future', type=int, default=1)
     args.add_argument('-past_day', action='store_true')
     args.add_argument('-max_len', type=int)
@@ -33,11 +33,11 @@ def add_loss(args):
 
 
 def add_optim(args):
-    args.add_argument('-optim', type=str, default='SGD',
+    args.add_argument('-optim', type=str, default='Adam',
                       choices=['SGD', 'Adam'])
-    args.add_argument('-lr', type=float, default=1)
+    args.add_argument('-lr', type=float, default=0.001)
     args.add_argument('-patience', type=int, default=10)
-    args.add_argument('-lr_min', type=float, default=1e-5)
+    args.add_argument('-lr_min', type=float, default=1e-4)
     args.add_argument('-weight_decay', type=float, default=5e-5)
     args.add_argument('-max_grad_norm', type=float, default=1)
 
@@ -51,7 +51,7 @@ def add_run(args):
 
 def add_model(args):
     # general
-    args.add_argument('-model', type=str, default='ST_Transformer')
+    args.add_argument('-model', type=str, default='Transformer')
     args.add_argument('-num_layers', type=int, default=1)
     args.add_argument('-dropout', type=float, default=0.1)
     # regularization
@@ -69,7 +69,7 @@ def add_model(args):
     # Attention
     args.add_argument('-attn_type', type=str, default='add',
                       choices=['add', 'dot', 'mul', 'mlp'])
-    args.add_argument('-head', type=int, default=8)
+    args.add_argument('-head', type=int, default=4)
     args.add_argument('-merge_type', type=str, default='add',
                       choices=['add', 'cat'])
 
@@ -108,20 +108,11 @@ def update_args(args):
 def modelname(args):
     # MODEL
     path = args.model
-    if args.model.startswith('En'):
-        path += str(args.subnum) + args.submodel
-    if 'RNN' in args.model:
-        path += args.rnn_type
-    if args.model == 'RNNAttn':
-        path += args.attn_type
-    if args.reg:
-        path += 'Reg' + str(args.reg_weight)
     # Attn
-    if 'Attn' in args.model:
-        path += 'Head' + str(args.head)
-        path += args.attn_type
+    path += 'Head' + str(args.head)
     # General
     path += 'Lay' + str(args.num_layers)
     # Data
+    path += 'Past' + str(args.past)
     path += 'Future' + str(args.future)
     return path

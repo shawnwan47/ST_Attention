@@ -77,9 +77,10 @@ class RNN(ModelBase):
         return out
 
 
-class ST_Transformer(ModelBase):
+class Transformer(ModelBase):
     def __init__(self, args):
-        super(ST_Transformer, self).__init__(args)
+        super(Transformer, self).__init__(args)
+        self.head = args.head
         self.layers = nn.ModuleList([Layers.TransformerLayer(
             self.emb_size, args.head, args.dropout
         ) for _ in range(self.num_layers)])
@@ -95,47 +96,55 @@ class ST_Transformer(ModelBase):
         atts = []
         for i in range(self.num_layers):
             query, att = self.layers[i](query, context)
-            atts.append(att.view(-1, self.num_loc, self.past, self.num_loc))
-        query = query.view(-1, self.num_loc, self.emb_size)
-        out = self.linear(query).view(-1, self.num_flow)
-        att = torch.stack(atts, 1)
+            atts.append(att)
+        out = self.linear(query)
+        return self.forward_out(out, atts)
+
+    def forward_out(self, out, att):
+        out = out.transpose(1, 2).contiguous()
+        out = out.view(-1, self.num_flow, self.future, self.num_loc)
+        att = torch.stack(att, 1).view(-1, self.num_layers, self.head,
+                                       self.future, self.num_loc,
+                                       self.past, self.num_loc)
         return out, att
+
 
     def embed_query_context(self, inp, st):
         context = torch.cat((inp.unsqueeze(-1), st), -1)
         query = self.init_query(context)
         context = context.view(-1, self.past * self.num_loc, 4)
-        query = query.view(-1, self.num_loc, 4)
+        query = query.view(-1, self.future * self.num_loc, 4)
         context = self.embed(context)
         query = self.embed(query)
         return query, context
 
     def init_query(self, context):
-        query = torch.zeros((context.size(0), self.num_loc, 4)).type(torch.LongTensor)
-        query[:, :, 1:] = context.data[:, -1, :, 1:]
-        query[:, :, 2] += 1
-        query[:, :, 1] += query[:, :, 2].div(self.num_time)
-        query[:, :, 1] = query[:, :, 1].remainder(self.num_day)
-        query[:, :, 2] = query[:, :, 2].remainder(self.num_time)
+        query = torch.zeros((context.size(0), self.future, self.num_loc, 4))
+        query = query.type(torch.LongTensor)
+        for i in range(self.future):
+            query[:, i, :, :] = context.data[:, -1, :, :]
+            query[:, i, :, 2] += i + 1
+            query[:, i, :, 1] += query[:, i, :, 2].div(self.num_time)
+            query[:, i, :, 1] = query[:, i, :, 1].remainder(self.num_day)
+            query[:, i, :, 2] = query[:, i, :, 2].remainder(self.num_time)
         return Variable(query, volatile=context.volatile).cuda()
 
 
-class ST_Transformer2(ST_Transformer):
+class Transformer2(Transformer):
     def __init__(self, args):
-        super(ST_Transformer2, self).__init__(args)
+        super(Transformer2, self).__init__(args)
         self.emb_flow = args.emb_flow
-        self.attention = Layers.Transformer2Layer(
+        self.layers = nn.ModuleList([Layers.Transformer2Layer(
             self.emb_size, self.emb_flow, args.head, args.dropout
-        )
+        ) for _ in range(self.num_layers)])
         self.linear = BottleLinear(self.emb_flow, self.num_flow)
 
     def forward(self, inp, st):
         qry, key = self.embed_query_context(inp, st)
         val = key[:, :, :self.emb_flow].contiguous()
+        atts = []
         for i in range(self.num_layers):
-            qry, att = self.attention(qry, key, val)
-        out = qry[:, :, :self.emb_flow].contiguous()
-        out = out.view(-1, self.num_loc, self.emb_flow)
-        out = self.linear(out).view(-1, self.num_flow)
-        att = att.view(-1, self.num_loc, self.past, self.num_loc)
-        return out, att
+            qry, att = self.layers[i](qry, key, val)
+            atts.append(att)
+        out = self.linear(qry[:, :, :self.emb_flow].contiguous())
+        return self.forward_out(out, atts)

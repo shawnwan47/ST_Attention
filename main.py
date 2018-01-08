@@ -37,6 +37,20 @@ if args.seed > 0:
  flow_min, flow_scale) = Utils.load_data(args)
 
 
+def WAPE(out, tgt):
+    '''
+    out: batch x future x loc x weight
+    tgt: batch x future x loc
+    '''
+    _, out = out.max(1)
+    out = out.type(torch.cuda.FloatTensor)
+    tgt = tgt.type(torch.cuda.FloatTensor)
+    out = out * flow_scale + flow_min
+    tgt = tgt * flow_scale + flow_min
+    wape = torch.abs(out - tgt).sum() / torch.sum(tgt)
+    return wape.data[0]
+
+
 # MODEL
 modelpath = MODEL_PATH + Args.modelname(args)
 print('Model: {}'.format(modelpath))
@@ -59,7 +73,7 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True)
 # TRAINING
 def train():
     model.train()
-    loss_train = []
+    loss_train = wape = 0
     num_sample = inp_train.size(0)
     days = torch.randperm(num_sample)
     iters = num_sample // args.batch
@@ -68,75 +82,64 @@ def train():
         inp = inp_train[idx].cuda()
         tgt = tgt_train[idx].cuda()
         st = st_train[idx].cuda()
-        out = model(inp, st)
-        if type(out) is tuple:
-            out = out[0]
-        loss = criterion(out, tgt.view(-1))
-        loss_train.append(loss.data[0])
+        out, _ = model(inp, st)
+        loss = criterion(out, tgt)
+        loss_train += loss.data[0]
+        wape += WAPE(out, tgt)
         # optimization
         optimizer.zero_grad()
         loss.backward()
         # clip_grad_norm(model.parameters(), args.max_grad_norm)
         optimizer.step()
-    return sum(loss_train) / len(loss_train)
+    return loss_train / iters, wape / iters
 
 
 def valid():
     model.eval()
-    loss = 0
+    loss = wape = 0
     iters = inp_valid.size(0) // args.batch
     for i in range(iters):
         inp = inp_valid[i::iters].cuda()
         tgt = tgt_valid[i::iters].cuda()
         st = st_valid[i::iters].cuda()
-        out = model(inp, st)
-        if type(out) is tuple:
-            out = out[0]
-        loss += criterion(out, tgt.view(-1)).data[0]
-    return loss / iters
+        out, _ = model(inp, st)
+        loss += criterion(out, tgt).data[0]
+        wape += WAPE(out, tgt)
+    return loss / iters, wape / iters
 
 
 def test():
     model.eval()
-    loss = 0
+    loss = wape = 0
     iters = inp_test.size(0) // args.batch
     for i in range(iters):
         inp = inp_test[i::iters].cuda()
         tgt = tgt_test[i::iters].cuda()
         st = st_test[i::iters].cuda()
-        out = model(inp, st)
-        ret_more = False
-        if type(out) is tuple:
-            out, out_ = out[0], out[1:]
-            ret_more = True
-        loss += criterion(out, tgt.view(-1)).data[0]
-    loss = loss / iters
-    if ret_more:
-        return loss, out_
-    else:
-        return loss
+        out, att = model(inp, st)
+        loss += criterion(out, tgt).data[0]
+        wape += WAPE(out, tgt)
+    return loss / iters, wape / iters, att
 
 
 def run():
     if not args.test:
         for epoch in range(args.epoches):
-            loss_train = train()
-            loss_valid = valid()
+            loss_train, wape_train = train()
+            loss_valid, wape_valid = valid()
 
             if not epoch % args.print_epoches:
-                print('Epoch: %d train: %.4f valid: %.4f' % (
-                    epoch, loss_train, loss_valid))
+                print('Epoch: %d NLL: %.4f %.4f WAPE: %.4f %.4f' % (
+                    epoch, loss_train, loss_valid, wape_train, wape_valid))
 
             scheduler.step(loss_valid)
             if optimizer.param_groups[0]['lr'] < args.lr_min:
                 break
 
-    out = test()
-    if type(out) is tuple:
-        out, out_ = out[0], out[1]
-        Utils.torch2npsave(modelpath + '_out', out_)
-    print('Test {}: {}'.format(modelpath, out))
+    loss_test, wape_test, att = test()
+    print('Test {}: NLL:{} WAPE:{}'.format(modelpath, loss_test, wape_test))
     torch.save(model.cpu(), modelpath + '.pt')
+    Utils.torch2npsave(modelpath + '_att', att)
 
 
 if __name__ == '__main__':
