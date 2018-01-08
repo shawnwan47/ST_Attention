@@ -29,15 +29,13 @@ class ModelBase(nn.Module):
         self.softmax = nn.Softmax(3)
 
     def embed(self, inp):
-        '''inp: batch x time x loc x 4'''
-        times = inp.size(1)
-        inp = inp.view(-1, times * self.num_loc, 4)
+        '''inp: batch x -1 x 4'''
         flow = self.dropout(self.embedding_flow(inp[:, :, 0]))
         day = self.dropout(self.embedding_day(inp[:, :, 1]))
         time = self.dropout(self.embedding_time(inp[:, :, 2]))
         loc = self.dropout(self.embedding_loc(inp[:, :, 3]))
         out = torch.cat((flow, day, time, loc), -1)
-        return out.view(-1, times, self.num_loc, self.emb_size)
+        return out
 
 
 class TempLinear(ModelBase):
@@ -79,58 +77,13 @@ class RNN(ModelBase):
         return out
 
 
-class RNNAttn(RNN):
-    def __init__(self, args):
-        super(RNNAttn, self).__init__(args)
-        self.att = Attention.Attn(self.hidden_size, args.att_type, args.dropout)
-        mask = Utils.get_mask_trim(args.max_len, self.past)
-        self.register_buffer('mask', mask)
-
-    def forward(self, inp, daytime=None):
-        out = self.forward_rnn(inp, daytime)
-        batch, length, dim = out.size()
-        mask = self.mask[:length, :length]
-        out, att = self.att(out, mask)
-        out = self.linear_out(self.dropout(out[:, self.past:]))
-        out = out.view(batch, -1, self.future, self.dim)
-        return out, att
-
-
-class HeadAttn(ModelBase):
-    def __init__(self, args):
-        super(HeadAttn, self).__init__(args)
-        self.head = args.head
-        self.layers = nn.ModuleList([Layers.HeadAttnLayer(
-            self.input_size, self.head, args.dropout)
-            for _ in range(self.num_layers)])
-        self.linear_out = BottleLinear(self.input_size, self.dim * self.future)
-        mask = Utils.get_mask_trim(args.max_len, self.past)
-        self.register_buffer('mask', mask)
-
-    def forward(self, inp, daytime=None):
-        out = super(HeadAttn, self).forward(inp, daytime)
-        batch, length, dim = out.size()
-        att = []
-        for i in range(self.num_layers):
-            out, att_i = self.layers[i](out, self.mask[:length, :length])
-            att.append(att_i)
-        att = torch.stack(att, 1)
-        out = out[:, self.past:].contiguous()
-        out = self.linear_out(out).view(batch, -1, self.future, self.dim)
-        out = out + inp[:, self.past:].unsqueeze(-2)
-        return out, att
-
-    def pack_weight(self, weight):
-        return weight.sum(1).view(-1, weight.size(-1))
-
-
 class ST_Transformer(ModelBase):
     def __init__(self, args):
         super(ST_Transformer, self).__init__(args)
         self.layers = nn.ModuleList([Layers.TransformerLayer(
             self.emb_size, args.head, args.dropout
         ) for _ in range(self.num_layers)])
-        self.linear = BottleLinear(self.emb_size, self.num_flow, bias=False)
+        self.linear = BottleLinear(self.emb_size, self.num_flow)
 
     def forward(self, inp, st):
         '''
@@ -138,27 +91,51 @@ class ST_Transformer(ModelBase):
         st: batch x time x loc x 3
         out: batch x num_flow x time x loc
         '''
-        context = torch.cat((inp.unsqueeze(-1), st), -1)
-        query = self.init_query(context)
-        context = self.embed(context)
-        query = self.embed(query)
-        # flatten inp context
-        context = context.view(-1, self.past * self.num_loc, self.emb_size)
-        query = query.view(-1, self.future * self.num_loc, self.emb_size)
+        query, context = self.embed_query_context(inp, st)
+        atts = []
         for i in range(self.num_layers):
             query, att = self.layers[i](query, context)
-        query = query.view(-1, self.future, self.num_loc, self.emb_size)
+            atts.append(att.view(-1, self.num_loc, self.past, self.num_loc))
+        query = query.view(-1, self.num_loc, self.emb_size)
         out = self.linear(query).view(-1, self.num_flow)
-        att = att.view(-1, self.future, self.num_loc, self.past, self.num_loc)
-        att = att[:, 0]
+        att = torch.stack(atts, 1)
         return out, att
 
+    def embed_query_context(self, inp, st):
+        context = torch.cat((inp.unsqueeze(-1), st), -1)
+        query = self.init_query(context)
+        context = context.view(-1, self.past * self.num_loc, 4)
+        query = query.view(-1, self.num_loc, 4)
+        context = self.embed(context)
+        query = self.embed(query)
+        return query, context
+
     def init_query(self, context):
-        query = torch.zeros((context.size(0), self.future, self.num_loc, 4)).type(torch.LongTensor)
-        query[:, :, :, 1:] = context[:, -1, :, 1:].data
-        for i in range(self.future):
-            query[:, i, :, 2] = query[:, i, :, 2] + i
-            query[:, i, :, 1] = query[:, i, :, 1] + query[:, -1, :, 2].div(self.num_time)
-            query[:, i, :, 1] = query[:, i, :, 1].remainder(self.num_day)
-            query[:, i, :, 2] = query[:, i, :, 2].remainder(self.num_time)
+        query = torch.zeros((context.size(0), self.num_loc, 4)).type(torch.LongTensor)
+        query[:, :, 1:] = context.data[:, -1, :, 1:]
+        query[:, :, 2] += 1
+        query[:, :, 1] += query[:, :, 2].div(self.num_time)
+        query[:, :, 1] = query[:, :, 1].remainder(self.num_day)
+        query[:, :, 2] = query[:, :, 2].remainder(self.num_time)
         return Variable(query, volatile=context.volatile).cuda()
+
+
+class ST_Transformer2(ST_Transformer):
+    def __init__(self, args):
+        super(ST_Transformer2, self).__init__(args)
+        self.emb_flow = args.emb_flow
+        self.attention = Layers.Transformer2Layer(
+            self.emb_size, self.emb_flow, args.head, args.dropout
+        )
+        self.linear = BottleLinear(self.emb_flow, self.num_flow)
+
+    def forward(self, inp, st):
+        qry, key = self.embed_query_context(inp, st)
+        val = key[:, :, :self.emb_flow].contiguous()
+        for i in range(self.num_layers):
+            qry, att = self.attention(qry, key, val)
+        out = qry[:, :, :self.emb_flow].contiguous()
+        out = out.view(-1, self.num_loc, self.emb_flow)
+        out = self.linear(out).view(-1, self.num_flow)
+        att = att.view(-1, self.num_loc, self.past, self.num_loc)
+        return out, att

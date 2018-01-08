@@ -8,7 +8,7 @@ def add_data(args):
     # data attribute
     args.add_argument('-data_type', type=str, default='highway',
                       choices=['highway', 'metro'])
-    args.add_argument('-num_flow', type=int, default=64)
+    args.add_argument('-num_flow', type=int, default=16)
     args.add_argument('-num_day', type=int, default=7)
     args.add_argument('-num_time', type=int)
     args.add_argument('-num_loc', type=int)
