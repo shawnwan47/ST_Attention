@@ -7,11 +7,11 @@ from Consts import *
 
 
 def load_station():
-    return pd.read_csv(DATA_PATH + 'STATION.csv', index_col=0)
+    return pd.read_csv(DATA_PATH + 'STATION.txt', index_col=0)
 
 
-def load_link():
-    return np.genfromtxt(DATA_PATH + 'LINK.txt', dtype=int)
+def load_link(filename='LINK.txt'):
+    return np.genfromtxt(DATA_PATH + filename, dtype=int)
 
 
 def load_flow(affix='O'):

@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import numpy as np
 
+import Data
+
 
 def saveclf(figpath):
     dirname = os.path.dirname(figpath)
@@ -13,15 +15,32 @@ def saveclf(figpath):
     plt.clf()
 
 
-def plotTimeTicks(args, length, axis='x', offset=True):
+def plot_network():
+    station = Data.load_station()
+    link = Data.load_link('LINK_RAW.txt')
+    plt.axis('off')
+    for i in range(link.shape[0]):
+        s, e = link[i, 0], link[i, 1]
+        if s in station.index and e in station.index:
+            plt.plot(station.loc[[s, e], 'Longitude'],
+                     station.loc[[s, e], 'Latitude'], 'gray')
+
+def scatter_network(val, scale=1):
+    idx = Data.load_idx()
+    assert len(val) == len(idx)
+    station = Data.load_station().loc[idx]
+    plt.scatter(station['Longitude'], station['Latitude'],
+                s=val * scale, alpha=0.5, edgecolors='none')
+
+
+def plotTimeTicks(args, length, axis='x'):
     hour = 60 // args.resolution
-    daily_hour = args.daily_times // hour
-    ticks = np.arange(length // hour + 1).astype(int)
-    labels = list(map(lambda x: str(x) + ':00',
-                      ticks % daily_hour + args.start_time))
+    num_hour = args.num_time // hour
+    ticks = np.arange(length // hour).astype(int)
+    labels = list(map(lambda x: str(x) + ':00', ticks))
     ticks *= hour
     if axis is 'x':
-        plt.xticks(ticks, labels, rotation=60)
+        plt.xticks(ticks, labels, rotation=90)
     else:
         plt.yticks(ticks, labels)
 
@@ -84,34 +103,16 @@ def show_attn(attn, args):
     plt.ylabel('Future')
 
 
-def show_adj(adj, args):
+def loc2loc(im, args):
     plt.axis('off')
-    plt.imshow(adj)
-    dim = args.dim
+    plt.imshow(im, vmin=0, vmax=0.1)
+    dim = args.num_loc
     mid = dim // 2
     plt.plot(mid * np.ones(dim), 'k')
     plt.plot(mid * np.ones(dim), np.arange(dim), 'k')
 
 
-def show_attn_merge(attn_merge, args):
-    '''
-    attn_merge: length x channel
-    '''
-    length, channel = attn_merge.shape
-    plt.imshow(attn_merge, cmap='rainbow', vmin=0, vmax=1)
-    plotTimeTicks(args, length, axis='y')
-
-
-def show_linear_weight(weight, args=None):
-    plt.imshow(weight, vmin=0, vmax=1, cmap='rainbow')
-    plt.axis('off')
-
-
-def chain_attns(attn1, attn2):
-    '''
-    attn1: len1 x len2
-    attn2: len2 x len3
-    ret: len1 x len3
-    '''
-    assert attn1.shape[1] == attn2.shape[0]
-    return np.matmul(attn1, attn2)
+def loc2time(im, loc, args):
+    plt.imshow(im, vmin=0, vmax=0.1)
+    plotTimeTicks(args, im.shape[0], 'y')
+    plt.xticks([loc], ['location'])

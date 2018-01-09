@@ -53,6 +53,9 @@ def load_data(args):
     flow_min = Variable(torch.FloatTensor(flow_min), requires_grad =False).cuda()
     flow_scale = Variable(torch.FloatTensor(flow_scale), requires_grad =False).cuda()
 
+    print('Data loaded.\ninp: {}, tgt: {}, st: {}'.format(
+        inp_test.size(), tgt_test.size(), st_test.size()))
+
     return (inp_train, inp_valid, inp_test,
             tgt_train, tgt_valid, tgt_test,
             st_train, st_valid, st_test,
