@@ -89,62 +89,27 @@ def load_daytime(resolution=15):
 
 
 def load_loc():
-    loc, _, _ = load_flow_pixel()
-    for i in range(loc.shape[-1]):
-        loc[:, :, i] = i
-    return loc
+    orig, dest, _, _ = load_flow_pixel()
+    for i in range(orig.shape[-1]):
+        orig[:, :, i] = i
+        dest[:, :, i] = i
+    dest += dest.shape[-1]
+    return orig, dest
 
 
 def load_flow_pixel(bits=64):
     idx = load_idx()
-    origin = load_flow('O').loc[:, idx].astype(float).as_matrix()
-    destination = load_flow('D').loc[:, idx].astype(float).as_matrix()
+    orig = load_flow('O').loc[:, idx].astype(float).as_matrix()
+    dest = load_flow('D').loc[:, idx].astype(float).as_matrix()
 
-    flow = np.concatenate((origin, destination), -1)
-    flow_min = np.min(flow, 0)
-    flow -= flow_min
-    flow_scale = (np.max(flow, 0) + 1e-3) / bits
-    flow /= flow_scale
-    flow = flow.reshape(-1, 96, flow.shape[-1]).astype(int)
-    return flow, flow_min, flow_scale
+    def scale_flow(flow):
+        flow_min = np.min(flow, 0)
+        flow -= flow_min
+        flow_scale = (np.max(flow, 0) + 1e-3) / bits
+        flow /= flow_scale
+        flow = flow.reshape(-1, 96, flow.shape[-1]).astype(int)
+        return flow, flow_min, flow_scale
 
-
-def load_flow_metro(resolution=15, start_time=5, end_time=23):
-    assert resolution in [5, 10, 15, 20, 30, 60]
-    steps = resolution // 5
-    origin = load_flow('O').astype(float).as_matrix()
-    destination = load_flow('D').astype(float).as_matrix()
-    flow = np.concatenate((origin, destination), -1)
-
-    # sum up steps interval
-    flow = flow.reshape((DAYS, -1, flow.shape[-1]))
-    for i in range(flow.shape[1] - steps):
-        flow[:, i] = flow[:, i:i + steps].sum(axis=1)
-    flow = flow[:, :-steps]
-
-    # trim the head and tail
-    head = start_time * 60 // 5
-    tail = end_time * 60 // 5
-    flow = flow[:, head:tail]
-
-    # trim the mod and slice flow
-    res = flow.shape[1] % steps
-    flow = flow[:, :-res] if res else flow
-    flow = np.concatenate([flow[:, i::steps, :] for i in range(steps)], 0)
-
-    # normalization
-    flow = flow.reshape((-1, flow.shape[-1]))
-    flow_mean = flow.mean(0)
-    flow_std = flow.std(0)
-    flow = (flow - flow_mean) / (flow_std + EPS)
-    flow = flow.reshape((DAYS * steps, -1, flow.shape[-1]))
-
-    # compute daytime
-    nday, ntime, _ = flow.shape
-    daytime = np.zeros((nday, ntime, 2)).astype(int)
-    for iday in range(nday):
-        daytime[iday, :, 0] = (iday % DAYS - WEEKDAY) % 7
-    for itime in range(ntime):
-        daytime[:, itime, 1] = itime
-
-    return flow, daytime, flow_mean, flow_std
+    orig, orig_min, orig_scale = scale_flow(orig)
+    dest, dest_min, dest_scale = scale_flow(dest)
+    return orig, orig_min, orig_scale, dest, dest_min, dest_scale

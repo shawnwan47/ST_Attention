@@ -9,49 +9,39 @@ def load_adj():
     return torch.ByteTensor(Data.load_adj()).cuda() == 0
 
 
-def denormalize(flow, flow_mean, flow_std):
-    return flow * flow_std + flow_mean
-
-
 def load_data(args):
-    flow, flow_min, flow_scale = Data.load_flow_pixel(args.num_flow)
+    orig, _, _, dest, dest_min, dest_scale = Data.load_flow_pixel(args.num_flow)
     day, time = Data.load_daytime()
-    loc = Data.load_loc()
+    loc_orig, loc_dest = Data.load_loc()
 
-    flow = torch.LongTensor(flow)
-    day = torch.LongTensor(day).expand_as(flow)
-    time = torch.LongTensor(time).expand_as(flow)
-    loc = torch.LongTensor(loc)
-    inp = tgt = flow.contiguous().view(-1, args.num_loc)
-    st = torch.stack((day, time, loc), -1).view(-1, args.num_loc, 3)
+    orig = torch.LongTensor(orig)
+    dest = torch.LongTensor(dest)
+    day = torch.LongTensor(day).expand_as(orig)
+    time = torch.LongTensor(time).expand_as(orig)
+    loc_orig = torch.LongTensor(loc_orig)
+    loc_dest = torch.LongTensor(loc_dest)
+
+    inp = torch.stack((orig, day, time, loc_orig), -1).view(-1, args.num_loc, 4)
+    tgt = torch.stack((dest, day, time, loc_dest), -1).view(-1, args.num_loc, 4)
 
     num_sample = (args.days - 1) * args.num_time
-    inp_size = (args.days - 1, args.num_time, args.past, args.num_loc)
-    tgt_size = (args.days - 1, args.num_time, args.future, args.num_loc)
-    st_size = (args.days - 1, args.num_time, args.past, args.num_loc, 3)
     inp = torch.stack([inp[i:i + args.past]
-                       for i in range(num_sample)], 0).view(inp_size)
+                       for i in range(num_sample)], 0)
     tgt = torch.stack([tgt[i + args.past:i + args.past + args.future]
-                       for i in range(num_sample)], 0).view(tgt_size)
-    st = torch.stack([st[i:i + args.past]
-                      for i in range(num_sample)], 0).view(st_size)
+                       for i in range(num_sample)], 0)
 
-    inp_size = (-1, args.past, args.num_loc)
-    tgt_size = (-1, args.future, args.num_loc)
-    st_size = (-1, args.past, args.num_loc, 3)
+    train_size = args.days_train * args.num_time
+    test_size = args.days_test * args.num_time
 
-    inp_train = Variable(inp[:args.days_train]).view(inp_size)
-    inp_valid = Variable(inp[args.days_train:-args.days_test], volatile=True).view(inp_size)
-    inp_test = Variable(inp[-args.days_test:], volatile=True).view(inp_size)
-    tgt_train = Variable(tgt[:args.days_train]).view(tgt_size)
-    tgt_valid = Variable(tgt[args.days_train:-args.days_test], volatile=True).view(tgt_size)
-    tgt_test = Variable(tgt[-args.days_test:], volatile=True).view(tgt_size)
-    st_train = Variable(st[:args.days_train]).view(st_size)
-    st_valid = Variable(st[args.days_train:-args.days_test], volatile=True).view(st_size)
-    st_test = Variable(st[-args.days_test:], volatile=True).view(st_size)
+    inp_train = Variable(inp[:train_size])
+    inp_valid = Variable(inp[train_size:-test_size], volatile=True)
+    inp_test = Variable(inp[-test_size:], volatile=True)
+    tgt_train = Variable(tgt[:train_size])
+    tgt_valid = Variable(tgt[train_size:-test_size], volatile=True)
+    tgt_test = Variable(tgt[-test_size:], volatile=True)
 
-    flow_min = Variable(torch.FloatTensor(flow_min), requires_grad =False).cuda()
-    flow_scale = Variable(torch.FloatTensor(flow_scale), requires_grad =False).cuda()
+    tgt_min = Variable(torch.FloatTensor(tgt_min), requires_grad =False).cuda()
+    tgt_scale = Variable(torch.FloatTensor(tgt_scale), requires_grad =False).cuda()
 
     print('Data loaded.\ninp: {}, tgt: {}, st: {}'.format(
         inp_test.size(), tgt_test.size(), st_test.size()))
@@ -59,7 +49,7 @@ def load_data(args):
     return (inp_train, inp_valid, inp_test,
             tgt_train, tgt_valid, tgt_test,
             st_train, st_valid, st_test,
-            flow_min, flow_scale)
+            tgt_min, tgt_scale)
 
 
 def aeq(*args):
