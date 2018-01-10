@@ -68,8 +68,6 @@ class BottleLayerNorm(Bottle, LayerNorm):
 
 
 class PointwiseMLP(nn.Module):
-    ''' A two-layer Feed-Forward-Network.'''
-
     def __init__(self, dim, dropout=0.1):
         super(PointwiseMLP, self).__init__()
         self.w_1 = BottleLinear(dim, dim)

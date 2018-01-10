@@ -10,7 +10,7 @@ def load_adj():
 
 
 def load_data(args):
-    orig, _, _, dest, dest_min, dest_scale = Data.load_flow_pixel(args.num_flow)
+    orig, orig_min, orig_scale, dest, dest_min, dest_scale = Data.load_flow_pixel(args.num_flow)
     day, time = Data.load_daytime()
     loc_orig, loc_dest = Data.load_loc()
 
@@ -21,8 +21,10 @@ def load_data(args):
     loc_orig = torch.LongTensor(loc_orig)
     loc_dest = torch.LongTensor(loc_dest)
 
-    inp = torch.stack((orig, day, time, loc_orig), -1).view(-1, args.num_loc, 4)
-    tgt = torch.stack((dest, day, time, loc_dest), -1).view(-1, args.num_loc, 4)
+    inp = torch.stack((orig, day, time, loc_orig), -1)
+    tgt = torch.stack((dest, day, time, loc_dest), -1)
+    inp = inp.view(-1, inp.size(-2), inp.size(-1))
+    tgt = tgt.view(-1, tgt.size(-2), tgt.size(-1))
 
     num_sample = (args.days - 1) * args.num_time
     inp = torch.stack([inp[i:i + args.past]
@@ -33,22 +35,21 @@ def load_data(args):
     train_size = args.days_train * args.num_time
     test_size = args.days_test * args.num_time
 
-    inp_train = Variable(inp[:train_size])
-    inp_valid = Variable(inp[train_size:-test_size], volatile=True)
-    inp_test = Variable(inp[-test_size:], volatile=True)
-    tgt_train = Variable(tgt[:train_size])
-    tgt_valid = Variable(tgt[train_size:-test_size], volatile=True)
-    tgt_test = Variable(tgt[-test_size:], volatile=True)
+    inp_train = inp[:train_size]
+    inp_valid = inp[train_size:-test_size]
+    inp_test = inp[-test_size:]
+    tgt_train = tgt[:train_size]
+    tgt_valid = tgt[train_size:-test_size]
+    tgt_test = tgt[-test_size:]
 
-    tgt_min = Variable(torch.FloatTensor(tgt_min), requires_grad =False).cuda()
-    tgt_scale = Variable(torch.FloatTensor(tgt_scale), requires_grad =False).cuda()
+    tgt_min = Variable(torch.FloatTensor(dest_min), requires_grad=False).cuda()
+    tgt_scale = Variable(torch.FloatTensor(dest_scale), requires_grad=False).cuda()
 
-    print('Data loaded.\ninp: {}, tgt: {}, st: {}'.format(
-        inp_test.size(), tgt_test.size(), st_test.size()))
+    print('Data loaded.\ninp: {}, tgt: {}'.format(
+        inp_test.size(), tgt_test.size()))
 
     return (inp_train, inp_valid, inp_test,
             tgt_train, tgt_valid, tgt_test,
-            st_train, st_valid, st_test,
             tgt_min, tgt_scale)
 
 

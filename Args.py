@@ -8,9 +8,9 @@ def add_data(args):
     # data attribute
     args.add_argument('-data_type', type=str, default='highway',
                       choices=['highway', 'metro'])
-    args.add_argument('-num_flow', type=int, default=16)
+    args.add_argument('-num_flow', type=int, default=64)
     args.add_argument('-num_day', type=int, default=7)
-    args.add_argument('-num_time', type=int)
+    args.add_argument('-num_time', type=int, default=96)
     args.add_argument('-num_loc', type=int)
     # dataset
     args.add_argument('-past', type=int, default=1)
@@ -58,20 +58,14 @@ def add_model(args):
     args.add_argument('-reg', action='store_true')
     args.add_argument('-reg_weight', type=float, default=0.1)
     # Embedding
-    args.add_argument('-emb_flow', type=int, default=16)
-    args.add_argument('-emb_day', type=int, default=16)
-    args.add_argument('-emb_time', type=int, default=16)
-    args.add_argument('-emb_loc', type=int, default=16)
-    args.add_argument('-emb_size', type=int)
-    # RNN
-    args.add_argument('-rnn_type', type=str, default='RNN',
-                      choices=['RNN', 'GRU', 'LSTM'])
+    args.add_argument('-emb_size', type=int, default=64)
+    args.add_argument('-emb_merge', type=str, default='sum',
+                      choices=['cat', 'sum'])
+    args.add_argument('-emb_all', type=int)
     # Attention
-    args.add_argument('-attn_type', type=str, default='add',
-                      choices=['add', 'dot', 'mul', 'mlp'])
+    args.add_argument('-attn_type', type=str, default='dot',
+                      choices=['dot', 'add'])
     args.add_argument('-head', type=int, default=4)
-    args.add_argument('-merge_type', type=str, default='add',
-                      choices=['add', 'cat'])
 
 
 def _dataset(args):
@@ -97,7 +91,12 @@ def _dataset(args):
 
 
 def _model(args):
-    args.emb_size = args.emb_flow + args.emb_day + args.emb_time + args.emb_loc
+    if args.num_flow > args.emb_size:
+        args.emb_size = args.num_flow
+    if args.emb_merge == 'cat':
+        args.emb_all = 4 * args.emb_size
+    else:
+        args.emb_all = args.emb_size
 
 
 def update_args(args):
@@ -108,11 +107,13 @@ def update_args(args):
 def modelname(args):
     # MODEL
     path = args.model
+    # Embedding
+    path += 'Emb' + str(args.emb_size) + args.emb_merge
     # Attn
     path += 'Head' + str(args.head)
     # General
     path += 'Lay' + str(args.num_layers)
-    # Data
+    path += 'Flow' + str(args.num_flow)
     path += 'Past' + str(args.past)
     path += 'Future' + str(args.future)
     return path

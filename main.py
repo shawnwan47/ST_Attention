@@ -42,9 +42,8 @@ model.cuda()
 
 # DATA
 (inp_train, inp_valid, inp_test,
- tgt_train, tgt_valid, tgt_test,
- st_train, st_valid, st_test,
- flow_min, flow_scale) = Utils.load_data(args)
+tgt_train, tgt_valid, tgt_test,
+tgt_min, tgt_scale) = Utils.load_data(args)
 
 
 def WAPE(out, tgt):
@@ -53,19 +52,14 @@ def WAPE(out, tgt):
     tgt: batch x future x loc
     '''
     _, out = out.max(1)
-    out = out.type(torch.cuda.FloatTensor)
-    tgt = tgt.type(torch.cuda.FloatTensor)
-    out = out * flow_scale + flow_min
-    tgt = tgt * flow_scale + flow_min
-    wape = torch.abs(out - tgt).sum() / torch.sum(tgt)
-    return wape.data[0]
+    return WAPE_(out, tgt)
 
 
 def WAPE_(out, tgt):
     out = out.type(torch.cuda.FloatTensor)
     tgt = tgt.type(torch.cuda.FloatTensor)
-    out = out * flow_scale + flow_min
-    tgt = tgt * flow_scale + flow_min
+    out = out * tgt_scale + tgt_min
+    tgt = tgt * tgt_scale + tgt_min
     wape = torch.abs(out - tgt).sum() / torch.sum(tgt)
     return wape.data[0]
 
@@ -80,21 +74,21 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True)
 
 
 # TRAINING
-def train():
+def train(inputs, targets):
     model.train()
     loss_train = wape = 0
     num_sample = inp_train.size(0)
-    days = torch.randperm(num_sample)
+    random_idx = torch.randperm(num_sample)
     iters = num_sample // args.batch
-    for day in range(iters):
-        idx = days[day::iters]
-        inp = inp_train[idx].cuda()
-        tgt = tgt_train[idx].cuda()
-        st = st_train[idx].cuda()
-        out, _ = model(inp, st)
-        loss = criterion(out, tgt)
+    for i in range(iters):
+        idx = random_idx[i::iters]
+        inp = Variable(inputs[idx]).cuda()
+        tgt = Variable(targets[idx]).cuda()
+        flow = Variable(targets[idx][:, :, :, 0]).cuda()
+        out, _ = model(inp, tgt)
+        loss = criterion(out, flow)
         loss_train += loss.data[0]
-        wape += WAPE(out, tgt)
+        wape += WAPE(out, flow)
         # optimization
         optimizer.zero_grad()
         loss.backward()
@@ -103,40 +97,26 @@ def train():
     return loss_train / iters, wape / iters
 
 
-def valid():
+def test(inputs, targets):
     model.eval()
     loss = wape = 0
-    days = inp_valid.size(0) // args.num_time
-    for i in range(days):
-        inp = inp_valid[i * args.num_time:(i + 1) * args.num_time].cuda()
-        tgt = tgt_valid[i * args.num_time:(i + 1) * args.num_time].cuda()
-        st = st_valid[i * args.num_time:(i + 1) * args.num_time].cuda()
-        out, _ = model(inp, st)
-        loss += criterion(out, tgt).data[0]
-        wape += WAPE(out, tgt)
-    return loss / days, wape / days
-
-
-def test():
-    model.eval()
-    loss = wape = 0
-    days = inp_test.size(0) // args.num_time
+    days = inputs.size(0) // args.num_time
     atts = []
     for i in range(days):
-        inp = inp_test[i * args.num_time:(i + 1) * args.num_time].cuda()
-        tgt = tgt_test[i * args.num_time:(i + 1) * args.num_time].cuda()
-        st = st_test[i * args.num_time:(i + 1) * args.num_time].cuda()
-        out, att = model(inp, st)
-        loss += criterion(out, tgt).data[0]
-        wape += WAPE(out, tgt)
+        inp = Variable(inputs[i * args.num_time:(i + 1) * args.num_time], volatile=True).cuda()
+        tgt = Variable(targets[i * args.num_time:(i + 1) * args.num_time], volatile=True).cuda()
+        flow = Variable(targets[i * args.num_time:(i + 1) * args.num_time][:, :, :, 0], volatile=True).cuda()
+        out, att = model(inp, tgt)
+        loss += criterion(out, flow).data[0]
+        wape += WAPE(out, flow)
         atts.append(att)
     return loss / days, wape / days, torch.stack(atts, 0)
 
 
 if not args.test:
     for epoch in range(args.epoches):
-        loss_train, wape_train = train()
-        loss_valid, wape_valid = valid()
+        loss_train, wape_train = train(inp_train, tgt_train)
+        loss_valid, wape_valid, _ = test(inp_valid, tgt_valid)
 
         if not epoch % args.print_epoches:
             print('Epoch: %d NLL: %.4f %.4f WAPE: %.4f %.4f' % (
@@ -146,7 +126,7 @@ if not args.test:
         if optimizer.param_groups[0]['lr'] < args.lr_min:
             break
 
-loss_test, wape_test, att = test()
+loss_test, wape_test, att = test(inp_test, tgt_test)
 print('Test {}: NLL:{} WAPE:{}'.format(modelpath, loss_test, wape_test))
 torch.save(model.cpu(), modelpath + '.pt')
 Utils.torch2npsave(modelpath + '_att', att)

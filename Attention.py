@@ -51,38 +51,6 @@ class Attention(nn.Module):
         return score.view(batch, length, length)
 
 
-class MixAttention(nn.Module):
-    def __init__(self, dim, attn_types, dropout=0.1):
-        super(MixAttention, self).__init__()
-        self.att = nn.ModuleList([Attention(dim, attn_type, dropout)
-                                   for attn_type in attn_types])
-        self.softmax = nn.Softmax(2)
-
-    def forward(self, query, context, mask=None):
-        score = [att.score(query, context) for att in self.att]
-        score = torch.sum(torch.stack(score), 0)
-        if mask is not None:
-            score.masked_fill_(mask, -float('inf'))
-        return self.softmax(score)
-
-
-class MergeAttention(Attention):
-    def __init__(self, dim, attn_type, merge_type, dropout=0.1):
-        super(MergeAttention, self).__init__(dim, attn_type, dropout)
-        self.merge_type = merge_type
-        if merge_type == 'cat':
-            self.linear = BottleLinear(2 * dim, dim)
-
-    def forward(self, query, context, mask):
-        out, att = super(MergeAttention, self).forward(query, context, mask)
-        if self.merge_type == 'add':
-            out = self.dropout(out) + query
-        elif self.merge_type == 'cat':
-            out = torch.cat((query, out), -1)
-            out = self.linear(self.dropout(out))
-        return out, att
-
-
 class MultiHeadAttention(nn.Module):
     def __init__(self, dim_key, dim_val, head=4, dropout=0.1):
         '''
@@ -143,29 +111,4 @@ class MultiHeadAttention(nn.Module):
         out = torch.bmm(self.dropout(att), val)
         out = self.dropout(unshape_projection(out, dim_val))
         att = att.view(batch, self.head, len_qry, len_ctx)
-        return out, att
-
-
-class SelfAtt(nn.Module):
-    def __init__(self, dim, hop=1, dropout=0.1):
-        super(SelfAtt, self).__init__()
-        self.activation = nn.Tanh()
-        self.dropout = nn.Dropout(dropout)
-        self.softmax = nn.Softmax(2)
-        self.hop = hop
-        hid = int(math.sqrt(dim * hop))
-        self.w_1 = BottleLinear(dim, hid)
-        self.w_2 = BottleLinear(hid, hop)
-
-    def forward(self, inp):
-        '''
-        inp: -1 x length x dim
-        att: -1 x hop x length
-        out: -1 x hop x dim
-        '''
-        assert inp.dim() < 4
-        hid = self.activation(self.w_1(inp))
-        score = self.w_2(self.dropout(hid)).transpose(1, 2)
-        att = self.softmax(score)
-        out = torch.bmm(att, inp)
         return out, att

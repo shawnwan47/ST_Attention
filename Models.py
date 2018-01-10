@@ -19,12 +19,14 @@ class ModelBase(nn.Module):
         self.num_flow = args.num_flow
         self.num_day = args.num_day
         self.num_time = args.num_time
-        self.num_loc = args.num_loc
+        self.num_loc = args.num_loc // 2
         self.emb_size = args.emb_size
-        self.embedding_flow = nn.Embedding(args.num_flow, args.emb_flow)
-        self.embedding_day = nn.Embedding(args.num_day, args.emb_day)
-        self.embedding_time = nn.Embedding(args.num_time, args.emb_time)
-        self.embedding_loc = nn.Embedding(args.num_loc, args.emb_loc)
+        self.emb_merge = args.emb_merge
+        self.emb_all = args.emb_all
+        self.embedding_flow = nn.Embedding(args.num_flow + 1, self.emb_size)
+        self.embedding_day = nn.Embedding(args.num_day, self.emb_size)
+        self.embedding_time = nn.Embedding(args.num_time, self.emb_size)
+        self.embedding_loc = nn.Embedding(args.num_loc, self.emb_size)
         self.dropout = nn.Dropout(args.dropout)
 
     def embed(self, inp):
@@ -33,29 +35,11 @@ class ModelBase(nn.Module):
         day = self.dropout(self.embedding_day(inp[:, :, 1]))
         time = self.dropout(self.embedding_time(inp[:, :, 2]))
         loc = self.dropout(self.embedding_loc(inp[:, :, 3]))
-        out = torch.cat((flow, day, time, loc), -1)
-        return out
-
-
-class RNN(ModelBase):
-    def __init__(self, args):
-        super(RNN, self).__init__(args)
-        self.rnn = Layers.RNN(
-            args.rnn_type, self.emb_size, self.emb_size,
-            args.num_layers, args.dropout)
-        self.linear_out = BottleLinear(args.hidden_size, args.num_flow)
-
-    def forward_rnn(self, inp, daytime=None):
-        inp = super(RNN, self).forward(inp, daytime)
-        hid = self.rnn.initHidden(inp)
-        out, _ = self.rnn(inp, hid)
-        return out
-
-    def forward(self, inp, daytime=None):
-        out = self.forward_rnn(inp, daytime)
-        batch, length, _ = out.size()
-        out = self.linear_out(self.dropout(out[:, self.past:]))
-        out = out.view(batch, -1, self.future, self.dim)
+        emb = (flow, day, time, loc)
+        if self.emb_merge == 'cat':
+            out = torch.cat(emb, -1)
+        else:
+            out = torch.sum(torch.stack(emb, 0), 0)
         return out
 
 
@@ -64,17 +48,23 @@ class Transformer(ModelBase):
         super(Transformer, self).__init__(args)
         self.head = args.head
         self.layers = nn.ModuleList([Layers.TransformerLayer(
-            self.emb_size, args.head, args.dropout
+            self.emb_all, args.head, args.dropout
         ) for _ in range(self.num_layers)])
-        self.linear = BottleLinear(self.emb_size, self.num_flow)
+        self.linear = BottleLinear(self.emb_all, self.num_flow)
 
-    def forward(self, inp, st):
+    def embed_context_query(self, inp, tgt):
+        tgt[:, :, :, 0] = self.num_flow
+        inp = inp.view(-1, self.past * self.num_loc, 4)
+        tgt = tgt.view(-1, self.future * self.num_loc, 4)
+        return self.embed(inp), self.embed(tgt)
+
+    def forward(self, inp, tgt):
         '''
-        inp: batch x time x loc
-        st: batch x time x loc x 3
+        inp: batch x time x loc x 4
+        tgt: batch x time x loc x 4
         out: batch x num_flow x time x loc
         '''
-        query, context = self.embed_query_context(inp, st)
+        context, query = self.embed_context_query(inp, tgt)
         atts = []
         for i in range(self.num_layers):
             query, att = self.layers[i](query, context)
@@ -90,40 +80,21 @@ class Transformer(ModelBase):
                                        self.past, self.num_loc)
         return out, att
 
-    def embed_query_context(self, inp, st):
-        context = torch.cat((inp.unsqueeze(-1), st), -1)
-        query = self.init_query(context)
-        context = context.view(-1, self.past * self.num_loc, 4)
-        query = query.view(-1, self.future * self.num_loc, 4)
-        return self.embed(query), self.embed(context)
-
-    def init_query(self, context):
-        query = torch.zeros((context.size(0), self.future, self.num_loc, 4))
-        query = query.type(torch.LongTensor)
-        for i in range(self.future):
-            query[:, i, :, :] = context.data[:, -1, :, :]
-            query[:, i, :, 2] += i + 1
-            query[:, i, :, 1] += query[:, i, :, 2].div(self.num_time)
-            query[:, i, :, 1] = query[:, i, :, 1].remainder(self.num_day)
-            query[:, i, :, 2] = query[:, i, :, 2].remainder(self.num_time)
-        return Variable(query, volatile=context.volatile).cuda()
-
 
 class Transformer2(Transformer):
     def __init__(self, args):
         super(Transformer2, self).__init__(args)
-        self.emb_flow = args.emb_flow
         self.layers = nn.ModuleList([Layers.Transformer2Layer(
-            self.emb_size, self.emb_flow, args.head, args.dropout
+            self.emb_size, self.emb_size, args.head, args.dropout
         ) for _ in range(self.num_layers)])
-        self.linear = BottleLinear(self.emb_flow, self.num_flow)
+        self.linear = BottleLinear(self.emb_size, self.num_flow)
 
-    def forward(self, inp, st):
-        qry, key = self.embed_query_context(inp, st)
-        val = key[:, :, :self.emb_flow].contiguous()
+    def forward(self, inp, tgt):
+        key, qry = self.embed_context_query(inp, tgt)
+        val = self.embedding_flow(inp[:, :, :, 0])
         atts = []
         for i in range(self.num_layers):
             qry, att = self.layers[i](qry, key, val)
             atts.append(att.cpu())
-        out = self.linear(qry[:, :, :self.emb_flow].contiguous())
+        out = self.linear(qry[:, :, :self.emb_size].contiguous())
         return self.forward_out(out, atts)

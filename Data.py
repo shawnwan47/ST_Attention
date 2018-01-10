@@ -89,7 +89,7 @@ def load_daytime(resolution=15):
 
 
 def load_loc():
-    orig, dest, _, _ = load_flow_pixel()
+    orig, _, _, dest, _, _ = load_flow_pixel()
     for i in range(orig.shape[-1]):
         orig[:, :, i] = i
         dest[:, :, i] = i
