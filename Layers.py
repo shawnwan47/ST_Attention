@@ -10,16 +10,19 @@ from UtilClass import *
 
 
 class TransformerLayer(nn.Module):
-    def __init__(self, dim, head, dropout=0.1):
+    def __init__(self, dim, head, dropout=0.1, simple=False):
         super(TransformerLayer, self).__init__()
         self.att = MultiHeadAttention(dim, dim, head, dropout)
         self.layer_norm = BottleLayerNorm(dim)
-        self.feed_forward = PointwiseMLP(dim)
+        self.simple = simple
+        if not self.simple:
+            self.feed_forward = PointwiseMLP(dim)
 
     def forward(self, query, context, mask=None):
         out, att = self.att(query, context, context, mask)
         out = self.layer_norm(query + out)
-        out = self.feed_forward(out)
+        if not self.simple:
+            out = self.feed_forward(out)
         return out, att
 
 

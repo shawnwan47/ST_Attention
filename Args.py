@@ -1,3 +1,12 @@
+def add_args(args):
+    add_gpu(args)
+    add_data(args)
+    add_loss(args)
+    add_optim(args)
+    add_run(args)
+    add_model(args)
+
+
 def add_gpu(args):
     args.add_argument('-gpuid', type=int, default=0)
     args.add_argument('-seed', type=int, default=47)
@@ -37,15 +46,17 @@ def add_optim(args):
                       choices=['SGD', 'Adam'])
     args.add_argument('-lr', type=float, default=0.001)
     args.add_argument('-patience', type=int, default=10)
-    args.add_argument('-lr_min', type=float, default=1e-4)
+    args.add_argument('-lr_min', type=float, default=1e-5)
     args.add_argument('-weight_decay', type=float, default=5e-5)
     args.add_argument('-max_grad_norm', type=float, default=1)
 
 
 def add_run(args):
     args.add_argument('-test', action='store_true')
-    args.add_argument('-epoches', type=int, default=1000)
-    args.add_argument('-batch', type=int, default=100)
+    args.add_argument('-retrain', action='store_true')
+    args.add_argument('-epoches', type=int, default=300)
+    args.add_argument('-iterations', type=int, default=1)
+    args.add_argument('-batch', type=int, default=300)
     args.add_argument('-print_epoches', type=int, default=1)
 
 
@@ -53,27 +64,24 @@ def add_model(args):
     # general
     args.add_argument('-model', type=str, default='Transformer')
     args.add_argument('-num_layers', type=int, default=1)
-    args.add_argument('-dropout', type=float, default=0.1)
-    # regularization
-    args.add_argument('-reg', action='store_true')
-    args.add_argument('-reg_weight', type=float, default=0.1)
+    args.add_argument('-dropout', type=float, default=0.2)
     # Embedding
-    args.add_argument('-emb_size', type=int, default=64)
-    args.add_argument('-emb_merge', type=str, default='sum',
+    args.add_argument('-emb_size', type=int, default=32)
+    args.add_argument('-emb_merge', type=str, default='cat',
                       choices=['cat', 'sum'])
     args.add_argument('-emb_all', type=int)
     # Attention
     args.add_argument('-attn_type', type=str, default='dot',
                       choices=['dot', 'add'])
-    args.add_argument('-head', type=int, default=4)
+    args.add_argument('-head', type=int, default=1)
 
 
-def _dataset(args):
+def update_args(args):
     if args.data_type == 'highway':
         args.num_loc = 284
         args.days = 184
-        args.days_train = 120
-        args.days_test = 30
+        args.days_train = 150
+        args.days_test = 15
         args.start_time = 0
         args.end_time = 24
         args.resolution = 15
@@ -88,20 +96,14 @@ def _dataset(args):
     if args.past_day:
         args.past = args.num_time
     args.max_len = 2 * args.num_time
-
-
-def _model(args):
-    if args.num_flow > args.emb_size:
-        args.emb_size = args.num_flow
+    # model
     if args.emb_merge == 'cat':
         args.emb_all = 4 * args.emb_size
     else:
         args.emb_all = args.emb_size
-
-
-def update_args(args):
-    _dataset(args)
-    _model(args)
+    # run
+    if args.retrain:
+        args.lr /= 100
 
 
 def modelname(args):

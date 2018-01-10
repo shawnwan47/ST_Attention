@@ -6,26 +6,32 @@ import numpy as np
 from Consts import *
 
 
-def load_station():
-    return pd.read_csv(DATA_PATH + 'STATION.txt', index_col=0)
+def load_idx():
+    station = set(load_station().index)
+    link = set(np.unique(load_link()))
+    flow = set(load_flow().columns)
+    return station.intersection(link).intersection(flow)
+
+
+def load_station(clean=False):
+    if not clean:
+        return pd.read_csv(DATA_PATH + 'STATION.txt', index_col=0)
+    else:
+        return load_station().loc[load_idx()]
 
 
 def load_link(filename='LINK.txt'):
     return np.genfromtxt(DATA_PATH + filename, dtype=int)
 
 
-def load_flow(affix='O'):
+def load_flow(affix='D', clean=False):
     filepath = DATA_PATH + affix + '.csv'
     flow = pd.read_csv(filepath, index_col=0, parse_dates=True)
     flow.columns = list(map(int, flow.columns))
-    return flow
-
-
-def load_idx():
-    station = set(load_station().index)
-    link = set(np.unique(load_link()))
-    flow = set(load_flow().columns)
-    return station.intersection(link).intersection(flow)
+    if not clean:
+        return flow
+    else:
+        return flow.loc[:, load_idx()]
 
 
 def load_dist(recalc=False):
@@ -62,9 +68,6 @@ def load_od():
     od.index.name = ''
     od.columns = list(map(int, od.columns))
     od = od.loc[idx, idx].as_matrix()
-    od += od.transpose()
-    od /= (od.sum(0) + EPS)
-    od = (od + od.transpose()) / 2
     return od
 
 

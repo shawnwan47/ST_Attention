@@ -14,12 +14,7 @@ from Consts import MODEL_PATH
 
 
 args = argparse.ArgumentParser()
-Args.add_gpu(args)
-Args.add_data(args)
-Args.add_loss(args)
-Args.add_optim(args)
-Args.add_run(args)
-Args.add_model(args)
+Args.add_args(args)
 args = args.parse_args()
 Args.update_args(args)
 print(args)
@@ -35,9 +30,9 @@ modelpath = MODEL_PATH + Args.modelname(args)
 print('Model: {}'.format(modelpath))
 
 model = getattr(Models, args.model)(args)
-if args.test:
+if args.test or args.retrain:
     model = torch.load(modelpath + '.pt')
-    print('Loaded models from file.')
+    print('Model loaded.')
 model.cuda()
 
 # DATA
@@ -78,22 +73,24 @@ def train(inputs, targets):
     model.train()
     loss_train = wape = 0
     num_sample = inp_train.size(0)
-    random_idx = torch.randperm(num_sample)
     iters = num_sample // args.batch
-    for i in range(iters):
-        idx = random_idx[i::iters]
-        inp = Variable(inputs[idx]).cuda()
-        tgt = Variable(targets[idx]).cuda()
-        flow = Variable(targets[idx][:, :, :, 0]).cuda()
-        out, _ = model(inp, tgt)
-        loss = criterion(out, flow)
-        loss_train += loss.data[0]
-        wape += WAPE(out, flow)
-        # optimization
-        optimizer.zero_grad()
-        loss.backward()
-        # clip_grad_norm(model.parameters(), args.max_grad_norm)
-        optimizer.step()
+    for _ in range(args.iterations):
+        random_idx = torch.randperm(num_sample)
+        for i in range(iters):
+            idx = random_idx[i::iters]
+            inp = Variable(inputs[idx]).cuda()
+            tgt = Variable(targets[idx]).cuda()
+            flow = Variable(targets[idx][:, :, :, 0]).cuda()
+            out, _ = model(inp, tgt)
+            loss = criterion(out, flow)
+            loss_train += loss.data[0]
+            wape += WAPE(out, flow)
+            # optimization
+            optimizer.zero_grad()
+            loss.backward()
+            # clip_grad_norm(model.parameters(), args.max_grad_norm)
+            optimizer.step()
+    iters *= args.iterations
     return loss_train / iters, wape / iters
 
 
@@ -118,9 +115,8 @@ if not args.test:
         loss_train, wape_train = train(inp_train, tgt_train)
         loss_valid, wape_valid, _ = test(inp_valid, tgt_valid)
 
-        if not epoch % args.print_epoches:
-            print('Epoch: %d NLL: %.4f %.4f WAPE: %.4f %.4f' % (
-                epoch, loss_train, loss_valid, wape_train, wape_valid))
+        print('Epoch: %d NLL: %.4f %.4f WAPE: %.4f %.4f' % (
+            epoch, loss_train, loss_valid, wape_train, wape_valid))
 
         scheduler.step(loss_valid)
         if optimizer.param_groups[0]['lr'] < args.lr_min:

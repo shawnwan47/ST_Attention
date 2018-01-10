@@ -11,30 +11,44 @@ import Visual
 from Consts import MODEL_PATH, FIG_PATH
 
 
-# LOAD DATA
 args = argparse.ArgumentParser()
-Args.add_data(args)
-Args.add_model(args)
+Args.add_args(args)
 args = args.parse_args()
 Args.update_args(args)
+print(args)
+
+plt.clf()
+reload(Visual)
+reload(Data)
 
 
-def att_loc2time():
-    for attention in os.listdir(MODEL_PATH):
-        modelname = attention.split('_')[0]
-        att = np.load(MODEL_PATH + attention)
-        days, times, layers, heads, future, locs, pasts, locs = att.shape
-        im = att.mean(0)
-        for lay in range(layers):
-            for head in range(heads):
-                for loc in range(locs):
-                    Visual.loc2time(im[:, lay, head, 0, loc, 0, :], loc, args)
-                    figpath = os.path.join(FIG_PATH, modelname,
-                                           'lay' + str(lay),
-                                           'head' + str(head),
-                                           'loc2time',
-                                           str(loc))
-                    Visual.saveclf(figpath)
+def scatter_flow():
+    flow = Data.load_flow(clean=True).mean(0)
+    Visual.plot_network()
+    Visual.scatter_network(flow)
+    Visual.saveclf(FIG_PATH + 'flow')
+
+
+def scatter_selected(selected, flow):
+    Visual.plot_network()
+    Visual.scatter_network_highlight(selected, flow, c='red')
+    Visual.saveclf(FIG_PATH + 'selected')
+    return selected
+
+
+def scatter_od(selected):
+    od = Data.load_od()
+    od = od / (od.sum(0) + 1)
+    od = od.transpose()
+    station = Data.load_station().loc[Data.load_idx()]
+    for loc in selected:
+        name = station.iloc[loc]['Name']
+        x, y = station.iloc[loc]['Longitude'], station.iloc[loc]['Latitude']
+        Visual.plot_network()
+        Visual.scatter_network(od[loc], 10 * args.num_loc)
+        plt.scatter(x, y, c='red')
+        Visual.saveclf(FIG_PATH + name + 'od')
+
 
 
 def att_loc2loc():
@@ -44,44 +58,55 @@ def att_loc2loc():
         days, times, layers, heads, future, locs, pasts, locs = att.shape
         att = att.mean(0).mean(0)
         for lay in range(layers):
-            for head in range(heads):
+            im = att[lay, 0, 0, :, 0, :]
+            Visual.loc2loc(im, args)
+            figpath = os.path.join(FIG_PATH, modelname,
+                                   'lay' + str(lay),
+                                   'att_loc2loc')
+            Visual.saveclf(figpath)
+
+
+def att_loc2time(selected=None):
+    station = Data.load_station(clean=True)
+    for attention in os.listdir(MODEL_PATH):
+        modelname = attention.split('_')[0]
+        att = np.load(MODEL_PATH + attention)
+        days, times, layers, heads, future, locs, pasts, locs = att.shape
+        im = att.mean(0)
+        for lay in range(layers):
+            for loc in selected:
+                name = station.iloc[loc]['Name']
                 for past in range(pasts):
-                    im = att[lay, head, 0, :, past, :]
-                    Visual.loc2loc(im, args)
+                    Visual.loc2time(im[:, lay, 0, 0, loc, past, :], loc, args)
                     figpath = os.path.join(FIG_PATH, modelname,
                                            'lay' + str(lay),
-                                           'head' + str(head),
-                                           str(past))
+                                           'att_loc2time',
+                                           name + str(past))
                     Visual.saveclf(figpath)
 
 
-def scatter_flow():
-    idx = Data.load_idx()
-    flow = Data.load_flow().loc[:, idx].mean(0)
-    Visual.plot_network()
-    Visual.scatter_network(flow)
-
-
-def att_scatter():
+def att_scatter(selected=None):
+    station = Data.load_station(clean=True)
     for attention in os.listdir(MODEL_PATH):
         modelname = attention.split('_')[0]
         att = np.load(MODEL_PATH + attention)
         days, times, layers, heads, future, locs, pasts, locs = att.shape
         att = att.mean(0).mean(0)
         for lay in range(layers):
-            for head in range(heads):
-                for past in range(pasts):
-                    loc = att[lay, head, 0, :, past, :].mean(0)
-                    Visual.plot_network()
-                    Visual.scatter_network(loc[:locs//2], 100 * locs)
-                    Visual.scatter_network(loc[locs//2:], 100 * locs)
-                    figpath = os.path.join(FIG_PATH, modelname,
-                                           'lay' + str(lay),
-                                           'head' + str(head),
-                                           'signal')
-                    Visual.saveclf(figpath)
+            for loc in selected:
+                name = station.iloc[loc]['Name']
+                x, y = station.iloc[loc]['Longitude'], station.iloc[loc]['Latitude']
+                objs = att[lay, 0, 0, loc, :, :].mean(0)
+                Visual.plot_network()
+                Visual.scatter_network(objs, 100 * locs)
+                plt.scatter(x, y, c='red')
+                figpath = os.path.join(FIG_PATH, modelname,
+                                       'lay' + str(lay),
+                                       'att_scatter', name)
+                Visual.saveclf(figpath)
 
 
 
-plt.clf()
-reload(Visual)
+flow = Data.load_flow(clean=True).mean(0).as_matrix()
+selected = np.argsort(-flow)[:10]
+scatter_selected(selected, flow[selected])

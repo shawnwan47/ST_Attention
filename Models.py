@@ -81,6 +81,14 @@ class Transformer(ModelBase):
         return out, att
 
 
+class TransformerSimple(Transformer):
+    def __init__(self, args):
+        super(TransformerSimple, self).__init__(args)
+        self.layers = nn.ModuleList([Layers.TransformerLayer(
+            self.emb_all, args.head, args.dropout, simple=True
+        ) for _ in range(self.num_layers)])
+
+
 class Transformer2(Transformer):
     def __init__(self, args):
         super(Transformer2, self).__init__(args)
