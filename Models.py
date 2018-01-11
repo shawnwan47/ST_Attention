@@ -87,22 +87,3 @@ class TransformerSimple(Transformer):
         self.layers = nn.ModuleList([Layers.TransformerLayer(
             self.emb_all, args.head, args.dropout, simple=True
         ) for _ in range(self.num_layers)])
-
-
-class Transformer2(Transformer):
-    def __init__(self, args):
-        super(Transformer2, self).__init__(args)
-        self.layers = nn.ModuleList([Layers.Transformer2Layer(
-            self.emb_size, self.emb_size, args.head, args.dropout
-        ) for _ in range(self.num_layers)])
-        self.linear = BottleLinear(self.emb_size, self.num_flow)
-
-    def forward(self, inp, tgt):
-        key, qry = self.embed_context_query(inp, tgt)
-        val = self.embedding_flow(inp[:, :, :, 0])
-        atts = []
-        for i in range(self.num_layers):
-            qry, att = self.layers[i](qry, key, val)
-            atts.append(att.cpu())
-        out = self.linear(qry[:, :, :self.emb_size].contiguous())
-        return self.forward_out(out, atts)
