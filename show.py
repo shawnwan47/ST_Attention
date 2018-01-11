@@ -36,11 +36,19 @@ def scatter_selected(selected, flow):
     return selected
 
 
+def show_od():
+    od = Data.load_od()
+    od = od / (od.sum(0) + 1)
+    od = od.transpose()
+    Visual.loc2loc(od, args)
+    Visual.saveclf(FIG_PATH + 'OD')
+
+
 def scatter_od(selected):
     od = Data.load_od()
     od = od / (od.sum(0) + 1)
     od = od.transpose()
-    station = Data.load_station().loc[Data.load_idx()]
+    station = Data.load_station(clean=True)
     for loc in selected:
         name = station.iloc[loc]['Name']
         x, y = station.iloc[loc]['Longitude'], station.iloc[loc]['Latitude']
@@ -58,7 +66,7 @@ def att_loc2loc():
         days, times, layers, heads, future, locs, pasts, locs = att.shape
         att = att.mean(0).mean(0)
         for lay in range(layers):
-            im = att[lay, 0, 0, :, 0, :]
+            im = att[lay, 0, 0, :, :, :].sum(1)
             Visual.loc2loc(im, args)
             figpath = os.path.join(FIG_PATH, modelname,
                                    'lay' + str(lay),
@@ -76,6 +84,12 @@ def att_loc2time(selected=None):
         for lay in range(layers):
             for loc in selected:
                 name = station.iloc[loc]['Name']
+                Visual.loc2time(im[:, lay, 0, 0, loc, :, :].sum(1), loc, args)
+                figpath = os.path.join(FIG_PATH, modelname,
+                                       'lay' + str(lay),
+                                       'att_loc2time',
+                                       name)
+                Visual.saveclf(figpath)
                 for past in range(pasts):
                     Visual.loc2time(im[:, lay, 0, 0, loc, past, :], loc, args)
                     figpath = os.path.join(FIG_PATH, modelname,
@@ -109,4 +123,5 @@ def att_scatter(selected=None):
 
 flow = Data.load_flow(clean=True).mean(0).as_matrix()
 selected = np.argsort(-flow)[:10]
-scatter_selected(selected, flow[selected])
+att_loc2loc()
+att_loc2time(selected)
