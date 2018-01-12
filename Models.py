@@ -3,7 +3,6 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 import Layers
-import Attention
 
 import Utils
 from UtilClass import *
@@ -46,11 +45,11 @@ class ModelBase(nn.Module):
 class Transformer(ModelBase):
     def __init__(self, args):
         super(Transformer, self).__init__(args)
-        self.head = args.head
-        self.layers = nn.ModuleList([Layers.TransformerLayer(
-            self.emb_all, args.head, args.dropout
+        self.layers = nn.ModuleList([Layers.MultiHeadAttentionLayer(
+            self.emb_all, 1, args.dropout
         ) for _ in range(self.num_layers)])
-        self.linear = BottleLinear(self.emb_all, self.num_flow)
+        self.linear = BottleLinear(self.emb_all, 3 * args.num_prob)
+        self.prob = Layers.LogisticMixtures(args.num_prob, self.num_flow)
 
     def embed_context_query(self, inp, tgt):
         tgt[:, :, :, 0] = self.num_flow
@@ -69,21 +68,13 @@ class Transformer(ModelBase):
         for i in range(self.num_layers):
             query, att = self.layers[i](query, context)
             atts.append(att.cpu())
-        out = self.linear(query)
+        out = self.prob(self.linear(query))
         return self.forward_out(out, atts)
 
     def forward_out(self, out, att):
         out = out.transpose(1, 2).contiguous()
         out = out.view(-1, self.num_flow, self.future, self.num_loc)
-        att = torch.stack(att, 1).view(-1, self.num_layers, self.head,
+        att = torch.stack(att, 1).view(-1, self.num_layers,
                                        self.future, self.num_loc,
                                        self.past, self.num_loc)
         return out, att
-
-
-class TransformerSimple(Transformer):
-    def __init__(self, args):
-        super(TransformerSimple, self).__init__(args)
-        self.layers = nn.ModuleList([Layers.TransformerLayer(
-            self.emb_all, args.head, args.dropout, simple=True
-        ) for _ in range(self.num_layers)])

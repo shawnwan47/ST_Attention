@@ -37,8 +37,8 @@ def add_data(args):
 
 
 def add_loss(args):
-    args.add_argument('-loss', type=str, default='CrossEntropyLoss',
-                      choices=['L1Loss', 'CrossEntropyLoss'])
+    args.add_argument('-loss', type=str, default='NLLLoss2d',
+                      choices=['NLLLoss2d'])
 
 
 def add_optim(args):
@@ -74,6 +74,8 @@ def add_model(args):
     args.add_argument('-attn_type', type=str, default='dot',
                       choices=['dot', 'add'])
     args.add_argument('-head', type=int, default=1)
+    # LogisticMixtures
+    args.add_argument('-num_prob', type=int, default=5)
 
 
 def update_args(args):

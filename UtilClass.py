@@ -70,8 +70,8 @@ class BottleLayerNorm(Bottle, LayerNorm):
 class PointwiseMLP(nn.Module):
     def __init__(self, dim, dropout=0.1):
         super(PointwiseMLP, self).__init__()
-        self.w_1 = BottleLinear(dim, dim)
-        self.w_2 = BottleLinear(dim, dim)
+        self.w_1 = BottleLinear(dim, dim // 2)
+        self.w_2 = BottleLinear(dim // 2, dim)
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(dropout)
         self.layer_norm = BottleLayerNorm(dim)
@@ -79,3 +79,16 @@ class PointwiseMLP(nn.Module):
     def forward(self, inp):
         out = self.dropout(self.w_2(self.relu(self.w_1(inp))))
         return self.layer_norm(out + inp)
+
+
+class MLP(nn.Module):
+    def __init__(self, input_size, output_size, dropout=0.1):
+        super(MLP, self).__init__()
+        hidden_size = (input_size + output_size) // 2
+        self.w_1 = BottleLinear(input_size, hidden_size)
+        self.w_2 = BottleLinear(hidden_size, output_size)
+        self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, inp):
+        return self.w_2(self.relu(self.dropout(self.w_1(inp))))
