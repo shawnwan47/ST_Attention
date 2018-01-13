@@ -22,7 +22,7 @@ def add_data(args):
     args.add_argument('-num_time', type=int, default=96)
     args.add_argument('-num_loc', type=int)
     # dataset
-    args.add_argument('-past', type=int, default=1)
+    args.add_argument('-past', type=int, default=4)
     args.add_argument('-future', type=int, default=1)
     args.add_argument('-past_day', action='store_true')
     args.add_argument('-max_len', type=int)

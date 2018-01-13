@@ -25,17 +25,15 @@ def plot_network():
             plt.plot(station.loc[[s, e], 'Longitude'],
                      station.loc[[s, e], 'Latitude'], 'gray')
 
-def scatter_network(val, scale=1):
+def scatter_network(val, indices=None, s=1, c=None, label=None):
     station = Data.load_station(clean=True)
+    if indices is not None:
+        assert len(indices) == len(val)
+        station = station.iloc[indices]
+    else:
+        assert len(val) == len(station)
     plt.scatter(station['Longitude'], station['Latitude'],
-                s=val * scale, alpha=0.5, edgecolors='none')
-
-
-def scatter_network_highlight(key, val, scale=1, c=None):
-    station = Data.load_station(clean=True).iloc[key]
-    plt.scatter(station['Longitude'], station['Latitude'],
-                c=c, s=val * scale, alpha=0.5, edgecolors='none')
-
+                s=val * s, c=c, label=label, alpha=0.5, edgecolors='none')
 
 
 def tickTimes(args, length, axis='x'):

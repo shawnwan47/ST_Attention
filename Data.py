@@ -7,24 +7,24 @@ from Consts import *
 
 
 def load_idx():
-    station = set(load_station().index)
+    station = set(load_station(False).index)
     link = set(np.unique(load_link()))
     flow = set(load_flow().columns)
     return station.intersection(link).intersection(flow)
 
 
-def load_station(clean=False):
+def load_station(clean=True):
     if not clean:
         return pd.read_csv(DATA_PATH + 'STATION.txt', index_col=0)
     else:
-        return load_station().loc[load_idx()]
+        return load_station(clean=False).loc[load_idx()]
 
 
 def load_link(filename='LINK.txt'):
     return np.genfromtxt(DATA_PATH + filename, dtype=int)
 
 
-def load_flow(affix='D', clean=False):
+def load_flow(affix='D', clean=True):
     filepath = DATA_PATH + affix + '.csv'
     flow = pd.read_csv(filepath, index_col=0, parse_dates=True)
     flow.columns = list(map(int, flow.columns))
