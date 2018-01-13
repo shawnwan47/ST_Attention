@@ -120,8 +120,8 @@ def att_scatter(selected=None):
                 Visual.saveclf(figpath)
 
 
-
-flow = Data.load_flow(clean=True).mean(0).as_matrix()
-selected = np.argsort(-flow)[:10]
-att_loc2loc()
-att_loc2time(selected)
+station = Data.load_station(True)
+orig = Data.load_flow('O', clean=True)
+dest = Data.load_flow('D', clean=True)
+orig_max = np.argsort(-orig.mean(0))[:10]
+dest_max = np.argsort(-dest.mean(0))[:10]

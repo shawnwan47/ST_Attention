@@ -60,7 +60,8 @@ def WAPE_(out, tgt):
 
 
 # LOSS
-criterion = getattr(torch.nn, args.loss)()
+weight = Variable(torch.arange(args.num_flow) + 1).cuda()
+criterion = getattr(torch.nn, args.loss)(weight=weight)
 
 # OPTIM
 optimizer = getattr(torch.optim, args.optim)(

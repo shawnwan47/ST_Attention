@@ -5,10 +5,6 @@ from torch.autograd import Variable
 import Data
 
 
-def load_adj():
-    return torch.ByteTensor(Data.load_adj()).cuda() == 0
-
-
 def load_data(args):
     orig, orig_min, orig_scale, dest, dest_min, dest_scale = Data.load_flow_pixel(args.num_flow)
     day, time = Data.load_daytime()
@@ -91,11 +87,6 @@ def get_mask_dilated(length, dilations):
         mask = _get_mask_dilated(length, dilation, window)
         masks.append(mask)
     return torch.stack(masks, 0)
-
-
-def get_mask_pixel(dim, past, future):
-    shape = (future * dim, (past + future) * dim)
-
 
 
 def torch2npsave(filename, data):

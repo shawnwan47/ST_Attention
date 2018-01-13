@@ -62,7 +62,7 @@ def add_run(args):
 
 def add_model(args):
     # general
-    args.add_argument('-model', type=str, default='Transformer')
+    args.add_argument('-model', type=str, default='Attention')
     args.add_argument('-num_layers', type=int, default=1)
     args.add_argument('-dropout', type=float, default=0.2)
     # Embedding
@@ -71,9 +71,13 @@ def add_model(args):
                       choices=['cat', 'sum'])
     args.add_argument('-emb_all', type=int)
     # Attention
-    args.add_argument('-attn_type', type=str, default='dot',
-                      choices=['dot', 'add'])
     args.add_argument('-head', type=int, default=1)
+    args.add_argument('-map_type', type=str, default='linear',
+                      choices=['linear', 'mlp', 'resmlp'])
+    args.add_argument('-att_type', type=str, default='dot',
+                      choices=['dot', 'add', 'general', 'mlp'])
+    args.add_argument('-res', action='store_false')
+    args.add_argument('-mlp', action='store_false')
     # LogisticMixtures
     args.add_argument('-num_prob', type=int, default=5)
 
@@ -95,14 +99,6 @@ def update_args(args):
     else:
         raise KeyError
     args.num_time = (args.end_time - args.start_time) * 60 // args.resolution
-    if args.past_day:
-        args.past = args.num_time
-    args.max_len = 2 * args.num_time
-    # model
-    if args.emb_merge == 'cat':
-        args.emb_all = 4 * args.emb_size
-    else:
-        args.emb_all = args.emb_size
     # run
     if args.retrain:
         args.lr /= 100
@@ -112,9 +108,12 @@ def modelname(args):
     # MODEL
     path = args.model
     # Embedding
-    path += 'Emb' + str(args.emb_size) + args.emb_merge
-    # Attn
-    path += 'Head' + str(args.head)
+    path += 'Emb' + str(args.emb_size)
+    # Att
+    path += 'Map' + args.map_type
+    path += 'Att' + args.att_type
+    path += 'Res' if args.res else ''
+    path += 'MLP' if args.mlp else ''
     # General
     path += 'Lay' + str(args.num_layers)
     path += 'Flow' + str(args.num_flow)

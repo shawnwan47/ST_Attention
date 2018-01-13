@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from Utils import load_adj
 
 
 class Bottle(nn.Module):
@@ -41,25 +40,7 @@ class LayerNorm(nn.Module):
         return out
 
 
-class SparseLinear(nn.Linear):
-    def __init__(self, in_features, out_features=None, bias=True):
-        if out_features is None:
-            out_features = in_features
-        super(SparseLinear, self).__init__(in_features, out_features, bias)
-        self.adj = load_adj()
-
-    def forward(self, inp):
-        if self.adj is not None:
-            sparse_weight = self.weight.data.masked_fill_(self.adj, 0)
-            self.weight = nn.Parameter(sparse_weight)
-        return super(SparseLinear, self).forward(inp)
-
-
 class BottleLinear(Bottle, nn.Linear):
-    pass
-
-
-class BottleSparseLinear(Bottle, SparseLinear):
     pass
 
 
@@ -67,9 +48,9 @@ class BottleLayerNorm(Bottle, LayerNorm):
     pass
 
 
-class PointwiseMLP(nn.Module):
+class ResMLP(nn.Module):
     def __init__(self, dim, dropout=0.1):
-        super(PointwiseMLP, self).__init__()
+        super(ResMLP, self).__init__()
         self.w_1 = BottleLinear(dim, dim // 2)
         self.w_2 = BottleLinear(dim // 2, dim)
         self.relu = nn.ReLU()
