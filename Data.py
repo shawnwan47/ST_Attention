@@ -8,8 +8,8 @@ from Consts import *
 
 def load_idx():
     station = set(load_station(False).index)
+    flow = set(load_flow(clean=False).columns)
     link = set(np.unique(load_link()))
-    flow = set(load_flow().columns)
     return station.intersection(link).intersection(flow)
 
 

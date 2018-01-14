@@ -55,7 +55,7 @@ def add_run(args):
     args.add_argument('-test', action='store_true')
     args.add_argument('-retrain', action='store_true')
     args.add_argument('-epoches', type=int, default=300)
-    args.add_argument('-iterations', type=int, default=1)
+    args.add_argument('-iterations', type=int, default=3)
     args.add_argument('-batch', type=int, default=300)
     args.add_argument('-print_epoches', type=int, default=1)
 
@@ -72,8 +72,8 @@ def add_model(args):
     args.add_argument('-emb_all', type=int)
     # Attention
     args.add_argument('-head', type=int, default=1)
-    args.add_argument('-map_type', type=str, default='linear',
-                      choices=['linear', 'mlp', 'resmlp'])
+    args.add_argument('-map_type', type=str, default='lin',
+                      choices=['lin', 'mlp', 'res'])
     args.add_argument('-att_type', type=str, default='dot',
                       choices=['dot', 'add', 'general', 'mlp'])
     args.add_argument('-res', action='store_false')

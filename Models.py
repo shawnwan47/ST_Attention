@@ -20,7 +20,7 @@ class ModelBase(nn.Module):
         self.num_time = args.num_time
         self.num_loc = args.num_loc // 2
         self.emb_size = args.emb_size
-        self.emb_all = self.emb_size * 3
+        self.emb_all = self.emb_size * 4
         self.embeddings = nn.ModuleList([
             nn.Embedding(args.num_flow + 1, self.emb_size),
             nn.Embedding(args.num_day, self.emb_size),
@@ -36,11 +36,9 @@ class ModelBase(nn.Module):
 
     def embed(self, inp):
         '''inp: batch x -1 x 4'''
-        flow = self.dropout(self.embeddings[0](inp[:, :, 0]))
-        day = self.dropout(self.embeddings[1](inp[:, :, 1]))
-        time = self.dropout(self.embeddings[2](inp[:, :, 2]))
-        loc = self.dropout(self.embeddings[3](inp[:, :, 3]))
-        return torch.cat((flow, day + time, loc), -1)
+        embeds = [self.dropout(self.embeddings[i](inp[:, :, i]))
+                  for i in range(4)]
+        return torch.cat(embeds, -1)
 
     def forward_in(self, inp, tgt):
         tgt[:, :, :, 0] = self.num_flow

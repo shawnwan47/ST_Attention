@@ -27,11 +27,11 @@ class AttentionLayer(nn.Module):
     def __init__(self, dim, map_type='linear', att_type='dot',
                  res=True, mlp=True, dropout=0.5):
         super(AttentionLayer, self).__init__()
-        if map_type == 'linear':
+        if map_type == 'lin':
             self.map_q = self.map_k = self.map_v = BottleLinear(dim, dim, False)
         elif map_type == 'mlp':
             self.map_q = self.map_k = self.map_v = MLP(dim, dim, dropout)
-        elif map_type == 'resmlp':
+        elif map_type == 'res':
             self.map_q = self.map_k = self.map_v = ResMLP(dim, dropout)
         self.attention = Attention.Attention(dim, att_type, dropout)
         self.res = res

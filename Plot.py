@@ -16,7 +16,7 @@ def saveclf(figpath):
 
 
 def plot_network():
-    station = Data.load_station()
+    station = Data.load_station(clean=False)
     link = Data.load_link('LINK_RAW.txt')
     plt.axis('off')
     for i in range(link.shape[0]):
@@ -25,15 +25,24 @@ def plot_network():
             plt.plot(station.loc[[s, e], 'Longitude'],
                      station.loc[[s, e], 'Latitude'], 'gray')
 
-def scatter_network(val, indices=None, s=1, c=None, label=None):
-    station = Data.load_station(clean=True)
+def scatter_network(val, indices=None, scale=1, c=None, edgecolors='none'):
+    station = Data.load_station()
     if indices is not None:
-        assert len(indices) == len(val)
+        assert len(val) == len(indices)
         station = station.iloc[indices]
     else:
         assert len(val) == len(station)
     plt.scatter(station['Longitude'], station['Latitude'],
-                s=val * s, c=c, label=label, alpha=0.5, edgecolors='none')
+                s=val*scale, c=c, alpha=0.5, edgecolors=edgecolors)
+
+def scatter_od(indice, val1, val2, c):
+    station = Data.load_station()
+    x, y = station.iloc[indice]['Longitude'], station.iloc[indice]['Latitude']
+    scale = 10 * len(val1) / val1.sum()
+    plot_network()
+    plt.scatter(x, y, c='red')
+    scatter_network(val1, scale=scale, c=c)
+    scatter_network(val2, scale=scale, c='none', edgecolors=c)
 
 
 def tickTimes(args, length, axis='x'):
@@ -48,9 +57,9 @@ def tickTimes(args, length, axis='x'):
         plt.yticks(ticks, labels)
 
 
-def loc2loc(im, args):
+def imshow_square(im, **args):
     plt.axis('off')
-    plt.imshow(im, vmin=0, vmax=0.1)
+    plt.imshow(im, **args)
 
 
 def loc2time(im, loc, args):
