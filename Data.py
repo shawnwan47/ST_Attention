@@ -7,10 +7,12 @@ from Consts import *
 
 
 def load_idx():
-    station = set(load_station(False).index)
-    flow = set(load_flow(clean=False).columns)
-    link = set(np.unique(load_link()))
-    return station.intersection(link).intersection(flow)
+    station = load_station(False)
+    station_idx = set(station.index)
+    flow_idx = set(load_flow(clean=False).columns)
+    link_idx = set(np.unique(load_link()))
+    idx = list(station_idx.intersection(link_idx).intersection(flow_idx))
+    return station.loc[idx].sort_values(['ROUTE', 'STATION']).index
 
 
 def load_station(clean=True):

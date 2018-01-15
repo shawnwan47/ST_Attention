@@ -7,11 +7,14 @@ import numpy as np
 import Data
 
 
+plt.rcParams['figure.dpi'] = 600
+
+
 def saveclf(figpath):
     dirname = os.path.dirname(figpath)
     if not os.path.exists(dirname):
         os.makedirs(os.path.dirname(figpath))
-    plt.savefig(figpath + '.png')
+    plt.savefig(figpath + '.png', transparent=True)
     plt.clf()
 
 

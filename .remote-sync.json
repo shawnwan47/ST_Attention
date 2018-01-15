@@ -2,7 +2,7 @@
   "logger": {
     "title": "Server 61"
   },
-  "uploadOnSave": true,
+  "uploadOnSave": false,
   "useAtomicWrites": false,
   "deleteLocal": false,
   "hostname": "162.105.92.61",

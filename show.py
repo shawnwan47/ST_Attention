@@ -11,6 +11,9 @@ import Plot
 from Consts import MODEL_PATH, FIG_PATH
 
 
+plt.rcParams['figure.dpi'] = 600
+
+
 args = argparse.ArgumentParser()
 Args.add_args(args)
 args = args.parse_args()
@@ -36,6 +39,36 @@ def make_diag(by='od'):
     return nan
 
 
+def get_routes():
+    station = Data.load_station()
+    route = ''
+    ret = []
+    for i in range(station.shape[0]):
+        r = station.iloc[i]['ROUTE']
+        if route != r:
+            ret.append(i)
+            route = r
+    ret.append(station.shape[0])
+    return ret
+
+
+def get_routes_od(od, r, by='od'):
+    assert by in ['od', 'o', 'd']
+    length = len(r) - 1
+    for i in range(length):
+        for j in range(length):
+            s1, e1, s2, e2 = r[i], r[i+1], r[j], r[j+1]
+            if by == 'od':
+                scale = e1 - s1 + e2 - s2
+            elif by == 'o':
+                scale = e1 - s1
+            else:
+                scale = e2 - s2
+            val = od[s1:e1, s2:e2].sum() / scale
+            od[s1:e1, s2:e2] = val
+    return od
+
+
 def scatter_flow(od='O'):
     assert od in ['O', 'D']
     Plot.plot_network()
@@ -43,10 +76,13 @@ def scatter_flow(od='O'):
     Plot.saveclf(FIG_PATH + od)
 
 
-def imshow_od(by='od', diagsum=True):
+def imshow_od(by='od', diagsum=True, routes_od=False):
     assert by in ['o', 'd', 'od']
+    if routes_od:
+        diagsum = False
     figpath = FIG_PATH + 'imshow_od/' + by
     figpath += '_diag' if diagsum else ''
+    figpath += '_routes' if routes_od else ''
     od = Data.load_od()
     if by == 'od':
         scale = od.sum(0) + od.sum(1)
@@ -54,14 +90,23 @@ def imshow_od(by='od', diagsum=True):
     else:
         if by == 'o':
             scale = od.sum(1, keepdims=True)
-        elif by == 'd':
+        else:
             scale = od.sum(0, keepdims=True)
         od = od / (scale + 1)
 
+    routes = get_routes()
+    if routes_od:
+        od = get_routes_od(od, routes)
     Plot.imshow_square(od, cmap='gray')
     if diagsum:
         diag = make_diag(by)
         Plot.imshow_square(diag, cmap='cool')
+    # plot line splitting routes
+    length = len(od) - 0.5
+    for route in routes:
+        route -= 0.5
+        plt.plot([-0.5, length], [route, route], 'red', linewidth=0.3)
+        plt.plot([route, route], [-0.5, length], 'red', linewidth=0.3)
     Plot.saveclf(figpath)
 
 
@@ -153,7 +198,6 @@ def scatter_att(indices=None):
                 Plot.saveclf(figpath)
 
 
-station = Data.load_station(True)
 orig = Data.load_flow('O')
 dest = Data.load_flow('D')
 orig_max = np.argsort(-orig.mean(0))[:10]
