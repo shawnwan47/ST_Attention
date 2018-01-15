@@ -36,10 +36,6 @@ def make_diag(by='od'):
     return nan
 
 
-def plot_scatter(val):
-    pass
-
-
 def scatter_flow(od='O'):
     assert od in ['O', 'D']
     Plot.plot_network()
@@ -49,8 +45,8 @@ def scatter_flow(od='O'):
 
 def imshow_od(by='od', diagsum=True):
     assert by in ['o', 'd', 'od']
-    figpath = FIG_PATH + 'OD_' + by
-    figpath += '_diagsum' if diagsum else ''
+    figpath = FIG_PATH + 'imshow_od/' + by
+    figpath += '_diag' if diagsum else ''
     od = Data.load_od()
     if by == 'od':
         scale = od.sum(0) + od.sum(1)
@@ -62,10 +58,10 @@ def imshow_od(by='od', diagsum=True):
             scale = od.sum(0, keepdims=True)
         od = od / (scale + 1)
 
-    Plot.imshow_square(od)
+    Plot.imshow_square(od, cmap='gray')
     if diagsum:
         diag = make_diag(by)
-        Plot.imshow_square(diag, cmap='jet')
+        Plot.imshow_square(diag, cmap='cool')
     Plot.saveclf(figpath)
 
 
@@ -74,19 +70,19 @@ def scatter_od(od, indices, by='o'):
     odo = od / (od.sum(1, keepdims=True) + 1)
     odd = od / (od.sum(0, keepdims=True) + 1)
     if by == 'o':
-        od1, od2 = odo, odo / (odd + 1e-8)
+        od1, od2 = odo, odd
     else:
-        od1, od2 = odd, odd / (odo + 1e-8)
+        od1, od2 = odd, odo
     for i in indices:
-        name = station.iloc[i]['Name']
+        name = station.iloc[i]['NAME']
         name += 'od' if by == 'o' else 'do'
-        x, y = station.iloc[i]['Longitude'], station.iloc[i]['Latitude']
+        x, y = station.iloc[i]['LON'], station.iloc[i]['LAT']
         od1i, od2i = (od1[i], od2[i]) if by == 'o' else (od1[:, i], od2[:, i])
         od2i[od1i < 0.01] = 0
         Plot.plot_network()
         plt.scatter(x, y, c='red')
-        Plot.scatter_od(i, od1i, od2i, c='blue')
-        Plot.saveclf(FIG_PATH + name)
+        Plot.scatter_od(i, od1i, c=od2i, cmap='cool', vmin=0, vmax=1)
+        Plot.saveclf(FIG_PATH + 'scatter_od/' + name)
 
 
 def imshow_att():
@@ -120,7 +116,7 @@ def att_loc2time(indices=None):
         im = att.mean(0)
         for lay in range(layers):
             for i in indices:
-                name = station.iloc[i]['Name']
+                name = station.iloc[i]['NAME']
                 Plot.loc2time(im[:, lay, 0, 0, i].sum(1), i, args)
                 figpath = os.path.join(FIG_PATH, modelname,
                                        'lay' + str(lay),
@@ -145,8 +141,8 @@ def scatter_att(indices=None):
         att = att.mean(0).mean(0)
         for lay in range(layers):
             for i in indices:
-                name = station.iloc[i]['Name']
-                x, y = station.iloc[i]['Longitude'], station.iloc[i]['Latitude']
+                name = station.iloc[i]['NAME']
+                x, y = station.iloc[i]['LON'], station.iloc[i]['LAT']
                 im = att[lay, 0, 0, i].mean(0)
                 Plot.plot_network()
                 Plot.scatter_network(im, 100 * locs)

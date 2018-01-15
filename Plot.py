@@ -22,27 +22,28 @@ def plot_network():
     for i in range(link.shape[0]):
         s, e = link[i, 0], link[i, 1]
         if s in station.index and e in station.index:
-            plt.plot(station.loc[[s, e], 'Longitude'],
-                     station.loc[[s, e], 'Latitude'], 'gray')
+            plt.plot(station.loc[[s, e], 'LON'],
+                     station.loc[[s, e], 'LAT'],
+                     color='gray', linewidth=1)
 
-def scatter_network(val, indices=None, scale=1, c=None, edgecolors='none'):
+def scatter_network(val, indices=None, scale=1, c=None, **args):
     station = Data.load_station()
     if indices is not None:
         assert len(val) == len(indices)
         station = station.iloc[indices]
     else:
         assert len(val) == len(station)
-    plt.scatter(station['Longitude'], station['Latitude'],
-                s=val*scale, c=c, alpha=0.5, edgecolors=edgecolors)
+    plt.scatter(station['LON'], station['LAT'],
+                s=val*scale, c=c, alpha=0.5, edgecolors='none', **args)
 
-def scatter_od(indice, val1, val2, c):
-    station = Data.load_station()
-    x, y = station.iloc[indice]['Longitude'], station.iloc[indice]['Latitude']
+
+def scatter_od(indice, val1, **args):
+    station = Data.load_station().iloc[indice]
+    x, y = station['LON'], station['LAT']
     scale = 10 * len(val1) / val1.sum()
+    plt.scatter(x, y, c='black', s=3)
+    scatter_network(val1, scale=scale, **args)
     plot_network()
-    plt.scatter(x, y, c='red')
-    scatter_network(val1, scale=scale, c=c)
-    scatter_network(val2, scale=scale, c='none', edgecolors=c)
 
 
 def tickTimes(args, length, axis='x'):
