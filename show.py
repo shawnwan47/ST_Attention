@@ -69,11 +69,20 @@ def get_routes_od(od, r, by='od'):
     return od
 
 
-def scatter_flow(od='O'):
+def scatter_flow(od='O', max_count=10, scale=1):
     assert od in ['O', 'D']
+    flow = Data.load_flow(od).mean(0).as_matrix()
     Plot.plot_network()
-    Plot.scatter_network(Data.load_flow(od).mean(0))
+    Plot.scatter_network(flow, scale=scale)
     Plot.saveclf(FIG_PATH + od)
+    rank = np.argsort(-flow)
+    rankmax = rank[:max_count]
+    rankres = rank[max_count:]
+    Plot.plot_network()
+    print(flow[rankres], flow[rankmax])
+    Plot.scatter_network(flow[rankres], rankres, scale=scale)
+    Plot.scatter_network(flow[rankmax], rankmax, scale=scale)
+    Plot.saveclf(FIG_PATH + od + '_max')
 
 
 def imshow_od(by='od', diagsum=True, routes_od=False):
@@ -85,7 +94,7 @@ def imshow_od(by='od', diagsum=True, routes_od=False):
     figpath += '_routes' if routes_od else ''
     od = Data.load_od()
     if by == 'od':
-        scale = od.sum(0) + od.sum(1)
+        scale = od.sum(0) + od.sum(1) + 1
         od = np.log(od + od.mean())
     else:
         if by == 'o':
@@ -107,6 +116,7 @@ def imshow_od(by='od', diagsum=True, routes_od=False):
         route -= 0.5
         plt.plot([-0.5, length], [route, route], 'red', linewidth=0.3)
         plt.plot([route, route], [-0.5, length], 'red', linewidth=0.3)
+
     Plot.saveclf(figpath)
 
 

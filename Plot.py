@@ -20,7 +20,7 @@ def saveclf(figpath):
 
 def plot_network():
     station = Data.load_station(clean=False)
-    link = Data.load_link('LINK_RAW.txt')
+    link = Data.load_link(raw=True)
     plt.axis('off')
     for i in range(link.shape[0]):
         s, e = link[i, 0], link[i, 1]
@@ -29,7 +29,7 @@ def plot_network():
                      station.loc[[s, e], 'LAT'],
                      color='gray', linewidth=1)
 
-def scatter_network(val, indices=None, scale=1, c=None, **args):
+def scatter_network(val, indices=None, scale=1, **args):
     station = Data.load_station()
     if indices is not None:
         assert len(val) == len(indices)
@@ -37,7 +37,7 @@ def scatter_network(val, indices=None, scale=1, c=None, **args):
     else:
         assert len(val) == len(station)
     plt.scatter(station['LON'], station['LAT'],
-                s=val*scale, c=c, alpha=0.5, edgecolors='none', **args)
+                s=val*scale, alpha=0.5, edgecolors='none', **args)
 
 
 def scatter_od(indice, val1, **args):

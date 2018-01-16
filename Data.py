@@ -8,11 +8,14 @@ from Consts import *
 
 def load_idx():
     station = load_station(False)
-    station_idx = set(station.index)
-    flow_idx = set(load_flow(clean=False).columns)
-    link_idx = set(np.unique(load_link()))
-    idx = list(station_idx.intersection(link_idx).intersection(flow_idx))
-    return station.loc[idx].sort_values(['ROUTE', 'STATION']).index
+    station_idx = list(station.index)
+    flow_idx = list(load_flow(clean=False).columns)
+    link_idx = list(np.unique(load_link()))
+    od_idx = list(load_od(False).index)
+    idx = list(set(station_idx + link_idx + flow_idx + od_idx))
+    print(idx)
+    ret = station.loc[idx].sort_values(['ROUTE', 'STATION']).index
+    return ret
 
 
 def load_station(clean=True):
@@ -22,9 +25,21 @@ def load_station(clean=True):
         return load_station(clean=False).loc[load_idx()]
 
 
-def load_link(filename='LINK.txt'):
+def load_link(raw=False):
+    filename = 'LINK.txt' if not raw else 'LINK_RAW.txt'
     return np.genfromtxt(DATA_PATH + filename, dtype=int)
 
+
+def load_od(clean=True):
+    if clean==False:
+        od = pd.read_csv(DATA_PATH + 'OD.csv', index_col=0)
+    else:
+        idx = load_idx()
+        od = pd.read_csv(DATA_PATH + 'OD.csv', index_col=0)
+        od.index.name = ''
+        od.columns = list(map(int, od.columns))
+        od = od.loc[idx, idx].as_matrix()
+    return od
 
 def load_flow(affix='D', clean=True):
     filepath = DATA_PATH + affix + '.csv'
@@ -64,13 +79,6 @@ def load_dist(recalc=False):
     return dist.loc[ret_idx, ret_idx].as_matrix()
 
 
-def load_od():
-    idx = load_idx()
-    od = pd.read_csv(DATA_PATH + 'OD.csv', index_col=0)
-    od.index.name = ''
-    od.columns = list(map(int, od.columns))
-    od = od.loc[idx, idx].as_matrix()
-    return od
 
 
 def load_adj(jump=5, contrib=0.01):
