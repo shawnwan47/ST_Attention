@@ -1,4 +1,5 @@
 import os
+import pickle as pk
 
 import pandas as pd
 import numpy as np
@@ -7,15 +8,21 @@ from Consts import *
 
 
 def load_idx():
-    station = load_station(False)
-    station_idx = list(station.index)
-    flow_idx = list(load_flow(clean=False).columns)
-    link_idx = list(np.unique(load_link()))
-    od_idx = list(load_od(False).index)
-    idx = list(set(station_idx + link_idx + flow_idx + od_idx))
-    print(idx)
-    ret = station.loc[idx].sort_values(['ROUTE', 'STATION']).index
-    return ret
+    filepath = DATA_PATH + 'idx.pk'
+    if os.path.exists(filepath):
+        idx = pk.load(open(filepath, 'rb'))
+    else:
+        station = load_station(False)
+        station_idx = set(station.index)
+        flow_idx = set(load_flow(clean=False).columns)
+        link_idx = set(np.unique(load_link()))
+        od_idx = set(load_od(False).index)
+        for idx in [flow_idx, link_idx, od_idx]:
+            station_idx.intersection_update(idx)
+        idx = station.loc[station_idx].sort_values(['ROUTE', 'STATION']).index
+        idx = list(idx)
+        pk.dump(idx, open(filepath, 'wb'))
+    return idx
 
 
 def load_station(clean=True):

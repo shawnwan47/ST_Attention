@@ -17,6 +17,36 @@ def saveclf(figpath):
     plt.savefig(figpath + '.png', transparent=True)
     plt.clf()
 
+def get_routes():
+    station = Data.load_station()
+    route = ''
+    ret = []
+    for i in range(station.shape[0]):
+        r = station.iloc[i]['ROUTE']
+        if route != r:
+            ret.append(i)
+            route = r
+    ret.append(station.shape[0])
+    return ret
+
+def get_od_routes(od, by='od'):
+    assert by in ['od', 'o', 'd']
+    r = get_routes()
+    length = len(r) - 1
+    for i in range(length):
+        for j in range(length):
+            s1, e1, s2, e2 = r[i], r[i+1], r[j], r[j+1]
+            if by == 'o':
+                scale = e1 - s1
+            elif by == 'd':
+                scale = e2 - s2
+            else:
+                scale = e1 - s1 + e2 - s2
+            val = od[s1:e1, s2:e2].sum() / scale
+            od[s1:e1, s2:e2] = val
+    return od
+
+
 
 def plot_network():
     station = Data.load_station(clean=False)
@@ -64,6 +94,14 @@ def tickTimes(args, length, axis='x'):
 def imshow_square(im, **args):
     plt.axis('off')
     plt.imshow(im, **args)
+
+
+def plot_routes(scale=1, **args):
+    length = len(Data.load_idx()) * scale - 0.5
+    for route in get_routes():
+        route = route * scale - 0.5
+        plt.plot([-0.5, length], [route, route], linewidth=0.3, **args)
+        plt.plot([route, route], [-0.5, length], linewidth=0.3, **args)
 
 
 def loc2time(im, loc, args):

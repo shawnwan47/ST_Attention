@@ -1,5 +1,5 @@
 # data as highway or metro
-DATA_TYPE = 'metro'
+DATA_TYPE = 'highway'
 DATA_FOLDER = DATA_TYPE + '/'
 DATA_PATH = './data/' + DATA_FOLDER
 FIG_PATH = './fig/' + DATA_FOLDER
