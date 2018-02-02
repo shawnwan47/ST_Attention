@@ -1,18 +1,3 @@
-def add_args(args):
-    add_gpu(args)
-    add_data(args)
-    add_loss(args)
-    add_optim(args)
-    add_run(args)
-    add_model(args)
-
-
-def add_gpu(args):
-    args.add_argument('-gpuid', type=int, default=0)
-    args.add_argument('-seed', type=int, default=47)
-    args.add_argument('-eps', type=float, default=1e-8)
-
-
 def add_data(args):
     # data attribute
     args.add_argument('-data_type', type=str, default='highway',
@@ -35,13 +20,16 @@ def add_data(args):
     args.add_argument('-days_train', type=int)
     args.add_argument('-days_test', type=int)
 
+def add_train(args):
+    # gpu
+    args.add_argument('-gpuid', type=int, default=0)
+    args.add_argument('-seed', type=int, default=47)
+    args.add_argument('-eps', type=float, default=1e-8)
+    # loss
+    # args.add_argument('-loss', type=str, default='NLLLoss2d',
+    #                   choices=['NLLLoss2d'])
 
-def add_loss(args):
-    args.add_argument('-loss', type=str, default='NLLLoss2d',
-                      choices=['NLLLoss2d'])
-
-
-def add_optim(args):
+    # optimization
     args.add_argument('-optim', type=str, default='Adam',
                       choices=['SGD', 'Adam'])
     args.add_argument('-lr', type=float, default=0.001)
@@ -50,8 +38,7 @@ def add_optim(args):
     args.add_argument('-weight_decay', type=float, default=5e-5)
     args.add_argument('-max_grad_norm', type=float, default=1)
 
-
-def add_run(args):
+    # run
     args.add_argument('-test', action='store_true')
     args.add_argument('-retrain', action='store_true')
     args.add_argument('-epoches', type=int, default=300)
@@ -78,11 +65,11 @@ def add_model(args):
                       choices=['dot', 'add', 'general', 'mlp'])
     args.add_argument('-res', action='store_false')
     args.add_argument('-mlp', action='store_false')
-    # LogisticMixtures
-    args.add_argument('-num_prob', type=int, default=5)
+    # model name
+    args.add_argument('-path', type=str)
 
 
-def update_args(args):
+def update(args):
     if args.data_type == 'highway':
         args.num_loc = 284
         args.days = 184
@@ -103,9 +90,7 @@ def update_args(args):
     if args.retrain:
         args.lr /= 100
 
-
-def modelname(args):
-    # MODEL
+    # path
     path = args.model
     # Embedding
     path += 'Emb' + str(args.emb_size)
@@ -119,4 +104,4 @@ def modelname(args):
     path += 'Flow' + str(args.num_flow)
     path += 'Past' + str(args.past)
     path += 'Future' + str(args.future)
-    return path
+    args.path = path

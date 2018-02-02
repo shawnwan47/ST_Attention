@@ -95,7 +95,7 @@ def train(inputs, targets):
     return loss_train / iters, wape / iters
 
 
-def test(inputs, targets):
+def eval(inputs, targets):
     model.eval()
     loss = wape = 0
     days = inputs.size(0) // args.num_time
@@ -114,7 +114,7 @@ def test(inputs, targets):
 if not args.test:
     for epoch in range(args.epoches):
         loss_train, wape_train = train(inp_train, tgt_train)
-        loss_valid, wape_valid, _ = test(inp_valid, tgt_valid)
+        loss_valid, wape_valid, _ = eval(inp_valid, tgt_valid)
 
         print('Epoch: %d NLL: %.4f %.4f WAPE: %.4f %.4f' % (
             epoch, loss_train, loss_valid, wape_train, wape_valid))
@@ -123,7 +123,7 @@ if not args.test:
         if optimizer.param_groups[0]['lr'] < args.lr_min:
             break
 
-loss_test, wape_test, att = test(inp_test, tgt_test)
+loss_test, wape_test, att = eval(inp_test, tgt_test)
 print('Test {}: NLL:{} WAPE:{}'.format(modelpath, loss_test, wape_test))
 torch.save(model.cpu(), modelpath + '.pt')
 Utils.torch2npsave(modelpath + '_att', att)

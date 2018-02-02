@@ -10,13 +10,11 @@ if DATA_TYPE == 'highway':
     DAYS = 184
     DAYS_TRAIN = 120
     DAYS_TEST = 30
-    WEEKDAY = 5  # (day - WEEKDAY) % 7
 else:
     DIM = 538
     DAYS = 22
     DAYS_TRAIN = 14
     DAYS_TEST = 4
-    WEEKDAY = 0
 
 MAX_SEQ_LEN = 96 * 8
 EPS = 1e-8
