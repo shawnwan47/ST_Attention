@@ -49,11 +49,11 @@ class Loader(object):
     def load_link_raw(self):
         return np.genfromtxt(self.DATA_PATH + 'LINK_RAW.txt', dtype=int)
 
-    def load_origin(self):
+    def load_flow_in(self):
         flow = self._load_flow('O')
         return flow[self.idx]
 
-    def load_destination(self):
+    def load_flow_out(self):
         flow = self._load_flow('D')
         return flow[self.idx]
 
@@ -81,36 +81,10 @@ class Loader(object):
         return dist.as_matrix()
 
 
-def preprocess(orig, dest, freq):
-    def normalize(flow):
-        flow_mean, flow_std = flow.mean(), flow.std()
-        flow_norm = (flow - flow_mean) / (flow_std + 1e-8)
-        return flow_norm, flow_mean, flow_std
-
-    def getDayTime(flow):
-        day = flow.index.map(lambda x: x.weekday())
-        hour = flow.index.map(lambda x: x.hour)
-        minute = flow.index.map(lambda x: x.minute)
-        time = hour * (60 // freq) + minute // freq
-        day, time = np.array(day), np.array(time)
-        day, time = day.reshape((-1, 1)), time.reshape((-1, 1))
-        day = np.tile(day, )
-        return day, time
-
-    def getLoc(flow):
-        loc = np.arange(flow.shape[1])
-        loc = np.tile(loc, (flow.shape[0], 1))
-
-    orig, dest = loader.load_origin(), load.load_destination()
-    flow = pd.concat((orig, dest), axis=1)
-    flow = flow.resample(str(freq) + 'T').sum()
-    flow, flow_mean, flow_std = normalize(flow)
-    day, time = getDayTime(flow)
-    return flow, flow_mean, flow_std, day, time, loc
 
 
-class Dataset(object):
-    def __init__(self, dataset, freq, flow_in, flow_out):
+class Preprocesser(object):
+    def __init__(self, dataset, freq):
         assert freq in [5, 10, 15, 20, 30, 60]
         io = ['O', 'D', 'OD']
         assert flow_in in io and flow_out in io
@@ -121,12 +95,15 @@ class Dataset(object):
             self.DAYS_TRAIN = 14
             self.DAYS_TEST = 4
         loader = Loader(dataset)
-        orig, dest = loader.load_origin(), loader.load_destination()
-        flow, flow_mean, flow_std, day, time, loc = preprocess(orig, dest)
+        flow_in, flow_out = loader.load_flow_in(), loader.load_flow_out()
+        flow = pd.concat((flow_in, flow_out), axis=1)
+        self.mean, self.std = flow.mean(), flow.std() + 1e-8
+        weekday = flow.index.map(lambda x: x.weekday())
+        flow = (flow - self.mean) / self.std
+        self.flow = flow.as_matrix().reshape((-1, 1440 // freq, flow.shape[1]))
         # IO
         data = self.getFlow(flow, flow_in)
         targets = self.getFlow(flow, flow_out)
-        self.st = self.getST(data, day, time, loc)
         self.data_train, self.data_valid, self.data_test = self.split(data)
         self.targets_train, self.targets_valid, self.targets_test = self.split(targets)
 
