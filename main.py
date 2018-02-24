@@ -14,7 +14,9 @@ from Consts import MODEL_PATH
 
 
 args = argparse.ArgumentParser()
-Args.add_args(args)
+Args.add_data(args)
+Args.add_model(args)
+Args.add_train(args)
 args = args.parse_args()
 Args.update_args(args)
 print(args)

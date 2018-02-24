@@ -15,36 +15,31 @@ class ModelBase(nn.Module):
         self.past = args.past
         self.future = args.future
         self.num_layers = args.num_layers
-        self.num_flow = args.num_flow
+        self.hidden_size = args.hidden_size
         self.num_day = args.num_day
         self.num_time = args.num_time
         self.num_loc = args.num_loc // 2
         self.emb_size = args.emb_size
-        self.emb_all = self.emb_size * 4
+        self.emb_all = self.emb_size * 3
         self.embeddings = nn.ModuleList([
-            nn.Embedding(args.num_flow + 1, self.emb_size),
             nn.Embedding(args.num_day, self.emb_size),
             nn.Embedding(args.num_time, self.emb_size),
             nn.Embedding(args.num_loc, self.emb_size)
         ])
         self.dropout = nn.Dropout(args.dropout)
-        # for logistic mixtures prediction, bug exists
-        # self.linear = BottleLinear(self.emb_all, 3 * args.num_prob)
-        # self.prob = Layers.LogisticMixtures(args.num_prob, self.num_flow)
-        self.linear = BottleLinear(self.emb_all, self.num_flow)
-        self.logsoftmax = nn.LogSoftmax(-1)
+        self.linear_in = BottleLinear(self.emb_all + self.past, self.hidden_size)
 
-    def embed(self, inp):
-        '''inp: batch x -1 x 4'''
-        embeds = [self.dropout(self.embeddings[i](inp[:, :, i]))
-                  for i in range(4)]
-        return torch.cat(embeds, -1)
+    def embed(self, features_numerical, features_categorical):
+        '''features_categorical: batch x -1 x 4'''
+        embeds = [self.dropout(self.embeddings[i](features_categorical[:, :, i]))
+                  for i in range(3)]
+        features = torch.cat([features_numerical] + embeds, -1)
+        return self.linear_in(features)
 
-    def forward_in(self, inp, tgt):
-        tgt[:, :, :, 0] = self.num_flow
-        inp = inp.view(-1, self.past * self.num_loc, 4)
-        tgt = tgt.view(-1, self.future * self.num_loc, 4)
-        return self.embed(inp), self.embed(tgt)
+    def forward_in(self, query_numerical, query_categorical, context_numerical, context_categorical):
+        query = self.embed(query_numerical, query_categorical)
+        context = self.embed(context_numerical, context_categorical)
+        return query, context
 
     def forward_out(self, out, att):
         '''
@@ -65,11 +60,11 @@ class ModelBase(nn.Module):
             out.append(embedding.weight.data.cpu().numpy())
         return out
 
-class Transformer(ModelBase):
+class MultiHeadedAttention(ModelBase):
     def __init__(self, args):
-        super(Transformer, self).__init__(args)
+        super(MultiHeadedAttention, self).__init__(args)
         self.layers = nn.ModuleList([Layers.MultiHeadAttentionLayer(
-            self.emb_all, args.head, args.dropout
+            self.hidden_size, args.head, args.dropout
         ) for _ in range(self.num_layers)])
 
     def forward(self, inp, tgt):

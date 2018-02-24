@@ -24,57 +24,30 @@ class MultiHeadAttentionLayer(nn.Module):
 
 
 class AttentionLayer(nn.Module):
-    def __init__(self, dim, map_type='linear', att_type='dot',
-                 res=True, mlp=True, dropout=0.5):
+    def __init__(self, dim, map_type='lin', att_type='dot', res=True, dropout=0.2):
         super(AttentionLayer, self).__init__()
-        if map_type == 'lin':
-            self.map_q = self.map_k = self.map_v = BottleLinear(dim, dim, False)
-        elif map_type == 'mlp':
-            self.map_q = self.map_k = self.map_v = MLP(dim, dim, dropout)
-        elif map_type == 'res':
-            self.map_q = self.map_k = self.map_v = ResMLP(dim, dropout)
-        self.attention = Attention.Attention(dim, att_type, dropout)
+        self.dropout = dropout
+        self.map_qry = self.mapper(dim, map_type)
+        self.map_key = self.mapper(dim, map_type)
+        self.map_val = self.mapper(dim, map_type)
+        # self.attention = Attention.Attention(dim, att_type, dropout)
         self.res = res
-        self.mlp = mlp
-        if res:
-            self.layer_norm = BottleLayerNorm(dim)
-        if mlp:
-            self.resmlp = ResMLP(dim, dropout)
+        self.layer_norm = BottleLayerNorm(dim)
+        self.resmlp = ResMLP(dim, dropout)
+
+    def mapper(self, dim, map_type):
+        if map_type == 'lin':
+            return BottleLinear(dim, dim, False)
+        elif map_type == 'mlp':
+            return MLP(dim, dim, self.dropout)
+        elif map_type == 'res':
+            return ResMLP(dim, self.dropout)
 
     def forward(self, qry, key, val, mask=None):
-        q, k, v = self.map_q(qry), self.map_k(key), self.map_v(val)
+        q, k, v = self.map_qry(qry), self.map_key(key), self.map_val(val)
         out, att = self.attention(q, k, v, mask)
         if self.res:
             out = self.layer_norm(out + qry)
         if self.mlp:
             out = self.resmlp(out)
         return out, att
-
-
-
-class LogisticMixtures(nn.Module):
-    def __init__(self, components, categories):
-        super(LogisticMixtures, self).__init__()
-        self.components = components
-        self.categories = categories
-        self.softmax = nn.Softmax(1)
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, params):
-        '''params: batch x length x num_params'''
-        batch, length, num_params = params.size()
-        assert num_params % 3 == 0
-        params = params.view(-1, self.components, 3)
-        prob = self.softmax(params[:, :, [0]])
-        mean = params[:, :, [1]]
-        inv_std = torch.exp(params[:, :, [2]])
-        xs = torch.arange(self.categories) / self.categories * 2 - 1
-        xs = xs.expand(batch * length, self.components, self.categories)
-        x1, x2 = xs - 1. / self.categories, xs + 1. / self.categories
-        x1[:, :, 0] = -1e8
-        x2[:, :, -1] = 1e8
-        x1, x2 = Variable(x1).cuda(), Variable(x2).cuda()
-        cdf1 = self.sigmoid((x1 - mean) * inv_std)
-        cdf2 = self.sigmoid((x2 - mean) * inv_std)
-        log_pdf = torch.log((prob * (cdf2 - cdf1)).sum(1))
-        return log_pdf.view(batch, length, self.categories)
