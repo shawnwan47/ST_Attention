@@ -79,35 +79,23 @@ class Loader(object):
         return dist.as_matrix()
 
 
-class Dataset(object):
-    def __init__(self, dataset='highway', freq=15,
-                 start=360, history=120, future=60,
+class TrafficData(object):
+    def __init__(self, dataset='highway',
+                 freq=15, start=360, past=120, future=60,
                  inp='OD', out='OD'):
         assert freq in [5, 10, 15, 20, 30, 60]
         start //= freq
-        history //= freq
+        past //= freq
         future //= freq
-        if dataset == 'highway':
-            self.DAYS_TRAIN = 120
-            self.DAYS_TEST = 30
-        else:
-            self.DAYS_TRAIN = 14
-            self.DAYS_TEST = 4
         # load data
         flow = self.loadFlow(dataset, freq)
         start_day = flow.index[0].weekday()
         # normalize
         flow, self.mean, self.std = self.normalize(flow)
         # flow: num_day x num_time x num_loc x window
-        flow_i, flow_o = self.getFlowIO(flow, start, history, future)
-        # daytimeloc: num_day x num_time x num_loc x 3
-        daytimeloc = self.getCategorical(flow_i, start_day)
-        # query, context, flow_o
-        self.context_numerical = self.getIO(flow_i, inp)
-        self.context_categorical = self.getIO(daytimeloc, inp)
-        self.query_numerical = self.getIO(flow_i, out)
-        self.query_categorical = self.getIO(daytimeloc, out)
-        self.targets = self.getIO(flow_o, out)
+        self.data_numerical, self.targets = self.getFlowIO(flow, start, past, future)
+        # data_categorical: num_day x num_time x num_loc x 3
+        self.data_categorical = self.getCategorical(data_numerical, start_day)
 
     def loadFlow(self, dataset, freq):
         loader = Loader(dataset)
@@ -122,13 +110,13 @@ class Dataset(object):
         flow = flow.as_matrix().reshape((days, -1, flow.shape[1]))
         return flow, mean, std
 
-    def getFlowIO(self, flow, start, history, future):
+    def getFlowIO(self, flow, start, past, future):
         # ret: num_day x num_time x num_loc x window
         num_slots = flow.shape[1]
         num_time = num_slots - future - start
         # [num_day x num_loc x window]
         flow = flow.transpose(0, 2, 1)
-        flow_i = [flow[:, :, start + i - history:start + i]
+        flow_i = [flow[:, :, start + i - past:start + i]
                   for i in range(num_time)]
         flow_o = [flow[:, :, start + i:start + i + future]
                   for i in range(num_time)]
@@ -144,24 +132,3 @@ class Dataset(object):
         loc = np.arange(num_loc).reshape(1, 1, num_loc)
         ret = np.broadcast_arrays(day, time, loc)
         return np.stack(ret, -1)
-
-    def getIO(self, data, od):
-        # data: num_day, num_time, num_loc, num_features
-        assert len(data.shape) == 4
-        stations = data.shape[2] / 2
-        assert stations == int(stations)
-        if od is 'O':
-            return data[:, :, :stations]
-        if od is 'D':
-            return data[:, :, -stations:]
-        else:
-            return data
-
-    def getTrainValidTest(self, data):
-        assert len(data.shape) == 4
-        _, _, num_loc, num_features = data.shape
-        shape = (-1, num_loc, num_features)
-        data_train = data[:self.DAYS_TRAIN].reshape(shape)
-        data_valid = data[self.DAYS_TRAIN:-self.DAYS_TEST].reshape(shape)
-        data_test = data[-self.DAYS_TEST:].reshape(shape)
-        return data_train, data_valid, data_test

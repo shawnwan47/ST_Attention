@@ -1,52 +1,53 @@
 import numpy as np
 import torch
+from torch.utils.data import Dataset, DataLoader
 from torch.autograd import Variable
 
-import Data
+from Data import TrafficDataset
 
 
-def load_data(args):
-    orig, orig_min, orig_scale, dest, dest_min, dest_scale = Data.load_flow_pixel(args.num_flow)
-    day, time = Data.load_daytime()
-    loc_orig, loc_dest = Data.load_loc()
+class Dataset3(Dataset):
+    def __init__(self, data_numerical, data_categorical, targets):
+        self.data_numerical = data_numerical
+        self.data_categorical = data_categorical
+        self.targets = targets
 
-    orig = torch.LongTensor(orig)
-    dest = torch.LongTensor(dest)
-    day = torch.LongTensor(day).expand_as(orig)
-    time = torch.LongTensor(time).expand_as(orig)
-    loc_orig = torch.LongTensor(loc_orig)
-    loc_dest = torch.LongTensor(loc_dest)
+    def __getitem__(self, index):
+        return self.data_numerical[index], self.data_categorical[index], self.targets[index]
 
-    inp = torch.stack((orig, day, time, loc_orig), -1)
-    tgt = torch.stack((dest, day, time, loc_dest), -1)
-    inp = inp.view(-1, inp.size(-2), inp.size(-1))
-    tgt = tgt.view(-1, tgt.size(-2), tgt.size(-1))
+    def __len__(self):
+        return self.data_numerical.size(0)
 
-    num_sample = (args.days - 1) * args.num_time
-    inp = torch.stack([inp[i:i + args.past]
-                       for i in range(num_sample)], 0)
-    tgt = torch.stack([tgt[i + args.past:i + args.past + args.future]
-                       for i in range(num_sample)], 0)
 
-    train_size = args.days_train * args.num_time
-    test_size = args.days_test * args.num_time
+def getDataLoaders(dataset='highway', freq=15, start=360, past=120, future=60,
+                   batch_size=100):
 
-    inp_train = inp[:train_size]
-    inp_valid = inp[train_size:-test_size]
-    inp_test = inp[-test_size:]
-    tgt_train = tgt[:train_size]
-    tgt_valid = tgt[train_size:-test_size]
-    tgt_test = tgt[-test_size:]
+    def getTrainValidTest(data):
+        assert data.dim() is 4
+        size_new = (-1, data.size(-2), data.size(-1))
+        days = data.size(0)
+        days_train, days_test = days * 3 // 5, days // 5
+        data_train = data[:days_train].view(size_new)
+        data_valid = data[days_train:-days_test].view(size_new)
+        data_test = data[-days_test:].view(size_new)
+        return data_train, data_valid, data_test
 
-    tgt_min = Variable(torch.FloatTensor(dest_min), requires_grad=False).cuda()
-    tgt_scale = Variable(torch.FloatTensor(dest_scale), requires_grad=False).cuda()
+    dataset = TrafficDataset(dataset, freq=freq, start=start, past=past, future=future)
+    data_numerical = getTrainValidTest(torch.FloatTensor(dataset.data_numerical))
+    data_categorical = getTrainValidTest(orch.LongTensor(dataset.data_categorical))
+    targets = getTrainValidTest(torch.FloatTensor(dataset.targets))
 
-    print('Data loaded.\ninp: {}, tgt: {}'.format(
-        inp_test.size(), tgt_test.size()))
+    data_train = Dataset3(data_numerical[0], data_categorical[0], targets[0])
+    data_valid = Dataset3(data_numerical[1], data_categorical[1], targets[1])
+    data_test = Dataset3(data_numerical[2], data_categorical[2], targets[2])
 
-    return (inp_train, inp_valid, inp_test,
-            tgt_train, tgt_valid, tgt_test,
-            tgt_min, tgt_scale)
+    data_train = DataLoader(data_train, batch_size=batch_size, shuffle=True)
+    data_train = DataLoader(data_train, batch_size=batch_size)
+    data_train = DataLoader(data_train, batch_size=batch_size)
+
+    mean, std = torch.FloatTensor(dataset.mean), torch.FloatTensor(dataset.std)
+
+    return data_train, data_valid, data_test, mean, std
 
 
 def aeq(*args):
