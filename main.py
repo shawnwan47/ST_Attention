@@ -27,8 +27,18 @@ if args.gpuid:
 if args.seed > 0:
     torch.cuda.manual_seed(args.seed)
 
+# DATA
+data_train, data_valid, data_test, mean, std = Utils.getDataset(
+    dataset=args.dataset,
+    freq=args.freq,
+    start=args.start,
+    past=args.past,
+    future=args.future
+)
+num_loc = data_test[0].size(-2)
+
 # MODEL
-modelpath = MODEL_PATH + Args.modelname(args)
+modelpath = MODEL_PATH + args.path
 print('Model: {}'.format(modelpath))
 
 model = getattr(Models, args.model)(args)
@@ -37,33 +47,8 @@ if args.test or args.retrain:
     print('Model loaded.')
 model.cuda()
 
-# DATA
-(inp_train, inp_valid, inp_test,
-tgt_train, tgt_valid, tgt_test,
-tgt_min, tgt_scale) = Utils.load_data(args)
-
-
-def WAPE(out, tgt):
-    '''
-    out: batch x future x loc x weight
-    tgt: batch x future x loc
-    '''
-    _, out = out.max(1)
-    return WAPE_(out, tgt)
-
-
-def WAPE_(out, tgt):
-    out = out.type(torch.cuda.FloatTensor)
-    tgt = tgt.type(torch.cuda.FloatTensor)
-    out = out * tgt_scale + tgt_min
-    tgt = tgt * tgt_scale + tgt_min
-    wape = torch.abs(out - tgt).sum() / torch.sum(tgt)
-    return wape.data[0]
-
-
 # LOSS
-weight = Variable(torch.arange(args.num_flow) + 1).cuda()
-criterion = getattr(torch.nn, args.loss)(weight=weight)
+criterion = getattr(torch.nn, args.crit)
 
 # OPTIM
 optimizer = getattr(torch.optim, args.optim)(

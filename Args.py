@@ -1,35 +1,26 @@
 def add_data(args):
     # data attribute
-    args.add_argument('-data_type', type=str, default='highway',
+    args.add_argument('-dataset', type=str, default='highway',
                       choices=['highway', 'metro'])
-    args.add_argument('-num_flow', type=int, default=64)
+
+    args.add_argument('-freq', type=int, default=15)
     args.add_argument('-num_day', type=int, default=7)
     args.add_argument('-num_time', type=int, default=96)
     args.add_argument('-num_loc', type=int)
-    # dataset
-    args.add_argument('-past', type=int, default=4)
-    args.add_argument('-future', type=int, default=1)
-    args.add_argument('-past_day', action='store_true')
-    args.add_argument('-max_len', type=int)
-    # for metro only
-    args.add_argument('-resolution', type=int, default=15)
-    args.add_argument('-start_time', type=int, default=6)
-    args.add_argument('-end_time', type=int, default=22)
-    # args to be inferred
-    args.add_argument('-days', type=int)
-    args.add_argument('-days_train', type=int)
-    args.add_argument('-days_test', type=int)
+
+    args.add_argument('-start', type=int, default=360)
+    args.add_argument('-past', type=int, default=120)
+    args.add_argument('-future', type=int, default=60)
 
 def add_train(args):
     # gpu
     args.add_argument('-gpuid', type=int, default=0)
     args.add_argument('-seed', type=int, default=47)
     args.add_argument('-eps', type=float, default=1e-8)
-    # loss
-    # args.add_argument('-loss', type=str, default='NLLLoss2d',
-    #                   choices=['NLLLoss2d'])
 
     # optimization
+    args.add_argument('-crit', type=str, default='MSELoss',
+                      choices=['MSEloss', 'L1Loss'])
     args.add_argument('-optim', type=str, default='Adam',
                       choices=['SGD', 'Adam'])
     args.add_argument('-lr', type=float, default=0.001)
@@ -41,9 +32,9 @@ def add_train(args):
     # run
     args.add_argument('-test', action='store_true')
     args.add_argument('-retrain', action='store_true')
-    args.add_argument('-epoches', type=int, default=300)
-    args.add_argument('-iterations', type=int, default=3)
-    args.add_argument('-batch', type=int, default=300)
+    args.add_argument('-epoches', type=int, default=200)
+    args.add_argument('-iterations', type=int, default=1)
+    args.add_argument('-batch', type=int, default=200)
     args.add_argument('-print_epoches', type=int, default=1)
 
 
@@ -70,22 +61,6 @@ def add_model(args):
 
 
 def update(args):
-    if args.data_type == 'highway':
-        args.num_loc = 284
-        args.days = 184
-        args.days_train = 150
-        args.days_test = 15
-        args.start_time = 0
-        args.end_time = 24
-        args.resolution = 15
-    elif args.data_type == 'metro':
-        args.num_loc = 536
-        args.days = 22
-        args.days_train = 14
-        args.days_test = 4
-    else:
-        raise KeyError
-    args.num_time = (args.end_time - args.start_time) * 60 // args.resolution
     # run
     if args.retrain:
         args.lr /= 100

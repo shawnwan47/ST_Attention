@@ -7,10 +7,7 @@ import numpy as np
 
 class Loader(object):
     def __init__(self, dataset='highway'):
-        if dataset == 'highway':
-            self.DATA_PATH = 'data/highway/'
-        else:
-            self.DATA_PATH = 'data/metro/'
+        self.DATA_PATH = 'data/' + dataset + '/'
         self.idx = self._load_idx()
 
     def _load_idx(self):
