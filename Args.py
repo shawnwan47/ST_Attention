@@ -42,30 +42,30 @@ def add_train(args):
 
 def add_model(args):
     # general
-    args.add_argument('-model', type=str, default='Attention')
+    args.add_argument('-model', type=str, default='SpatialAttention')
     args.add_argument('-num_layers', type=int, default=1)
+    args.add_argument('-hidden_size', type=int, default=64)
     args.add_argument('-dropout', type=float, default=0.2)
     # Embedding
-    args.add_argument('-emb_size', type=int, default=32)
-    args.add_argument('-emb_merge', type=str, default='cat',
-                      choices=['cat', 'sum'])
-    args.add_argument('-emb_all', type=int)
+    args.add_argument('-emb_size', type=int, default=16)
     # Attention
-    args.add_argument('-head', type=int, default=1)
+    args.add_argument('-head', type=int, default=4)
     args.add_argument('-map_type', type=str, default='lin',
                       choices=['lin', 'mlp', 'res'])
     args.add_argument('-att_type', type=str, default='dot',
                       choices=['dot', 'add', 'general', 'mlp'])
     args.add_argument('-res', action='store_false')
     args.add_argument('-mlp', action='store_false')
-    # model name
+    # model name to be updated
     args.add_argument('-path', type=str)
 
 
 def update(args):
     # data
     end = 1440 - args.future
-    args.num_time = (args.start - end) // args.freq
+    args.num_time = (end - args.start) // args.freq
+    args.past //= args.freq
+    args.future //= args.freq
     if args.dataset is 'highway':
         args.num_loc = 266
     elif args.dataset is 'metro':
