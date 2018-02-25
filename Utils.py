@@ -35,9 +35,35 @@ def getDataset(dataset='highway', freq=15, start=360, past=120, future=60):
     data_categorical = getTrainValidTest(orch.LongTensor(dataset.data_categorical))
     targets = getTrainValidTest(torch.FloatTensor(dataset.targets))
 
+    data_train, data_valid, data_test = (
+        Dataset3(data_numerical=data_numerical[i],
+                 data_categorical=data_categorical[i],
+                 targets=targets[i])
+        for i in range(3)
+    )
+
+    data_train = DataLoader(
+        dataest=data_train,
+        batch_size=args.batch_size,
+        shuffle=True,
+        pin_memory=True
+    )
+
+    data_valid = DataLoader(
+        dataest=data_valid,
+        batch_size=args.batch_size,
+        pin_memory=True
+    )
+
+    data_test = DataLoader(
+        dataest=data_test,
+        batch_size=args.batch_size,
+        pin_memory=True
+    )
+
     mean, std = torch.FloatTensor(dataset.mean), torch.FloatTensor(dataset.std)
 
-    return data_numerical, data_categorical, targets, mean, std
+    return data_train, data_valid, data_test, mean, std
 
 
 def aeq(*args):

@@ -4,13 +4,14 @@ def add_data(args):
                       choices=['highway', 'metro'])
 
     args.add_argument('-freq', type=int, default=15)
-    args.add_argument('-num_day', type=int, default=7)
-    args.add_argument('-num_time', type=int, default=96)
-    args.add_argument('-num_loc', type=int)
 
     args.add_argument('-start', type=int, default=360)
     args.add_argument('-past', type=int, default=120)
     args.add_argument('-future', type=int, default=60)
+    args.add_argument('-num_day', type=int, default=7)
+    # to be updated
+    args.add_argument('-num_time', type=int)
+    args.add_argument('-num_loc', type=int)
 
 def add_train(args):
     # gpu
@@ -24,10 +25,11 @@ def add_train(args):
     args.add_argument('-optim', type=str, default='Adam',
                       choices=['SGD', 'Adam'])
     args.add_argument('-lr', type=float, default=0.001)
+    args.add_argument('-momentum', type=float, default=0.9)
     args.add_argument('-patience', type=int, default=10)
-    args.add_argument('-lr_min', type=float, default=1e-5)
-    args.add_argument('-weight_decay', type=float, default=5e-5)
-    args.add_argument('-max_grad_norm', type=float, default=1)
+    args.add_argument('-min_lr', type=float, default=1e-6)
+    args.add_argument('-weight_decay', type=float, default=1e-6)
+    args.add_argument('-max_grad_norm', type=float, default=0.1)
 
     # run
     args.add_argument('-test', action='store_true')
@@ -61,6 +63,14 @@ def add_model(args):
 
 
 def update(args):
+    # data
+    end = 1440 - args.future
+    args.num_time = (args.start - end) // args.freq
+    if args.dataset is 'highway':
+        args.num_loc = 266
+    elif args.dataset is 'metro':
+        args.num_loc = 536
+
     # run
     if args.retrain:
         args.lr /= 100

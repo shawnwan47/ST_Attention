@@ -1,4 +1,4 @@
-import os
+import pathlib
 import pickle as pk
 
 import pandas as pd
@@ -7,26 +7,21 @@ import numpy as np
 
 class Loader(object):
     def __init__(self, dataset='highway'):
-        self.DATA_PATH = 'data/' + dataset + '/'
+        self.DATA_PATH = pathlib.Path('data') / dataset
         self.idx = self._load_idx()
 
     def _load_idx(self):
-        filepath = self.DATA_PATH + 'idx.pk'
-        if os.path.exists(filepath):
-            idx = pk.load(open(filepath, 'rb'))
-        else:
-            station = self.load_station_raw()
-            station_idx = set(station.index)
-            flow_idx = set(self._load_flow().columns)
-            link_idx = set(np.unique(self.load_link()))
-            for idx in [flow_idx, link_idx]:
-                station_idx.intersection_update(idx)
-            idx = station.loc[station_idx].sort_values(['ROUTE', 'STATION']).index
-            pk.dump(idx, open(filepath, 'wb'))
+        station = self.load_station_raw()
+        station_idx = set(station.index)
+        flow_idx = set(self._load_flow().columns)
+        link_idx = set(np.unique(self.load_link()))
+        for idx in [flow_idx, link_idx]:
+            station_idx.intersection_update(idx)
+        idx = station.loc[station_idx].sort_values(['ROUTE']).index
         return idx
 
     def _load_flow(self, od='D'):
-        flow = pd.read_csv(self.DATA_PATH + od + '.csv',
+        flow = pd.read_csv(self.DATA_PATH / (od + '.csv'),
                            index_col=0, parse_dates=True)
         flow.columns = list(map(int, flow.columns))
         return flow
@@ -36,13 +31,13 @@ class Loader(object):
         return station.loc[self.idx]
 
     def load_station_raw(self):
-        return pd.read_csv(self.DATA_PATH + 'STATION.txt', index_col=0)
+        return pd.read_csv(self.DATA_PATH / 'STATION.txt', index_col=0)
 
     def load_link(self):
-        return np.genfromtxt(self.DATA_PATH + 'LINK.txt', dtype=int)
+        return np.genfromtxt(self.DATA_PATH / 'LINK.txt', dtype=int)
 
     def load_link_raw(self):
-        return np.genfromtxt(self.DATA_PATH + 'LINK_RAW.txt', dtype=int)
+        return np.genfromtxt(self.DATA_PATH / 'LINK_RAW.txt', dtype=int)
 
     def load_flow_in(self):
         flow = self._load_flow('O')
@@ -53,9 +48,9 @@ class Loader(object):
         return flow[self.idx]
 
     def load_dist(self):
-        filepath = DATA_PATH + 'DIST.csv'
-        if os.path.exists(filepath):
-            dist = pd.read_csv(filepath, index_col=0)
+        filepath = self.DATA_PATH / 'DIST.csv'
+        if filepath.exists():
+            dist = pd.read_csv(filepath.name, index_col=0)
             dist.columns = list(map(int, dist.columns))
         else:
             link = self.load_link()
@@ -72,7 +67,7 @@ class Loader(object):
                         tmp = dist.loc[i, k] + dist.loc[k, j]
                         if dist.loc[i, j] > tmp:
                             dist.loc[i, j] = tmp
-            dist.to_csv(filepath, index=True)
+            dist.to_csv(filepath.name, index=True)
         return dist.as_matrix()
 
 
@@ -90,9 +85,13 @@ class TrafficData(object):
         # normalize
         flow, self.mean, self.std = self.normalize(flow)
         # flow: num_day x num_time x num_loc x window
-        self.data_numerical, self.targets = self.getFlowIO(flow, start, past, future)
+        self.data_numerical, self.targets = self.getFlowIO(flow=flow,
+                                                           start=start,
+                                                           past=past,
+                                                           future=future)
         # data_categorical: num_day x num_time x num_loc x 3
-        self.data_categorical = self.getCategorical(data_numerical, start_day)
+        self.data_categorical = self.getCategorical(flow=self.data_numerical,
+                                                    start_day=start_day)
 
     def loadFlow(self, dataset, freq):
         loader = Loader(dataset)
