@@ -19,7 +19,7 @@ Args.add_data(args)
 Args.add_model(args)
 Args.add_train(args)
 args = args.parse_args()
-Args.update_args(args)
+Args.update(args)
 print(args)
 
 # CUDA
@@ -34,8 +34,19 @@ data_train, data_valid, data_test, mean, std = Utils.getDataset(
     freq=args.freq,
     start=args.start,
     past=args.past,
-    future=args.future
+    future=args.future,
+    out=args.out,
+    batch_size=args.batch_size
 )
+
+
+def WAPE(out, tgt):
+    out, tgt = denormalize(out), denormalize(tgt)
+    return (tgt - out).abs().sum() / tgt.sum()
+
+
+def denormalize(data):
+    return data * std + mean
 
 # MODEL
 modelpath = MODEL_PATH + args.path
@@ -48,7 +59,7 @@ if args.test or args.retrain:
 model.cuda()
 
 # LOSS
-criterion = getattr(torch.nn, args.crit)
+criterion = getattr(torch.nn, args.crit)()
 
 # OPTIM
 if args.optim is 'SGD':
@@ -72,7 +83,7 @@ def train_model(data):
             out, _ = model(data_numerical, data_categorical)
             loss = criterion(out, targets)
             loss_train += loss.data[0]
-            wape += WAPE(out, targets)
+            wape += WAPE(out, targets).data[0]
             iters += 1
             # optimization
             optimizer.zero_grad()
@@ -89,10 +100,12 @@ def eval_model(data):
     for data_numerical, data_categorical, targets in data:
         out, att = model(data_numerical, data_categorical)
         loss += criterion(out, targets).data[0]
-        wape += WAPE(out, targets)
-        iters += 0
-        atts.append(att)
-    return loss / iters, wape / iters, torch.stack(atts, 0)
+        wape += WAPE(out, targets).data[0]
+        iters += 1
+        atts.append(att.cpu())
+        # for att in atts:
+            # print(att.size())
+    return loss / iters, wape / iters, torch.cat(atts, 0)
 
 
 if not args.test:
@@ -101,7 +114,7 @@ if not args.test:
         loss_valid, wape_valid, _ = eval_model(data_valid)
         loss_test, wape_test, att = eval_model(data_test)
 
-        print(f'{Epoch:1} {loss_train:.4f} {wape_train:.4f} {loss_valid:.4f} {wape_valid:.4f} {loss_test:.4f} {wape_test:.4f}')
+        print(f'{epoch:1} {loss_train:.4f} {wape_train:.4f} {loss_valid:.4f} {wape_valid:.4f} {loss_test:.4f} {wape_test:.4f}')
 
         scheduler.step(loss_valid)
         if optimizer.param_groups[0]['lr'] < args.min_lr:

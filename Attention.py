@@ -105,5 +105,5 @@ class MultiHeadAttention(nn.Module):
 
         out = torch.bmm(self.dropout(att), val)
         out = self.dropout(unshape_projection(out))
-        att = att.view(batch, self.head, len_q, len_c)[:, 0].cpu()
+        att = att.view(batch, self.head, len_q, len_c)
         return out, att

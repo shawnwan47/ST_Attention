@@ -36,12 +36,14 @@ def add_train(args):
     args.add_argument('-retrain', action='store_true')
     args.add_argument('-epoches', type=int, default=200)
     args.add_argument('-iterations', type=int, default=1)
-    args.add_argument('-batch', type=int, default=200)
+    args.add_argument('-batch_size', type=int, default=200)
     args.add_argument('-print_epoches', type=int, default=1)
 
 
 def add_model(args):
     # general
+    args.add_argument('-inp', type=str, default='O')
+    args.add_argument('-out', type=str, default='D')
     args.add_argument('-model', type=str, default='SpatialAttention')
     args.add_argument('-num_layers', type=int, default=1)
     args.add_argument('-hidden_size', type=int, default=64)
@@ -49,11 +51,11 @@ def add_model(args):
     # Embedding
     args.add_argument('-emb_size', type=int, default=16)
     # Attention
+    args.add_argument('-att_type', type=str, default='dot',
+                      choices=['dot', 'add', 'general', 'mlp'])
     args.add_argument('-head', type=int, default=4)
     args.add_argument('-map_type', type=str, default='lin',
                       choices=['lin', 'mlp', 'res'])
-    args.add_argument('-att_type', type=str, default='dot',
-                      choices=['dot', 'add', 'general', 'mlp'])
     args.add_argument('-res', action='store_false')
     args.add_argument('-mlp', action='store_false')
     # model name to be updated
@@ -62,10 +64,9 @@ def add_model(args):
 
 def update(args):
     # data
-    end = 1440 - args.future
-    args.num_time = (end - args.start) // args.freq
-    args.past //= args.freq
-    args.future //= args.freq
+    args.num_time = (1440 - args.future - args.start) // args.freq
+    args.flow_size_in = args.past // args.freq
+    args.flow_size_out = args.future // args.freq
     if args.dataset is 'highway':
         args.num_loc = 266
     elif args.dataset is 'metro':
@@ -82,11 +83,11 @@ def update(args):
     # Att
     path += 'Map' + args.map_type
     path += 'Att' + args.att_type
+    path += 'Head' + str(args.head)
     path += 'Res' if args.res else ''
-    path += 'MLP' if args.mlp else ''
     # General
     path += 'Lay' + str(args.num_layers)
-    path += 'Flow' + str(args.num_flow)
+    path += 'Hin' + str(args.hidden_size)
     path += 'Past' + str(args.past)
     path += 'Future' + str(args.future)
     args.path = path

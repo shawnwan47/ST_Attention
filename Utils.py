@@ -3,7 +3,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from torch.autograd import Variable
 
-from Data import TrafficDataset
+from Data import TrafficData
 
 
 class Dataset3(Dataset):
@@ -19,49 +19,81 @@ class Dataset3(Dataset):
         return self.data_numerical.size(0)
 
 
-def getDataset(dataset='highway', freq=15, start=360, past=120, future=60):
+def getOD(data, od):
+    stations = data.size(-2) // 2
+    resize = False
+    if data.dim() is 4:
+        num_day, num_time, num_loc, size_last = data.size()
+        data = data.view(-1, num_loc, size_last)
+        resize = True
+    if od == 'O':
+        data = data[:, :stations].contiguous()
+    elif od == 'D':
+        data = data[:, -stations:].contiguous()
+    if resize:
+        data = data.view(num_day, num_time, -1, size_last)
+    return data
+
+
+def getDataset(dataset='highway', freq=15, start=360, past=120, future=60,
+               out='D', batch_size=100):
 
     def getTrainValidTest(data):
         assert data.dim() is 4
         days_valid = data.size(0) // 6
         days_train = data.size(0) - 2 * days_valid
-        data_train = data[:days_train]
-        data_valid = data[days_train:-days_valid]
-        data_test = data[-days_valid:]
+        *sizes, num_loc, dim = data.size()
+        new_size = (-1, num_loc, dim)
+        data_train = data[:days_train].contiguous().view(new_size)
+        data_valid = data[days_train:-days_valid].contiguous().view(new_size)
+        data_test = data[-days_valid:].contiguous().view(new_size)
         return data_train, data_valid, data_test
 
-    dataset = TrafficDataset(dataset, freq=freq, start=start, past=past, future=future)
-    data_numerical = getTrainValidTest(torch.FloatTensor(dataset.data_numerical))
-    data_categorical = getTrainValidTest(orch.LongTensor(dataset.data_categorical))
-    targets = getTrainValidTest(torch.FloatTensor(dataset.targets))
+    dataset = TrafficData(dataset, freq=freq, start=start, past=past, future=future)
+    data_numerical = torch.FloatTensor(dataset.data_numerical)
+    data_categorical = torch.LongTensor(dataset.data_categorical)
+    targets = torch.FloatTensor(dataset.targets).contiguous()
+    targets = getOD(targets, out)
 
-    data_train, data_valid, data_test = (
-        Dataset3(data_numerical=data_numerical[i],
-                 data_categorical=data_categorical[i],
-                 targets=targets[i])
-        for i in range(3)
-    )
+    data_numerical = getTrainValidTest(data_numerical)
+    data_categorical = getTrainValidTest(data_categorical)
+    targets = getTrainValidTest(targets)
+
+    data_train = Dataset3(data_numerical=data_numerical[0],
+                          data_categorical=data_categorical[0],
+                          targets=targets[0])
+
+    data_valid = Dataset3(data_numerical=Variable(data_numerical[1], volatile=True),
+                          data_categorical=Variable(data_categorical[1], volatile=True),
+                          targets=Variable(targets[1], volatile=True))
+
+    data_test = Dataset3(data_numerical=Variable(data_numerical[2], volatile=True),
+                         data_categorical=Variable(data_categorical[2], volatile=True),
+                         targets=Variable(targets[2], volatile=True))
 
     data_train = DataLoader(
-        dataest=data_train,
-        batch_size=args.batch_size,
+        dataset=data_train,
+        batch_size=batch_size,
         shuffle=True,
         pin_memory=True
     )
 
     data_valid = DataLoader(
-        dataest=data_valid,
-        batch_size=args.batch_size,
+        dataset=data_valid,
+        batch_size=batch_size,
         pin_memory=True
     )
 
     data_test = DataLoader(
-        dataest=data_test,
-        batch_size=args.batch_size,
+        dataset=data_test,
+        batch_size=batch_size,
         pin_memory=True
     )
 
-    mean, std = torch.FloatTensor(dataset.mean), torch.FloatTensor(dataset.std)
+    mean = Variable(torch.FloatTensor(dataset.mean)).cuda()
+    std = Variable(torch.FloatTensor(dataset.std)).cuda()
+    size = (1, mean.size(0), 1)
+    mean, std = getOD(mean.view(size), out), getOD(std.view(size), out)
 
     return data_train, data_valid, data_test, mean, std
 
@@ -71,39 +103,6 @@ def aeq(*args):
     first = next(arguments)
     assert all(arg == first for arg in arguments), \
         "Not all arguments have the same value: " + str(args)
-
-
-def pad_head(dim, head):
-    pad = head - dim % head
-    dim += pad
-    return dim, (pad // 2, pad // 2 + pad % 2)
-
-def get_mask_trim(length, past):
-    shape = (length, length)
-    mask_past = np.tril(np.ones(shape), k=-past).astype('uint8')
-    mask_future = np.triu(np.ones(shape), k=1).astype('uint8')
-    mask_past = torch.from_numpy(mask_past)
-    mask_future = torch.from_numpy(mask_future)
-    return mask_future + mask_past
-
-
-def get_mask_dilated(length, dilations):
-    def _get_mask_dilated(length, dilation, window):
-        attn_shape = (length, length)
-        mask = np.ones(attn_shape)
-        for i in range(window):
-            k = -i * dilation
-            mask -= np.diag(np.ones(length + k), k)
-        mask = torch.from_numpy(mask.astype('uint8'))
-        return mask
-
-    masks = []
-    for i in range(len(dilations) - 1):
-        dilation = dilations[i]
-        window = dilations[i + 1] // dilation
-        mask = _get_mask_dilated(length, dilation, window)
-        masks.append(mask)
-    return torch.stack(masks, 0)
 
 
 def torch2npsave(filename, data):

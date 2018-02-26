@@ -104,7 +104,7 @@ class TrafficData(object):
         mean, std = flow.mean(), flow.std() + 1e-8
         flow = (flow - mean) / std
         flow = flow.as_matrix().reshape((days, -1, flow.shape[1]))
-        return flow, mean, std
+        return flow, mean.as_matrix(), std.as_matrix()
 
     def getFlowIO(self, flow, start, past, future):
         # ret: num_day x num_time x num_loc x window
