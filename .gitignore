@@ -103,4 +103,5 @@ venv.bak/
 # output files
 model/**
 fig/**
-data/**/flow_od.csv
+data/**/od.csv
+data/**/do.csv

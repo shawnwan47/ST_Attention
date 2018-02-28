@@ -29,13 +29,12 @@ class ModelBase(nn.Module):
         self.linear_in = BottleLinear(self.input_size, self.hidden_size)
         self.linear_out = BottleLinear(self.hidden_size, self.flow_size_out)
         self.relu = nn.ReLU()
-        self.tanh = nn.Tanh()
 
     def forward(self, data_numerical, data_categorical):
         embeds = [self.dropout(self.embeddings[i](data_categorical[:, :, i]))
                   for i in range(3)]
         data = torch.cat([data_numerical, *embeds], -1)
-        data = self.tanh(self.linear_in(data))
+        data = self.relu(self.linear_in(data))
         context = getOD(data, self.inp)
         query = getOD(data, self.out)
         return context, query

@@ -13,10 +13,9 @@ class Loader(object):
     def _load_idx(self):
         station = self.load_station_raw()
         station_idx = set(station.index)
-        flow_idx = set(self._load_flow().columns)
-        link_idx = set(np.unique(self.load_link()))
-        for idx in [flow_idx, link_idx]:
-            station_idx.intersection_update(idx)
+        link_idx = list(np.unique(self.load_link()))
+        flow_idx = [*self._load_flow('O').columns, *self._load_flow('D').columns]
+        station_idx = station_idx.intersection(*[link_idx, flow_idx])
         idx = station.loc[station_idx].sort_values(['ROUTE']).index
         return idx
 
@@ -26,12 +25,12 @@ class Loader(object):
         flow.columns = list(map(int, flow.columns))
         return flow
 
+    def load_station_raw(self):
+        return pd.read_csv(self.DATA_PATH / 'STATION.txt', index_col=0)
+
     def load_station(self):
         station = self.load_station_raw()
         return station.loc[self.idx]
-
-    def load_station_raw(self):
-        return pd.read_csv(self.DATA_PATH / 'STATION.txt', index_col=0)
 
     def load_link(self):
         return np.genfromtxt(self.DATA_PATH / 'LINK.txt', dtype=int)
@@ -39,12 +38,10 @@ class Loader(object):
     def load_link_raw(self):
         return np.genfromtxt(self.DATA_PATH / 'LINK_RAW.txt', dtype=int)
 
-    def load_flow_in(self):
-        flow = self._load_flow('O')
-        return flow[self.idx]
-
-    def load_flow_out(self):
-        flow = self._load_flow('D')
+    def load_flow(self, od='O'):
+        flow = self._load_flow(od)
+        for col in self.idx.drop(flow.columns):
+            flow[col] = 0
         return flow[self.idx]
 
     def load_dist(self):
@@ -95,7 +92,7 @@ class TrafficData(object):
 
     def loadFlow(self, dataset, freq):
         loader = Loader(dataset)
-        flow_in, flow_out = loader.load_flow_in(), loader.load_flow_out()
+        flow_in, flow_out = loader.load_flow('O'), loader.load_flow('D')
         flow = pd.concat((flow_in, flow_out), axis=1)
         return flow.resample(str(freq) + 'T').sum()
 

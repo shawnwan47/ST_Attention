@@ -1,31 +1,46 @@
-import os
-import argparse
+'''
+Data visualization of Spatial Attention Model for traffic flow prediction.
+
+The main figs are:
+
+1. Maps of traffic stations
+2. Traffic flow traits
+    - od dynamics
+    - flow continuity spatially and temporally
+3. attention visualization to reveal traffic relations
+    - validate attention with real OD distributions
+    - multi-head attention visualizing
+4. traffic flow prediction results
+    - look into stations to reveal relations between attention and prediction
+    - different steps prediction
+5. visualizing t-sne of embeddings of day, time, loc
+'''
 from imp import reload
+from pathlib import Path
+import argparse
 
 import numpy as np
 from matplotlib import pyplot as plt
+import seaborn as sns
 
 import Args
-import Data
+from Data import Loader
 import Plot
-import Consts
-
-
-plt.rcParams['figure.dpi'] = 600
 
 
 args = argparse.ArgumentParser()
-Args.add_args(args)
+Args.add_data(args)
+Args.add_model(args)
 args = args.parse_args()
-Args.update_args(args)
+Args.update(args)
+
+plt.rcParams['figure.dpi'] = 600
 
 plt.clf()
 reload(Plot)
-reload(Data)
-reload(Consts)
 
-MODEL_PATH = Consts.MODEL_PATH
-FIG_PATH = Consts.FIG_PATH
+
+FIG_PATH = Path('fig/')
 
 
 def make_diag(by='od'):
@@ -211,13 +226,16 @@ def scatter_att(indices=None):
                 Plot.saveclf(figpath)
 
 
-orig = Data.load_flow('O')
-dest = Data.load_flow('D')
-orig_max = np.argsort(-orig.mean(0))[:10]
-dest_max = np.argsort(-dest.mean(0))[:10]
-od = Data.load_od()
-od[:] = od.mean()
-plt.imshow(od, cmap='gray', vmin=od.mean() - 1, vmax=od.mean()+1)
-plt.axis('off')
-Plot.plot_routes(color='red')
-Plot.saveclf(FIG_PATH + 'imshow_od/even')
+if __name__ == '__main__':
+    loader = Loader('highway')
+    station = loader.load_station_raw()
+    flow_o = Data.load_flow('O')
+    flow_d = Data.load_flow('D')
+    o_max = np.argsort(-orig.mean(0))[:10]
+    d_max = np.argsort(-dest.mean(0))[:10]
+    od = Data.load_od()
+    od[:] = od.mean()
+    plt.imshow(od, cmap='gray', vmin=od.mean() - 1, vmax=od.mean()+1)
+    plt.axis('off')
+    Plot.plot_routes(color='red')
+    Plot.saveclf(FIG_PATH + 'imshow_od/even')
