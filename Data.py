@@ -38,10 +38,11 @@ class Loader(object):
     def load_link_raw(self):
         return np.genfromtxt(self.DATA_PATH / 'LINK_RAW.txt', dtype=int)
 
-    def load_flow(self, od='O'):
+    def load_flow(self, od='O', freq='5T'):
         flow = self._load_flow(od)
         for col in self.idx.drop(flow.columns):
             flow[col] = 0
+        flow = flow.asfreq(freq)
         return flow[self.idx]
 
     def load_dist(self):
@@ -66,6 +67,17 @@ class Loader(object):
                             dist.loc[i, j] = tmp
             dist.to_csv(filepath.name, index=True)
         return dist.as_matrix()
+
+    def load_od(self, od='OD', freq='1h'):
+        assert od in ['OD', 'DO']
+        ret = pd.read_csv(self.DATA_PATH / (od + '.csv'),
+                          index_col=[0, 1, 2],
+                          parse_dates=[0],
+                          squeeze=True)
+        names = ret.index.names
+        ret = ret.groupby([pd.Grouper(level=names[0], freq=freq),
+                           names[1], names[2]]).sum()
+        return ret
 
 
 class TrafficData(object):
@@ -92,9 +104,9 @@ class TrafficData(object):
 
     def loadFlow(self, dataset, freq):
         loader = Loader(dataset)
-        flow_in, flow_out = loader.load_flow('O'), loader.load_flow('D')
-        flow = pd.concat((flow_in, flow_out), axis=1)
-        return flow.resample(str(freq) + 'T').sum()
+        flow_in = loader.load_flow('O', freq)
+        flow_out = loader.load_flow('D', freq)
+        return pd.concat((flow_in, flow_out), axis=1)
 
     def normalize(self, flow):
         days = (flow.index[-1].date() - flow.index[0].date()).days + 1

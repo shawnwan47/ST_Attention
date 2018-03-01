@@ -3,7 +3,7 @@ Data visualization of Spatial Attention Model for traffic flow prediction.
 
 The main figs are:
 
-1. Maps of traffic stations
+1. Map of traffic stations
 2. Traffic flow traits
     - od dynamics
     - flow continuity spatially and temporally
@@ -24,23 +24,20 @@ from matplotlib import pyplot as plt
 import seaborn as sns
 
 import Args
-from Data import Loader
+import Data
 import Plot
 
 
-args = argparse.ArgumentParser()
-Args.add_data(args)
-Args.add_model(args)
-args = args.parse_args()
-Args.update(args)
-
+plt.style.use('ggplot')
 plt.rcParams['figure.dpi'] = 600
 
 plt.clf()
 reload(Plot)
+reload(Data)
 
 
 FIG_PATH = Path('fig/')
+
 
 
 def make_diag(by='od'):
@@ -62,7 +59,6 @@ def get_od_expand(od, pos=0, r=2):
     od_ = np.zeros((len(od) * r, len(od) * r)) * np.nan
     od_[pos::r, pos::r] = od[:]
     return od_
-
 
 
 def scatter_flow(od='O', max_count=10, scale=1):
@@ -227,15 +223,10 @@ def scatter_att(indices=None):
 
 
 if __name__ == '__main__':
-    loader = Loader('highway')
+    loader = Data.Loader('highway')
     station = loader.load_station_raw()
-    flow_o = Data.load_flow('O')
-    flow_d = Data.load_flow('D')
-    o_max = np.argsort(-orig.mean(0))[:10]
-    d_max = np.argsort(-dest.mean(0))[:10]
-    od = Data.load_od()
-    od[:] = od.mean()
-    plt.imshow(od, cmap='gray', vmin=od.mean() - 1, vmax=od.mean()+1)
-    plt.axis('off')
-    Plot.plot_routes(color='red')
-    Plot.saveclf(FIG_PATH + 'imshow_od/even')
+    flow_o = loader.load_flow('O', '1h')
+    flow_d = loader.load_flow('D', '1h')
+    od = loader.load_od('OD', '1h')
+
+    #
