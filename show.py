@@ -3,7 +3,7 @@ Data visualization of Spatial Attention Model for traffic flow prediction.
 
 The main figs are:
 
-1. Map of traffic stations
+1. Map of traffic stations (fine)
 2. Traffic flow traits
     - od dynamics
     - flow continuity spatially and temporally
@@ -37,7 +37,6 @@ reload(Data)
 
 
 FIG_PATH = Path('fig/')
-
 
 
 def make_diag(by='od'):
@@ -103,6 +102,7 @@ def imshow_od(by='od', diagsum=True, routes_od=False):
     # plot line splitting routes
     Plot.plot_routes(color='red')
     Plot.saveclf(figpath)
+
 
 def imshow_od_mean(routes_od=False, cmap='gray'):
     assert cmap in ['gray', 'cool']
