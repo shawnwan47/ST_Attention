@@ -5,11 +5,12 @@ The main figs are:
 
 1. Map of traffic stations (fine)
 2. Traffic flow traits
-    - od dynamics
+    - flow corr, rolling windows
+    - od dynamics as gif
     - flow continuity spatially and temporally
 3. attention visualization to reveal traffic relations
     - validate attention with real OD distributions
-    - multi-head attention visualizing
+    - multi-head attention
 4. traffic flow prediction results
     - look into stations to reveal relations between attention and prediction
     - different steps prediction
@@ -129,7 +130,6 @@ def imshow_od_mean(routes_od=False, cmap='gray'):
     Plot.saveclf(figpath)
 
 
-
 def scatter_od(by='o', count=10, vmax=1):
     assert by in ['o', 'd']
     od = Data.load_od()
@@ -227,6 +227,4 @@ if __name__ == '__main__':
     station = loader.load_station_raw()
     flow_o = loader.load_flow('O', '1h')
     flow_d = loader.load_flow('D', '1h')
-    od = loader.load_od('OD', '1h')
-
-    #
+    
