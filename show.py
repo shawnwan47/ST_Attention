@@ -220,7 +220,8 @@ def scatter_att(indices=None):
                 Plot.saveclf(figpath)
 
 
-def
+def continuity(flow):
+    diff = flow.diff()
 
 
 if __name__ == '__main__':
