@@ -3,18 +3,16 @@ Data visualization of Spatial Attention Model for traffic flow prediction.
 
 The main figs are:
 
-1. Map of traffic stations (fine)
-2. Traffic flow traits
-    - flow corr, rolling windows
-    - od dynamics as gif
-    - flow continuity spatially and temporally
-3. attention visualization to reveal traffic relations
+- Map of traffic stations (fine)
+- Traffic continuity, periodicity(tidal, daily, weekly) to frequencies
+- OD relations
+- attention visualization to reveal traffic dynamics
     - validate attention with real OD distributions
     - multi-head attention
-4. traffic flow prediction results
-    - look into stations to reveal relations between attention and prediction
-    - different steps prediction
-5. visualizing t-sne of embeddings of day, time, loc
+- traffic flow prediction results
+    - attention attributes and prediction results
+    - different steps prediction uncertainties
+- visualizing t-sne of embeddings of day, time, loc
 '''
 from imp import reload
 from pathlib import Path
@@ -29,8 +27,8 @@ import Data
 import Plot
 
 
-plt.style.use('ggplot')
-plt.rcParams['figure.dpi'] = 600
+plt.style.use('seaborn')
+# plt.rcParams['figure.dpi'] = 600
 
 plt.clf()
 reload(Plot)
@@ -222,9 +220,14 @@ def scatter_att(indices=None):
                 Plot.saveclf(figpath)
 
 
+def
+
+
 if __name__ == '__main__':
     loader = Data.Loader('highway')
-    station = loader.load_station_raw()
-    flow_o = loader.load_flow('O', '1h')
-    flow_d = loader.load_flow('D', '1h')
-    
+    station_raw = loader.load_station_raw()
+    station = loader.load_station()
+    O = loader.load_flow('O')
+    D = loader.load_flow('D')
+    # OD = loader.load_od(od='OD')
+    # DO = loader.load_od(od='DO')

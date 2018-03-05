@@ -14,7 +14,7 @@ def saveclf(figpath):
     dirname = os.path.dirname(figpath)
     if not os.path.exists(dirname):
         os.makedirs(os.path.dirname(figpath))
-    plt.savefig(figpath + '.png', transparent=True)
+    plt.savefig(figpath + '.png')
     plt.clf()
 
 def get_routes():
@@ -29,28 +29,10 @@ def get_routes():
     ret.append(station.shape[0])
     return ret
 
-def get_od_routes(od, by='od'):
-    assert by in ['od', 'o', 'd']
-    r = get_routes()
-    length = len(r) - 1
-    for i in range(length):
-        for j in range(length):
-            s1, e1, s2, e2 = r[i], r[i+1], r[j], r[j+1]
-            if by == 'o':
-                scale = e1 - s1
-            elif by == 'd':
-                scale = e2 - s2
-            else:
-                scale = e1 - s1 + e2 - s2
-            val = od[s1:e1, s2:e2].sum() / scale
-            od[s1:e1, s2:e2] = val
-    return od
-
-
 
 def plot_network():
-    station = Data.load_station(clean=False)
-    link = Data.load_link(raw=True)
+    station = Data.load_station_raw()
+    link = Data.load_link_raw()
     plt.axis('off')
     for i in range(link.shape[0]):
         s, e = link[i, 0], link[i, 1]
