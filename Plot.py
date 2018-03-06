@@ -1,5 +1,3 @@
-import os
-
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import numpy as np
@@ -7,15 +5,9 @@ import numpy as np
 import Data
 
 
-plt.rcParams['figure.dpi'] = 600
-
-
-def saveclf(figpath):
-    dirname = os.path.dirname(figpath)
-    if not os.path.exists(dirname):
-        os.makedirs(os.path.dirname(figpath))
-    plt.savefig(figpath + '.png')
-    plt.clf()
+def savefig(path):
+    plt.tight_layout()
+    plt.savefig(path + '.png')
 
 def get_routes():
     station = Data.load_station()

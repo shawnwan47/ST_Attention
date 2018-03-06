@@ -68,7 +68,7 @@ class Loader(object):
             dist.to_csv(filepath.name, index=True)
         return dist.as_matrix()
 
-    def load_od(self, od='OD', freq='1h'):
+    def load_od(self, od='OD', freq='5T'):
         assert od in ['OD', 'DO']
         ret = pd.read_csv(self.DATA_PATH / (od + '.csv'),
                           index_col=[0, 1, 2],

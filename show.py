@@ -19,6 +19,7 @@ from pathlib import Path
 import argparse
 
 import numpy as np
+import pandas as pd
 from matplotlib import pyplot as plt
 import seaborn as sns
 
@@ -27,7 +28,7 @@ import Data
 import Plot
 
 
-plt.style.use('seaborn')
+# plt.style.use('seaborn')
 # plt.rcParams['figure.dpi'] = 600
 
 plt.clf()
@@ -35,8 +36,8 @@ reload(Plot)
 reload(Data)
 
 
-FIG_PATH = Path('fig/')
-
+DATASET = 'highway'
+FIG_PATH = Path('fig/') / DATASET
 
 def make_diag(by='od'):
     assert by in ['o', 'd', 'od']
@@ -220,15 +221,64 @@ def scatter_att(indices=None):
                 Plot.saveclf(figpath)
 
 
-def continuity(flow):
-    diff = flow.diff()
+
+def windowLegend(window):
+    minute = window * 5
+    if minute < 60:
+        return str(minute) + 'm'
+    else:
+        assert not minute % 60
+        return str(minute // 60) + 'h'
+
+
+def plot_rolling_diff(flow, func='cont'):
+    def rolling_diff(flow, window=1, periods=1):
+        assert flow.index.freqstr == '5T'
+        flow = flow.rolling(window).mean()
+        ret = pd.DataFrame(index=flow.index)
+        ret['hour'] = ret.index.map(lambda x: x.hour * 60 + x.minute)
+        ret['unit'] = ret.index.map(lambda x: x.dayofyear)
+        ret['Error'] = flow.diff(periods).abs().sum(1).div(flow.sum(1))
+        ret['Freq'] = windowLegend(window)
+
+        ret = ret[(ret['hour'] >= 60 * 6) & (ret['hour'] <= 60 * 22)]
+        weekday = ret.index.map(lambda x: x.weekday)
+        ret = ret[(weekday < 5) & (weekday > 0)]
+        return ret
+
+    windows = [1, 2, 3, 4, 6, 12, 24]
+    flow = pd.concat([rolling_diff(flow, window, window if func=='cont' else 288)
+                      for window in windows])
+    ax = sns.tsplot(data=flow, time="hour", unit='unit', value="Error", condition="Freq", ci='sd')
+    ax.set_xticks(np.arange(6, 23) * 60)
+    ax.set_xticklabels(np.arange(6, 23))
+    return ax
+
+
+def plot_traffic_cont_peri(flow, data_string):
+    ax_o = plot_rolling_diff(flow, func='cont')
+    ax_o.set_title("Traffic Continuity of " + data_string)
+    plt.tight_layout()
+    plt.savefig(FIG_PATH / (data_string + '_continuity.png'))
+    plt.show()
+
+    ax_o = plot_rolling_diff(flow, func='peri')
+    ax_o.set_title("Traffic Periodicity of " + data_string)
+    plt.tight_layout()
+    plt.savefig(FIG_PATH / (data_string + '_periodicity.png'))
+    plt.show()
 
 
 if __name__ == '__main__':
-    loader = Data.Loader('highway')
+    loader = Data.Loader(DATASET)
     station_raw = loader.load_station_raw()
     station = loader.load_station()
     O = loader.load_flow('O')
     D = loader.load_flow('D')
-    # OD = loader.load_od(od='OD')
-    # DO = loader.load_od(od='DO')
+    OD = loader.load_od('OD')
+    DO = loader.load_od('DO')
+
+    plot_traffic_cont_peri(O, 'Entries')
+    plot_traffic_cont_peri(D, 'Exits')
+    plot_traffic_cont_peri(OD.unstack([-1, -2], fill_value=0), 'OD')
+    plot_traffic_cont_peri(DO.unstack([-1, -2], fill_value=0), 'DO')
