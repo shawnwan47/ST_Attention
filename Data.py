@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 
 
-class Loader(object):
+class Loader:
     def __init__(self, dataset='highway'):
         self.DATA_PATH = pathlib.Path('data') / dataset
         self.idx = self._load_idx()
@@ -80,32 +80,26 @@ class Loader(object):
         return ret
 
 
-class TrafficData(object):
+class TrafficFlow:
     def __init__(self, dataset='highway',
                  freq=15, start=360, past=120, future=60,
                  inp='OD', out='OD'):
         assert freq in [5, 10, 15, 20, 30, 60]
-        start //= freq
-        past //= freq
-        future //= freq
+        assert past <= start
+        self.freq = freq
+        self.start = start // freq
+        self.past = past // freq
+        self.future = future // freq
         # load data
-        flow = self.loadFlow(dataset, freq)
-        start_day = flow.index[0].weekday()
+        flow = self.loadFlow(dataset)
+        self.start_day = flow.index[0].weekday()
         # normalize
-        flow, self.mean, self.std = self.normalize(flow)
-        # flow: num_day x num_time x num_loc x window
-        self.data_numerical, self.targets = self.getFlowIO(flow=flow,
-                                                           start=start,
-                                                           past=past,
-                                                           future=future)
-        # data_categorical: num_day x num_time x num_loc x 3
-        self.data_categorical = self.getCategorical(flow=self.data_numerical,
-                                                    start_day=start_day)
+        self.flow, self.mean, self.std = self.normalize(flow)
 
-    def loadFlow(self, dataset, freq):
+    def loadFlow(self, dataset):
         loader = Loader(dataset)
-        flow_in = loader.load_flow('O', freq)
-        flow_out = loader.load_flow('D', freq)
+        flow_in = loader.load_flow('O', self.freq)
+        flow_out = loader.load_flow('D', self.freq)
         return pd.concat((flow_in, flow_out), axis=1)
 
     def normalize(self, flow):
@@ -115,25 +109,43 @@ class TrafficData(object):
         flow = flow.as_matrix().reshape((days, -1, flow.shape[1]))
         return flow, mean.as_matrix(), std.as_matrix()
 
-    def getFlowIO(self, flow, start, past, future):
+
+class SpatialData(TrafficFlow):
+    def __init__(self, **args):
+        super().__init__(**args)
+        # flow: num_day x num_time x num_loc x window
+        self.data_num, self.targets = self.getFlowIO(self.flow)
+        # data_categorical: num_day x num_time x num_loc x 3
+        self.data_cat = self.getCategorical()
+
+    def getFlowIO(self):
         # ret: num_day x num_time x num_loc x window
-        num_slots = flow.shape[1]
-        num_time = num_slots - future - start
+        num_slots = self.flow.shape[1]
+        num_time = num_slots - self.future - self.start
         # [num_day x num_loc x window]
-        flow = flow.transpose(0, 2, 1)
-        flow_i = [flow[:, :, start + i - past:start + i]
+        self.flow = self.flow.transpose(0, 2, 1)
+        flow_i = [self.flow[:, :, self.start + i - self.past:self.start + i]
                   for i in range(num_time)]
-        flow_o = [flow[:, :, start + i:start + i + future]
+        flow_o = [self.flow[:, :, self.start + i:self.start + i + self.future]
                   for i in range(num_time)]
         flow_i = np.stack(flow_i, axis=1)
         flow_o = np.stack(flow_o, axis=1)
         return flow_i, flow_o
 
-    def getCategorical(self, flow, start_day):
-        num_day, num_time, num_loc, _ = flow.shape
+    def getCategorical(self):
+        num_day, num_time, num_loc, _ = self.data_num.shape
         day = np.arange(num_day).reshape(num_day, 1, 1)
         day = (day + start_day) % 7
         time = np.arange(num_time).reshape(1, num_time, 1)
         loc = np.arange(num_loc).reshape(1, 1, num_loc)
         ret = np.broadcast_arrays(day, time, loc)
         return np.stack(ret, -1)
+
+
+class TemporalData:
+    def __init__(self, **args):
+        super().__init__(**args)
+        self.data, self.targets = self.getFlowIO()
+
+    def getFlowIO(self):
+        pass

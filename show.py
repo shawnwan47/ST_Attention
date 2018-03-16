@@ -221,7 +221,6 @@ def scatter_att(indices=None):
                 Plot.saveclf(figpath)
 
 
-
 def windowLegend(window):
     minute = window * 5
     if minute < 60:

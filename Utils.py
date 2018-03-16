@@ -35,7 +35,7 @@ def getOD(data, od):
     return data
 
 
-def getDataset(dataset='highway', freq=15, start=360, past=120, future=60,
+def getSpatialDataset(dataset='highway', freq=15, start=360, past=120, future=60,
                out='D', batch_size=100):
 
     def getTrainValidTest(data):
@@ -49,7 +49,7 @@ def getDataset(dataset='highway', freq=15, start=360, past=120, future=60,
         data_test = data[-days_valid:].contiguous().view(new_size)
         return data_train, data_valid, data_test
 
-    dataset = TrafficData(dataset, freq=freq, start=start, past=past, future=future)
+    dataset = Data.SpatialData(dataset, freq=freq, start=start, past=past, future=future)
     data_numerical = torch.FloatTensor(dataset.data_numerical)
     data_categorical = torch.LongTensor(dataset.data_categorical)
     targets = torch.FloatTensor(dataset.targets).contiguous()
