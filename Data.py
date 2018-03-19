@@ -114,7 +114,7 @@ class SpatialData(TrafficFlow):
     def __init__(self, **args):
         super().__init__(**args)
         # flow: num_day x num_time x num_loc x window
-        self.data_num, self.targets = self.getFlowIO(self.flow)
+        self.data_num, self.targets = self.getFlowIO()
         # data_categorical: num_day x num_time x num_loc x 3
         self.data_cat = self.getCategorical()
 
@@ -123,10 +123,10 @@ class SpatialData(TrafficFlow):
         num_slots = self.flow.shape[1]
         num_time = num_slots - self.future - self.start
         # [num_day x num_loc x window]
-        self.flow = self.flow.transpose(0, 2, 1)
-        flow_i = [self.flow[:, :, self.start + i - self.past:self.start + i]
+        flow = self.flow.transpose(0, 2, 1)
+        flow_i = [flow[:, :, self.start + i - self.past:self.start + i]
                   for i in range(num_time)]
-        flow_o = [self.flow[:, :, self.start + i:self.start + i + self.future]
+        flow_o = [flow[:, :, self.start + i:self.start + i + self.future]
                   for i in range(num_time)]
         flow_i = np.stack(flow_i, axis=1)
         flow_o = np.stack(flow_o, axis=1)
@@ -142,7 +142,7 @@ class SpatialData(TrafficFlow):
         return np.stack(ret, -1)
 
 
-class TemporalData:
+class TemporalData(TrafficFlow):
     def __init__(self, **args):
         super().__init__(**args)
         self.data, self.targets = self.getFlowIO()
