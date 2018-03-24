@@ -1,4 +1,4 @@
-import pathlib
+from pathlib import Path
 import pickle as pk
 
 import pandas as pd
@@ -7,7 +7,7 @@ import numpy as np
 
 class Loader:
     def __init__(self, dataset='highway'):
-        self.DATA_PATH = pathlib.Path('data') / dataset
+        self.DATA_PATH = Path('data') / dataset
         self.idx = self._load_idx()
 
     def _load_idx(self):
@@ -86,10 +86,10 @@ class TrafficFlow:
                  inp='OD', out='OD'):
         assert freq in [5, 10, 15, 20, 30, 60]
         assert past <= start
-        self.freq = freq
         self.start = start // freq
         self.past = past // freq
         self.future = future // freq
+        self.freq = str(freq) + 'T'
         # load data
         flow = self.loadFlow(dataset)
         self.start_day = flow.index[0].weekday()
@@ -111,8 +111,12 @@ class TrafficFlow:
 
 
 class SpatialData(TrafficFlow):
-    def __init__(self, **args):
-        super().__init__(**args)
+    def __init__(self, dataset='highway',
+                 freq=15, start=360, past=120, future=60,
+                 inp='OD', out='OD'):
+        super().__init__(dataset=dataset,
+                         freq=freq, start=start, past=past, future=future,
+                         inp=inp, out=out)
         # flow: num_day x num_time x num_loc x window
         self.data_num, self.targets = self.getFlowIO()
         # data_categorical: num_day x num_time x num_loc x 3
@@ -123,6 +127,7 @@ class SpatialData(TrafficFlow):
         num_slots = self.flow.shape[1]
         num_time = num_slots - self.future - self.start
         # [num_day x num_loc x window]
+<<<<<<< HEAD
         flow = self.flow.transpose(0, 2, 1)
         flow_i = [flow[:, :, self.start + i - self.past:self.start + i]
                   for i in range(num_time)]
@@ -130,12 +135,21 @@ class SpatialData(TrafficFlow):
                   for i in range(num_time)]
         flow_i = np.stack(flow_i, axis=1)
         flow_o = np.stack(flow_o, axis=1)
+=======
+        self.flow = self.flow.transpose(0, 2, 1)
+        flow_i = np.stack(
+            [self.flow[:, :, self.start + i - self.past:self.start + i]
+             for i in range(num_time)], axis=1)
+        flow_o = np.stack(
+            [self.flow[:, :, self.start + i:self.start + i + self.future]
+             for i in range(num_time)], axis=1)
+>>>>>>> 356a299cdfbf52d52135b8c1d8b408efaa058e11
         return flow_i, flow_o
 
     def getCategorical(self):
         num_day, num_time, num_loc, _ = self.data_num.shape
         day = np.arange(num_day).reshape(num_day, 1, 1)
-        day = (day + start_day) % 7
+        day = (day + self.start_day) % 7
         time = np.arange(num_time).reshape(1, num_time, 1)
         loc = np.arange(num_loc).reshape(1, 1, num_loc)
         ret = np.broadcast_arrays(day, time, loc)
@@ -143,9 +157,22 @@ class SpatialData(TrafficFlow):
 
 
 class TemporalData(TrafficFlow):
+<<<<<<< HEAD
     def __init__(self, **args):
         super().__init__(**args)
+=======
+    def __init__(self, dataset='highway',
+                 freq=15, start=360, past=120, future=60,
+                 inp='OD', out='OD'):
+        super().__init__(dataset=dataset,
+                         freq=freq, start=start, past=past, future=future,
+                         inp=inp, out=out)
+>>>>>>> 356a299cdfbf52d52135b8c1d8b408efaa058e11
         self.data, self.targets = self.getFlowIO()
 
     def getFlowIO(self):
+        '''
+        Temporal traffic flow within time span of a week
+        '''
+
         pass
