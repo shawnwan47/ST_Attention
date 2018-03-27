@@ -29,7 +29,7 @@ if args.seed > 0:
     torch.cuda.manual_seed(args.seed)
 
 # DATA
-data_train, data_valid, data_test, mean, std = Utils.getDataset(
+data_train, data_valid, data_test, mean, scale = Utils.getDataset(
     dataset=args.dataset,
     freq=args.freq,
     start=args.start,
@@ -46,7 +46,7 @@ def WAPE(out, tgt):
 
 
 def denormalize(data):
-    return data * std + mean
+    return data * scale + mean
 
 # MODEL
 modelpath = MODEL_PATH + args.path
@@ -63,15 +63,10 @@ criterion = getattr(torch.nn, args.crit)()
 
 # OPTIM
 if args.optim is 'SGD':
-    optimizer = optim.SGD(model.parameters(),
-                          momentum=args.momentum,
-                          weight_decay=args.weight_decay)
+    optimizer = optim.SGD(model.parameters(), momentum=0.9, weight_decay=args.weight_decay)
 else:
-    optimizer = optim.Adam(model.parameters(),
-                           weight_decay = args.weight_decay)
-scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer,
-                                                 verbose=True,
-                                                 min_lr=args.min_lr)
+    optimizer = optim.Adam(model.parameters(), weight_decay = args.weight_decay)
+scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True, min_lr=args.min_lr)
 
 
 # TRAINING

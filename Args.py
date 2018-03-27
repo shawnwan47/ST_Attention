@@ -2,14 +2,15 @@ def add_data(args):
     # data attribute
     args.add_argument('-dataset', type=str, default='highway',
                       choices=['highway', 'metro'])
+    args.add_argument('-inp', type=str, default='OD')
+    args.add_argument('-out', type=str, default='OD')
 
     args.add_argument('-freq', type=int, default=15)
-
     args.add_argument('-start', type=int, default=360)
     args.add_argument('-past', type=int, default=120)
     args.add_argument('-future', type=int, default=60)
+
     args.add_argument('-num_day', type=int, default=7)
-    # to be updated
     args.add_argument('-num_time', type=int)
     args.add_argument('-num_loc', type=int)
 
@@ -18,38 +19,32 @@ def add_train(args):
     args.add_argument('-gpuid', type=int, default=0)
     args.add_argument('-seed', type=int, default=47)
     args.add_argument('-eps', type=float, default=1e-8)
-
     # optimization
     args.add_argument('-crit', type=str, default='MSELoss',
                       choices=['MSEloss', 'L1Loss'])
     args.add_argument('-optim', type=str, default='Adam',
                       choices=['SGD', 'Adam'])
     args.add_argument('-lr', type=float, default=0.001)
-    args.add_argument('-momentum', type=float, default=0.9)
-    args.add_argument('-patience', type=int, default=10)
     args.add_argument('-min_lr', type=float, default=1e-6)
-    args.add_argument('-weight_decay', type=float, default=1e-6)
-    args.add_argument('-max_grad_norm', type=float, default=0.1)
+    args.add_argument('-weight_decay', type=float, default=1e-5)
+    args.add_argument('-max_grad_norm', type=float, default=1)
 
     # run
     args.add_argument('-test', action='store_true')
-    args.add_argument('-retrain', action='store_true')
-    args.add_argument('-epoches', type=int, default=200)
+    args.add_argument('-epoches', type=int, default=100)
     args.add_argument('-iterations', type=int, default=1)
-    args.add_argument('-batch_size', type=int, default=200)
+    args.add_argument('-batch_size', type=int, default=256)
     args.add_argument('-print_epoches', type=int, default=1)
 
 
 def add_model(args):
     # general
-    args.add_argument('-inp', type=str, default='O')
-    args.add_argument('-out', type=str, default='D')
     args.add_argument('-model', type=str, default='SpatialAttention')
     args.add_argument('-num_layers', type=int, default=1)
     args.add_argument('-hidden_size', type=int, default=64)
     args.add_argument('-dropout', type=float, default=0.2)
     # Embedding
-    args.add_argument('-emb_size', type=int, default=16)
+    args.add_argument('-emb_size', type=int, default=64)
     # Attention
     args.add_argument('-att_type', type=str, default='dot',
                       choices=['dot', 'add', 'general', 'mlp'])
@@ -71,10 +66,6 @@ def update(args):
         args.num_loc = 266
     elif args.dataset is 'metro':
         args.num_loc = 536
-
-    # run
-    if args.retrain:
-        args.lr /= 100
 
     # path
     path = args.model
