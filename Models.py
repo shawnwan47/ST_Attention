@@ -13,28 +13,34 @@ class ModelBase(nn.Module):
     def __init__(self, args):
         super().__init__()
         self.num_layers = args.num_layers
+        emb_size = args.hidden_size - args.flow_size_in
         self.embeddings = nn.ModuleList([
-            nn.Embedding(args.num_day, args.emb_size),
-            nn.Embedding(args.num_time, args.emb_size),
-            nn.Embedding(args.num_loc, args.emb_size)
+            nn.Embedding(args.num_day, emb_size),
+            nn.Embedding(args.num_time, emb_size),
+            nn.Embedding(args.num_loc, emb_size)
         ])
-        self.dropout = nn.Dropout(args.dropout)
-        self.linear_flow = BottleLinear(args.flow_size_in, args.hidden_size)
         self.linear_out = BottleLinear(args.hidden_size, args.flow_size_out)
+        self.dropout = nn.Dropout(args.dropout)
         self.mask_od = get_mask_od(args.num_loc, args.inp)
         self.mask_graph = get_mask_graph(args.dataset)
 
     def forward(self, data_num, data_cat):
-        embeds = [self.dropout(self.embeddings[i](data_cat[:, :, i]))
-                  for i in range(3)]
-        data = self.linear_flow(data_num) + torch.sum(embeds)
-        return context, query
+        embeds = torch.stack([self.dropout(embedding(data_cat[:, :, i]))
+                              for i, embedding in enumerate(self.embeddings)])
+        data = torch.cat([data_num, torch.sum(embeds, 0)], -1)
+        return data
 
     def get_embeddings(self):
         out = []
         for embedding in self.embeddings:
             out.append(embedding.weight.data.cpu().numpy())
         return np.stack(out)
+
+
+class LoneModel(ModelBase):
+    def forward(self, data_num, data_cat):
+        data = super().forward(data_num, data_cat)
+        return self.linear_out(data), None
 
 
 class Transformer(ModelBase):
@@ -49,7 +55,7 @@ class Transformer(ModelBase):
         atts = []
         for i in range(self.num_layers):
             data, att = self.layers[i](data, data, data)
-            atts.append(att)
+            atts.append(att.cpu())
         att = torch.stack(atts, 1) # batch x layer x head x query x context
         out = self.linear_out(data)
         return out, att

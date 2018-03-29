@@ -11,7 +11,7 @@ import Attention
 
 class MultiHeadAttentionLayer(nn.Module):
     def __init__(self, dim, head=1, dropout=0.1):
-        super(MultiHeadAttentionLayer, self).__init__()
+        super().__init__()
         self.attention = Attention.MultiHeadAttention(dim, head, dropout)
         self.layer_norm = BottleLayerNorm(dim)
         self.mlp = ResMLP(dim, dropout)
@@ -21,6 +21,23 @@ class MultiHeadAttentionLayer(nn.Module):
         out = self.layer_norm(qry + out)
         out = self.mlp(out)
         return out, att.cpu()
+
+
+class MultiFusionSelfAttention(nn.Module):
+    def __init__(self, dim, head, att, key, val, dropout=0.2):
+        super().__init__()
+        self.head = head
+        self.linear_key
+        self.attentions = nn.ModuleList([
+            Attention.GeneralAttention(dim, att, key, val, dropout)
+            for _ in range(head)])
+        self.fusion = Attention.GeneralAttention(dim, att, key, val, dropout)
+
+    def forward(self, data):
+        outs, atts = [], []
+        for i in range(self.head):
+
+            out, att = self.attentions[i](data):
 
 
 class AttentionLayer(nn.Module):

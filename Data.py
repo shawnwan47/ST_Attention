@@ -118,14 +118,12 @@ class SpatialTraffic(TrafficFlow):
         super().__init__(dataset=dataset,
                          freq=freq, start=start, past=past, future=future)
         # flow: num_day x num_time x num_loc x window
-        self.data_num, self.targets = self.getNumerical()
+        self.data_num, self.targets = self.get_data_num()
         # data_categorical: num_day x num_time x num_loc x 3
-        self.data_cat = self.getCategorical()
+        self.data_cat = self.get_data_cat()
         del self.flow
-        # inp out as O, D or OD
-        self.updateIO(inp, out)
 
-    def getNumerical(self):
+    def get_data_num(self):
         # ret: num_day x num_time x num_loc x window
         num_slots = self.flow.shape[1]
         num_time = num_slots - self.future - self.start
@@ -139,7 +137,7 @@ class SpatialTraffic(TrafficFlow):
              for i in range(num_time)], axis=1)
         return flow_i, flow_o
 
-    def getCategorical(self):
+    def get_data_cat(self):
         num_day, num_time, num_loc, _ = self.data_num.shape
         day = np.arange(num_day).reshape(num_day, 1, 1)
         day = (day + self.start_day) % 7

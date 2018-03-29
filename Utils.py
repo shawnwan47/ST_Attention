@@ -20,33 +20,29 @@ class Dataset3(Dataset):
 
 
 def getTrainValidTest(data):
-    days_valid = data.shape[0] // 6
-    days_train = data.shape[0] - 2 * days_valid
-    *sizes, num_loc, dim = data.shape
+    days_valid = data.size(0) // 6
+    days_train = data.size(0) - 2 * days_valid
+    *sizes, num_loc, dim = data.size()
     new_size = (-1, num_loc, dim)
-    data_train = Variable(data[:days_train].contiguous().view(new_size))
-    data_valid = Variable(data[days_train:-days_valid].contiguous().view(new_size), volatile=True)
-    data_test = Variable(data[-days_valid:].contiguous().view(new_size), volatile=True)
+    data_train = data[:days_train].contiguous().view(new_size)
+    data_valid = data[days_train:-days_valid].contiguous().view(new_size)
+    data_test = data[-days_valid:].contiguous().view(new_size)
     return data_train, data_valid, data_test
 
 
-def getDataset(dataset='highway', freq=15, start=360, past=120, future=60,
-               inp='OD', out='OD', batch_size=128):
+def getDataset(dataset='highway', freq=15, start=360, past=120, future=60, batch_size=128):
     dataset = Data.SpatialTraffic(dataset=dataset, freq=freq,
-                                  start=start, past=past, future=future,
-                                  inp=inp, out=out)
+                                  start=start, past=past, future=future)
 
-    data_num = getTrainValidTest(dataset.data_num)
-    data_cat = getTrainValidTest(dataset.data_cat)
-    targets = getTrainValidTest(dataset.targets)
+    data_num = getTrainValidTest(torch.FloatTensor(dataset.data_num))
+    data_cat = getTrainValidTest(torch.LongTensor(dataset.data_cat))
+    targets = getTrainValidTest(torch.FloatTensor(dataset.targets))
 
-    data_train = Dataset3(data_num=data_num[0], data_cat=data_cat[0], targets=targets[0])
-    data_valid = Dataset3(data_num=data_num[1], data_cat=data_cat[1], targets=targets[1])
-    data_test = Dataset3(data_num=data_num[2], data_cat=data_cat[2], targets=targets[2])
+    data = [Dataset3(data_num[i], data_cat[i], targets[i]) for i in range(3)]
 
-    data_train = DataLoader(dataset=data_train, batch_size=batch_size, shuffle=True)
-    data_valid = DataLoader(dataset=data_valid, batch_size=batch_size)
-    data_test = DataLoader(dataset=data_test, batch_size=batch_size)
+    data_train = DataLoader(data[0], batch_size=batch_size, shuffle=True)
+    data_valid = DataLoader(data[1], batch_size=batch_size)
+    data_test = DataLoader(data[2], batch_size=batch_size)
 
     mean = Variable(torch.FloatTensor(dataset.mean)).unsqueeze(0).cuda()
     scale = Variable(torch.FloatTensor(dataset.scale)).unsqueeze(0).cuda()

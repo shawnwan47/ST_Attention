@@ -50,6 +50,10 @@ class Attention(nn.Module):
         return score.view(batch, len_q, len_k)
 
 
+class GeneralAttention(nn.Module):
+    def __init__()
+
+
 class MultiHeadAttention(nn.Module):
     def __init__(self, dim, head=4, dropout=0.1):
         '''

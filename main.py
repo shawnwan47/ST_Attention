@@ -35,7 +35,6 @@ data_train, data_valid, data_test, mean, scale = Utils.getDataset(
     start=args.start,
     past=args.past,
     future=args.future,
-    out=args.out,
     batch_size=args.batch_size
 )
 
@@ -53,7 +52,7 @@ modelpath = MODEL_PATH + args.path
 print('Model: {}'.format(modelpath))
 
 model = getattr(Models, args.model)(args)
-if args.test or args.retrain:
+if args.test:
     model = torch.load(modelpath + '.pt')
     print('Model loaded.')
 model.cuda()
@@ -63,9 +62,12 @@ criterion = getattr(torch.nn, args.crit)()
 
 # OPTIM
 if args.optim is 'SGD':
-    optimizer = optim.SGD(model.parameters(), momentum=0.9, weight_decay=args.weight_decay)
+    optimizer = optim.SGD(model.parameters(),
+                          momentum=0.9,
+                          weight_decay=args.weight_decay,
+                          nesterov=True)
 else:
-    optimizer = optim.Adam(model.parameters(), weight_decay = args.weight_decay)
+    optimizer = optim.Adam(model.parameters(), weight_decay=args.weight_decay)
 scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True, min_lr=args.min_lr)
 
 
@@ -74,8 +76,11 @@ def train_model(data):
     model.train()
     loss_train = wape = iters = 0
     for _ in range(args.iterations):
-        for data_numerical, data_categorical, targets in data:
-            out, _ = model(data_numerical, data_categorical)
+        for data_num, data_cat, targets in data:
+            data_num = Variable(data_num).cuda()
+            data_cat = Variable(data_cat).cuda()
+            targets = Variable(targets).cuda()
+            out, _ = model(data_num, data_cat)
             loss = criterion(out, targets)
             loss_train += loss.data[0]
             wape += WAPE(out, targets).data[0]
@@ -92,14 +97,15 @@ def eval_model(data):
     model.eval()
     loss = wape = iters = 0
     atts = []
-    for data_numerical, data_categorical, targets in data:
-        out, att = model(data_numerical, data_categorical)
+    for data_num, data_cat, targets in data:
+        data_num = Variable(data_num, volatile=True).cuda()
+        data_cat = Variable(data_cat, volatile=True).cuda()
+        targets = Variable(targets, volatile=True).cuda()
+        out, att = model(data_num, data_cat)
         loss += criterion(out, targets).data[0]
         wape += WAPE(out, targets).data[0]
         iters += 1
-        atts.append(att.cpu())
-        # for att in atts:
-            # print(att.size())
+        atts.append(att)
     return loss / iters, wape / iters, torch.cat(atts, 0)
 
 
