@@ -71,6 +71,9 @@ def get_mask_graph(dataset):
     od = loader.load_od_sum()
 
 
+def get_mask_target():
+    pass
+
 def torch2npsave(filename, data):
     def _var2np(x):
         return x.data.cpu().numpy()
