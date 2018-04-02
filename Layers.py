@@ -3,6 +3,7 @@ import math
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
+from torch.nn import functional as F
 
 from Utils import aeq
 from UtilClass import *
@@ -23,21 +24,26 @@ class MultiHeadAttentionLayer(nn.Module):
         return out, att.cpu()
 
 
-class MultiFusionSelfAttention(nn.Module):
-    def __init__(self, dim, head, att, key, val, dropout=0.2):
+class AttentionFusionLayer(nn.Module):
+    def __init__(self, dim, head, att_type, dropout=0.2):
         super().__init__()
-        self.head = head
-        self.linear_key
-        self.attentions = nn.ModuleList([
-            Attention.GeneralAttention(dim, att, key, val, dropout)
-            for _ in range(head)])
-        self.fusion = Attention.GeneralAttention(dim, att, key, val, dropout)
+        self.attention = Attention.AttentionFusion(dim, head, att_type, dropout)
+        self.gate_query = BottleLinear(dim, 1)
+        self.gate_context = BottleLinear(dim, 1)
+        self.mlp = ResMLP(dim, dropout)
 
-    def forward(self, data):
-        outs, atts = [], []
-        for i in range(self.head):
-
-            out, att = self.attentions[i](data):
+    def forward(self, query, context, mask):
+        '''
+        out, query, context: batch x num x features
+        gate: batch x num x 1
+        att_fusion: batch x num x head
+        att_head: batch x num x head x num_key
+        '''
+        context, att_head, att_fusion = self.attention(query, context, context, mask)
+        gate = F.sigmoid(self.gate_query(query) + self.gate_context(context))
+        out = gate * query + (1 - gate) * context
+        out = self.mlp(out)
+        return out, gate, att_fusion, att_head
 
 
 class AttentionLayer(nn.Module):

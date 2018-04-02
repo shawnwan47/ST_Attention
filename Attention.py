@@ -26,6 +26,10 @@ class Attention(nn.Module):
             self.map_qk = BottleLinear(dim, dim, bias=False)
 
     def forward(self, qry, key, val, mask=None):
+        '''
+        qry, key, val: batch x num x features
+        att: batch x num_qry x num_key
+        '''
         score = self.score(qry, key)
         if mask is not None:
             score.data.masked_fill_(mask, -float('inf'))
@@ -39,7 +43,7 @@ class Attention(nn.Module):
         aeq(dim, dim_)
         if self.att_type in ['dot', 'general']:
             if self.att_type == 'general':
-                key = self.map_qk(key)
+                key = self.relu(self.map_qk(key))
             score = torch.bmm(qry, key.transpose(1, 2)) / math.sqrt(dim)
         else:
             qry = self.map_q(qry).unsqueeze(2).expand(batch, len_q, len_k, -1)
@@ -50,8 +54,36 @@ class Attention(nn.Module):
         return score.view(batch, len_q, len_k)
 
 
-class GeneralAttention(nn.Module):
-    def __init__()
+class AttentionFusion(nn.Module):
+    def __init__(self, dim, head, att_type, dropout):
+        super().__init__()
+        self.head = head
+        self.attention_head = nn.ModuleList([Attention(dim, att_type, dropout)
+                                             for _ in range(head)])
+        self.attention_fusion = Attention(dim, att_type, dropout)
+
+    def forward(self, qry, key, val, mask):
+        '''
+        qry, key, val: batch x num x features
+        contexts: batch x num_qry x head x features
+        att_head: batch x num_qry x num_head x num_key
+        att_fusion: batch x num_qry x num_head
+        '''
+        batch, num, features = qry.size()
+        contexts = torch.stack([self.attention_head[i](qry, key, val, mask)
+                                for i in range(self.head)], 1)
+        contexts, att_head = [], []
+        for attention in self.attention_head:
+            ctx, att = attention(qry, key, val, mask)
+            contexts.append(ctx)
+            att_head.append(att)
+        att_head = torch.stack(att_head, -2)
+        contexts = torch.stack(contexts, -2).view(-1, self.head, features)
+        context, att_fusion = self.attention_fusion(qry.view(-1, 1, features),
+                                                    contexts, contexts)
+        context = context.view(batch, num, features)
+        att_fusion = att_fusion.view(batch, num, self.head)
+        return context, att_fusion, att_head
 
 
 class MultiHeadAttention(nn.Module):

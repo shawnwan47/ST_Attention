@@ -21,8 +21,8 @@ class ModelBase(nn.Module):
         ])
         self.linear_out = BottleLinear(args.hidden_size, args.flow_size_out)
         self.dropout = nn.Dropout(args.dropout)
-        self.mask_od = get_mask_od(args.num_loc, args.inp)
         self.mask_graph = get_mask_graph(args.dataset)
+        self.mask_od = get_mask_od(args.num_loc, args.inp)
 
     def forward(self, data_num, data_cat):
         embeds = torch.stack([self.dropout(embedding(data_cat[:, :, i]))
@@ -31,16 +31,13 @@ class ModelBase(nn.Module):
         return data
 
     def get_embeddings(self):
-        out = []
-        for embedding in self.embeddings:
-            out.append(embedding.weight.data.cpu().numpy())
-        return np.stack(out)
+        return np.stack([emb.weight.data.cpu().numpy() for emb in self.embeddings])
 
 
-class LoneModel(ModelBase):
+class Isolation(ModelBase):
     def forward(self, data_num, data_cat):
         data = super().forward(data_num, data_cat)
-        return self.linear_out(data), None
+        return self.linear_out(data)
 
 
 class Transformer(ModelBase):
@@ -61,25 +58,26 @@ class Transformer(ModelBase):
         return out, att
 
 
-class Attention(ModelBase):
-    def __init__(self, args):
-        super().__init__(args)
-        self.layers = nn.ModuleList([Layers.AttentionLayer(
-            dim=args.hidden_size,
-            map_type=args.map_type,
-            att_type=args.att_type,
-            res=args.res,
-            mlp=args.mlp,
-            dropout=args.dropout
-        ) for _ in range(args.num_layers)])
-
-
 class AttentionFusion(ModelBase):
     def __init__(self, args):
         super().__init__(args)
-        self.layers = nn.ModuleList([Layers.AttentionLayer(
+        self.layers = nn.ModuleList([Layers.AttentionFusionLayer(
             dim=args.hidden_size,
-            map_type=args.map_type,
+            head=args.head,
             att_type=args.att_type,
-            res=False
+            dropout=dropout
         ) for _ in range(args.num_layers)])
+
+    def forward(self, data_num, data_cat):
+        data = super().forward(data_num, data_cat)
+        gates, att_fusions, att_heads = [], [], []
+        for layer in self.layers:
+            data, gate, att_fusion, att_head = layer(data, data, mask)
+            gates.append(gate)
+            att_fusions.append(att_fusion)
+            att_heads.append(att_head)
+        gates = torch.stack(gates, 1)
+        att_fusions = torch.stack(att_fusions, 1)
+        att_heads = torch.stack(att_heads, 1)
+        out = self.linear_out(data)
+        return out, gates, att_fusions, att_heads

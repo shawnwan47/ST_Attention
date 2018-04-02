@@ -80,7 +80,9 @@ def train_model(data):
             data_num = Variable(data_num).cuda()
             data_cat = Variable(data_cat).cuda()
             targets = Variable(targets).cuda()
-            out, _ = model(data_num, data_cat)
+            out = model(data_num, data_cat)
+            if type(out) is tuple:
+                out = out[0]
             loss = criterion(out, targets)
             loss_train += loss.data[0]
             wape += WAPE(out, targets).data[0]
@@ -96,24 +98,26 @@ def train_model(data):
 def eval_model(data):
     model.eval()
     loss = wape = iters = 0
-    atts = []
+    info = []
     for data_num, data_cat, targets in data:
         data_num = Variable(data_num, volatile=True).cuda()
         data_cat = Variable(data_cat, volatile=True).cuda()
         targets = Variable(targets, volatile=True).cuda()
-        out, att = model(data_num, data_cat)
+        out = model(data_num, data_cat)
+        if type(out) is tuple:
+            out, more = out[0], out[1:]
+            info.append(more)
         loss += criterion(out, targets).data[0]
         wape += WAPE(out, targets).data[0]
         iters += 1
-        atts.append(att)
-    return loss / iters, wape / iters, torch.cat(atts, 0)
+    return loss / iters, wape / iters, info
 
 
 if not args.test:
     for epoch in range(args.epoches):
         loss_train, wape_train = train_model(data_train)
         loss_valid, wape_valid, _ = eval_model(data_valid)
-        loss_test, wape_test, att = eval_model(data_test)
+        loss_test, wape_test, _ = eval_model(data_test)
 
         print(f'{epoch:1} {loss_train:.4f} {wape_train:.4f} {loss_valid:.4f} {wape_valid:.4f} {loss_test:.4f} {wape_test:.4f}')
 
