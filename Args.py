@@ -64,7 +64,7 @@ def update(args):
     args.flow_size_in = args.past // args.freq
     args.flow_size_out = args.future // args.freq
     if args.dataset is 'highway':
-        args.num_loc = 266
+        args.num_loc = 264
     elif args.dataset is 'metro':
         args.num_loc = 536
 

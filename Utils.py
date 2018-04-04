@@ -44,9 +44,8 @@ def getDataset(dataset='highway', freq=15, start=360, past=120, future=60, batch
     data_valid = DataLoader(data[1], batch_size=batch_size)
     data_test = DataLoader(data[2], batch_size=batch_size)
 
-    mean = Variable(torch.FloatTensor(dataset.mean)).unsqueeze(0).cuda()
-    scale = Variable(torch.FloatTensor(dataset.scale)).unsqueeze(0).cuda()
-
+    mean = Variable(torch.FloatTensor(dataset.mean)).unsqueeze(0).unsqueeze(-1).cuda()
+    scale = Variable(torch.FloatTensor(dataset.scale)).unsqueeze(0).unsqueeze(-1).cuda()
     return data_train, data_valid, data_test, mean, scale
 
 
@@ -58,17 +57,28 @@ def aeq(*args):
 
 
 def get_mask_od(num_loc, od):
-    pass
+    assert od in ['OD', 'O', 'D']
+    assert not num_loc % 2
+    mask = torch.zeros(num_loc, num_loc)
+    if od is 'O':
+        mask[:, num_loc/2:] = 1
+    if od is 'D':
+        mask[:, :num_loc/2] = 1
+    return (mask == 1).cuda()
 
 
-def get_mask_graph(dataset):
+def get_mask_adj(dataset, od_ratio=0.01, hops=5):
     loader = Data.Loader(dataset)
-    dist = loader.load_dist()
-    od = loader.load_od_sum()
+    od = loader.load_od_sum() < od_ratio
+    dist = loader.load_dist() > hops
+    mask = np.vstack((np.hstack((dist, od)), np.hstack((od, dist))))
+    np.fill_diagonal(mask, True)
+    return torch.ByteTensor(mask).cuda()
 
 
 def get_mask_target():
     pass
+
 
 def torch2npsave(filename, data):
     def _var2np(x):

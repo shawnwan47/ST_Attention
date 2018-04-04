@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 
 import Layers
-from Utils import get_mask_od, get_mask_graph
+from Utils import get_mask_od, get_mask_adj
 from UtilClass import *
 from Regularizer import *
 
@@ -21,8 +21,9 @@ class ModelBase(nn.Module):
         ])
         self.linear_out = BottleLinear(args.hidden_size, args.flow_size_out)
         self.dropout = nn.Dropout(args.dropout)
-        self.mask_graph = get_mask_graph(args.dataset)
-        self.mask_od = get_mask_od(args.num_loc, args.inp)
+        mask_adj = get_mask_adj(args.dataset)
+        mask_od = get_mask_od(args.num_loc, args.inp)
+        self.mask = mask_adj | mask_od
 
     def forward(self, data_num, data_cat):
         embeds = torch.stack([self.dropout(embedding(data_cat[:, :, i]))
@@ -44,7 +45,7 @@ class Transformer(ModelBase):
     def __init__(self, args):
         super().__init__(args)
         self.layers = nn.ModuleList([Layers.MultiHeadAttentionLayer(
-            self.hidden_size, args.head, args.dropout
+            args.hidden_size, args.head, args.dropout
         ) for _ in range(self.num_layers)])
 
     def forward(self, data_num, data_cat):
@@ -65,14 +66,14 @@ class AttentionFusion(ModelBase):
             dim=args.hidden_size,
             head=args.head,
             att_type=args.att_type,
-            dropout=dropout
+            dropout=args.dropout
         ) for _ in range(args.num_layers)])
 
     def forward(self, data_num, data_cat):
         data = super().forward(data_num, data_cat)
         gates, att_fusions, att_heads = [], [], []
         for layer in self.layers:
-            data, gate, att_fusion, att_head = layer(data, data, mask)
+            data, gate, att_fusion, att_head = layer(data, data, self.mask)
             gates.append(gate)
             att_fusions.append(att_fusion)
             att_heads.append(att_head)

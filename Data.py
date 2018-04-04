@@ -49,12 +49,12 @@ class Loader:
     def load_dist(self):
         filepath = self.DATA_PATH / 'DIST.csv'
         if filepath.exists():
-            dist = pd.read_csv(filepath.name, index_col=0)
-            dist.columns = list(map(int, dist.columns))
+            dist = pd.read_csv(filepath, index_col=0)
+            dist.columns = [int(col) for col in dist.columns]
         else:
             link = self.load_link()
             idx = np.unique(link)
-            dist = pd.DataFrame(100, index=idx, columns=idx)
+            dist = pd.DataFrame(2**31, index=idx, columns=idx)
             for i in range(link.shape[0]):
                 dist.loc[link[i, 0], link[i, 1]] = 1
                 dist.loc[link[i, 1], link[i, 0]] = 1
@@ -66,8 +66,8 @@ class Loader:
                         tmp = dist.loc[i, k] + dist.loc[k, j]
                         if dist.loc[i, j] > tmp:
                             dist.loc[i, j] = tmp
-            dist.to_csv(filepath.name, index=True)
-        return dist.as_matrix()
+            dist.to_csv(filepath, index=True)
+        return dist.loc[self.idx, self.idx].as_matrix()
 
     def load_od(self, od='OD', freq='5T'):
         assert od in ['OD', 'DO']
@@ -81,10 +81,17 @@ class Loader:
         return ret
 
     def load_od_sum(self):
-        pass
-
-    def load_adj(self):
-        pass
+        filepath = self.DATA_PATH / 'ODSUM.csv'
+        if filepath.exists():
+            ret = pd.read_csv(filepath, index_col=0)
+            ret.columns = [int(col) for col in ret.columns]
+        else:
+            od = self.load_od(freq='1d').groupby(['Entry', 'Exit']).sum()
+            od = od.unstack().fillna(0)
+            ret = pd.DataFrame(0, index=self.idx, columns=self.idx)
+            ret.loc[od.index, od.columns] = od
+            ret.to_csv(filepath, index=True)
+        return ret.as_matrix()
 
 
 class TrafficFlow:
@@ -102,8 +109,8 @@ class TrafficFlow:
         days = (flow.index[-1].date() - flow.index[0].date()).days + 1
         # scale data
         scaler = preprocessing.StandardScaler().fit(flow)
-        self.flow = scaler.transform(flow).reshape((days, -1, flow.shape[1]))
         self.mean, self.scale = scaler.mean_, scaler.scale_
+        self.flow = scaler.transform(flow).reshape((days, -1, flow.shape[1]))
 
     def loadFlow(self, dataset):
         loader = Loader(dataset)

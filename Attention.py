@@ -70,8 +70,6 @@ class AttentionFusion(nn.Module):
         att_fusion: batch x num_qry x num_head
         '''
         batch, num, features = qry.size()
-        contexts = torch.stack([self.attention_head[i](qry, key, val, mask)
-                                for i in range(self.head)], 1)
         contexts, att_head = [], []
         for attention in self.attention_head:
             ctx, att = attention(qry, key, val, mask)
