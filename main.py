@@ -121,7 +121,10 @@ if not args.test:
         loss_valid, wape_valid, _ = eval_model(data_valid)
         loss_test, wape_test, _ = eval_model(data_test)
 
-        print(f'{epoch:1} {loss_train:.4f} {wape_train:.4f} {loss_valid:.4f} {wape_valid:.4f} {loss_test:.4f} {wape_test:.4f}')
+        print(f'{epoch}\t'
+              f'train:{loss_train:.4f} {wape_train:.4f}\t'
+              f'valid:{loss_valid:.4f} {wape_valid:.4f}\t'
+              f'test:{loss_test:.4f} {wape_test:.4f}')
 
         scheduler.step(loss_valid)
         if optimizer.param_groups[0]['lr'] < args.min_lr:

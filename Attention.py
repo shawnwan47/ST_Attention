@@ -92,7 +92,7 @@ class MultiHeadAttention(nn.Module):
             dim(int): the dimension of keys/values/queries in this
                 MultiHeadAttention, must be divisible by head.
         '''
-        assert dim % head == 0
+        assert not dim % head
         super(MultiHeadAttention, self).__init__()
         self.head = head
         self.dim = dim
@@ -104,9 +104,9 @@ class MultiHeadAttention(nn.Module):
 
     def forward(self, qry, key, val, mask=None):
         '''
-        qry: batch x length_q x dim
-        key: batch x length_c x dim
-        val: batch x length_c x dim
+        qry: batch x len_q x dim
+        key: batch x len_c x dim
+        val: batch x len_c x dim
         att: batch x head x length x dim_head
         '''
         batch, len_q, dim = qry.size()
@@ -125,7 +125,7 @@ class MultiHeadAttention(nn.Module):
         def unshape_projection(x):
             return x.view(batch, self.head, -1, dim_head) \
                     .transpose(1, 2).contiguous() \
-                    .view(batch, -1, self.dim)
+                    .view(batch, -1, dim)
 
         qry = shape_projection(self.w_q(qry))
         key = shape_projection(self.w_k(key))
@@ -139,5 +139,5 @@ class MultiHeadAttention(nn.Module):
 
         out = torch.bmm(self.dropout(att), val)
         out = self.dropout(unshape_projection(out))
-        att = att.view(batch, self.head, len_q, len_c)
+        att = att.view(batch, self.head, len_q, len_c).cpu()
         return out, att

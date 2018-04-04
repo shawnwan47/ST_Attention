@@ -21,7 +21,7 @@ class MultiHeadAttentionLayer(nn.Module):
         out, att = self.attention(qry, key, val, mask)
         out = self.layer_norm(qry + out)
         out = self.mlp(out)
-        return out, att.cpu()
+        return out, att
 
 
 class AttentionFusionLayer(nn.Module):
