@@ -11,7 +11,11 @@ import Attention
 
 
 class MultiHeadAttentionLayer(nn.Module):
+<<<<<<< HEAD
     def __init__(self, dim, head, dropout):
+=======
+    def __init__(self, dim, head, dropout=0.2):
+>>>>>>> 07a51796d7c060b159ce6bbcb4c94fc31ad2cbef
         super().__init__()
         self.attention = Attention.MultiHeadAttention(dim, head, dropout)
         self.layer_norm = BottleLayerNorm(dim)
@@ -19,7 +23,12 @@ class MultiHeadAttentionLayer(nn.Module):
 
     def forward(self, qry, key, val, mask=None):
         out, att = self.attention(qry, key, val, mask)
+<<<<<<< HEAD
         out = self.mlp(self.layer_norm(qry + out))
+=======
+        out = self.layer_norm(qry + out)
+        out = self.mlp(out)
+>>>>>>> 07a51796d7c060b159ce6bbcb4c94fc31ad2cbef
         return out, att
 
 
@@ -29,6 +38,7 @@ class AttentionFusionLayer(nn.Module):
         self.attention = Attention.AttentionFusion(dim, head, att_type, dropout)
         self.gate_query = BottleLinear(dim, 1)
         self.gate_context = BottleLinear(dim, 1)
+        self.layer_norm = LayerNorm(dim)
         self.mlp = ResMLP(dim, dropout)
 
     def forward(self, query, context, mask):
@@ -41,8 +51,9 @@ class AttentionFusionLayer(nn.Module):
         context, att_head, att_fusion = self.attention(query, context, context, mask)
         gate = F.sigmoid(self.gate_query(query) + self.gate_context(context))
         out = gate * query + (1 - gate) * context
+        out = self.layer_norm(out)
         out = self.mlp(out)
-        return out, gate, att_fusion, att_head
+        return out, gate.cpu(), att_fusion, att_head
 
 
 class MultiHeadAttentionGateLayer(MultiHeadAttentionLayer):

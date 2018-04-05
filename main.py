@@ -40,12 +40,12 @@ data_train, data_valid, data_test, mean, scale = Utils.getDataset(
 
 
 def WAPE(out, tgt):
+    def denormalize(data):
+        return data * scale + mean
     out, tgt = denormalize(out), denormalize(tgt)
     return (tgt - out).abs().sum() / tgt.sum()
 
 
-def denormalize(data):
-    return data * scale + mean
 
 # MODEL
 modelpath = MODEL_PATH + args.path
@@ -68,7 +68,9 @@ if args.optim is 'SGD':
                           nesterov=True)
 else:
     optimizer = optim.Adam(model.parameters(), weight_decay=args.weight_decay)
-scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True, min_lr=args.min_lr)
+scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer,
+                                                 verbose=True,
+                                                 min_lr=args.min_lr)
 
 
 # TRAINING
@@ -84,14 +86,14 @@ def train_model(data):
             if type(out) is tuple:
                 out = out[0]
             loss = criterion(out, targets)
-            loss_train += loss.data[0]
             wape += WAPE(out, targets).data[0]
-            iters += 1
+            loss_train += loss.data[0]
             # optimization
             optimizer.zero_grad()
             loss.backward()
             clip_grad_norm(model.parameters(), args.max_grad_norm)
             optimizer.step()
+            iters += 1
     return loss_train / iters, wape / iters
 
 
@@ -119,7 +121,10 @@ if not args.test:
         loss_valid, wape_valid, _ = eval_model(data_valid)
         loss_test, wape_test, _ = eval_model(data_test)
 
-        print(f'{epoch:1} {loss_train:.4f} {wape_train:.4f} {loss_valid:.4f} {wape_valid:.4f} {loss_test:.4f} {wape_test:.4f}')
+        print(f'{epoch}\t'
+              f'train:{loss_train:.4f} {wape_train:.4f}\t'
+              f'valid:{loss_valid:.4f} {wape_valid:.4f}\t'
+              f'test:{loss_test:.4f} {wape_test:.4f}')
 
         scheduler.step(loss_valid)
         if optimizer.param_groups[0]['lr'] < args.min_lr:

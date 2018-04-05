@@ -16,28 +16,16 @@ class Bottle(nn.Module):
 
 
 class LayerNorm(nn.Module):
-    ''' Layer normalization module '''
-
-    def __init__(self, dim, eps=1e-3):
+    def __init__(self, features, eps=1e-6):
         super(LayerNorm, self).__init__()
-
+        self.a_2 = nn.Parameter(torch.ones(features))
+        self.b_2 = nn.Parameter(torch.zeros(features))
         self.eps = eps
-        self.a_2 = nn.Parameter(torch.ones(dim), requires_grad=True)
-        self.b_2 = nn.Parameter(torch.zeros(dim), requires_grad=True)
 
-    def forward(self, z):
-        if z.size(1) == 1:
-            return z
-        mu = torch.mean(z, dim=1)
-        sigma = torch.std(z, dim=1)
-        # HACK. PyTorch is changing behavior
-        if mu.dim() == 1:
-            mu = mu.unsqueeze(1)
-            sigma = sigma.unsqueeze(1)
-        out = (z - mu.expand_as(z)) / (sigma.expand_as(z) + self.eps)
-        out = out.mul(self.a_2.expand_as(out)) \
-            + self.b_2.expand_as(out)
-        return out
+    def forward(self, x):
+        mean = x.mean(-1, keepdim=True)
+        std = x.std(-1, keepdim=True)
+        return self.a_2 * (x - mean) / (std + self.eps) + self.b_2
 
 
 class BottleLinear(Bottle, nn.Linear):

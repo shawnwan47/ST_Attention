@@ -2,9 +2,10 @@ import numpy as np
 
 import torch
 import torch.nn as nn
+from torch.nn import functional as F
 
 import Layers
-from Utils import get_mask_od, get_mask_graph
+from Utils import get_mask_od, get_mask_adj
 from UtilClass import *
 from Regularizer import *
 
@@ -13,25 +14,28 @@ class ModelBase(nn.Module):
     def __init__(self, args):
         super().__init__()
         self.num_layers = args.num_layers
-        emb_size = args.hidden_size - args.flow_size_in
         self.embeddings = nn.ModuleList([
-            nn.Embedding(args.num_day, emb_size),
-            nn.Embedding(args.num_time, emb_size),
-            nn.Embedding(args.num_loc, emb_size)
+            nn.Embedding(args.num_day, args.day_embed_size),
+            nn.Embedding(args.num_time, args.time_embed_size),
+            nn.Embedding(args.num_loc, args.loc_embed_size)
         ])
-        self.linear_out = BottleLinear(args.hidden_size, args.flow_size_out)
+        self.linear_in = BottleLinear(args.input_size, args.hidden_size)
+        self.linear_out = BottleLinear(args.hidden_size, args.output_size)
         self.dropout = nn.Dropout(args.dropout)
-        self.mask_graph = get_mask_graph(args.dataset)
-        self.mask_od = get_mask_od(args.num_loc, args.inp)
+        mask_adj = get_mask_adj(args.dataset)
+        mask_od = get_mask_od(args.num_loc, args.inp)
+        self.mask = mask_adj | mask_od
 
     def forward(self, data_num, data_cat):
-        embeds = torch.stack([self.dropout(embedding(data_cat[:, :, i]))
-                              for i, embedding in enumerate(self.embeddings)])
-        data = torch.cat([data_num, torch.sum(embeds, 0)], -1)
-        return data
+        embeds = (self.dropout(embedding(data_cat[:, :, i]))
+                  for i, embedding in enumerate(self.embeddings))
+        data = torch.cat((data_num, *embeds), -1)
+        hid = self.dropout(F.relu(self.linear_in(data)))
+        return hid
 
     def get_embeddings(self):
-        return np.stack([emb.weight.data.cpu().numpy() for emb in self.embeddings])
+        return np.stack([embedding.weight.data.cpu().numpy()
+                         for embedding in self.embeddings])
 
 
 class Isolation(ModelBase):
@@ -44,7 +48,7 @@ class Transformer(ModelBase):
     def __init__(self, args):
         super().__init__(args)
         self.layers = nn.ModuleList([Layers.MultiHeadAttentionLayer(
-            self.hidden_size, args.head, args.dropout
+            args.hidden_size, args.head, args.dropout
         ) for _ in range(self.num_layers)])
 
     def forward(self, data_num, data_cat):
@@ -72,7 +76,7 @@ class AttentionFusion(ModelBase):
         data = super().forward(data_num, data_cat)
         gates, att_fusions, att_heads = [], [], []
         for layer in self.layers:
-            data, gate, att_fusion, att_head = layer(data, data, mask)
+            data, gate, att_fusion, att_head = layer(data, data, self.mask)
             gates.append(gate)
             att_fusions.append(att_fusion)
             att_heads.append(att_head)

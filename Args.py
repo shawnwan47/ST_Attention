@@ -45,7 +45,10 @@ def add_model(args):
     args.add_argument('-hidden_size', type=int, default=64)
     args.add_argument('-dropout', type=float, default=0.2)
     # Embedding
-    args.add_argument('-emb_size', type=int, default=64)
+    args.add_argument('-embed_size', type=int)
+    args.add_argument('-day_embed_size', type=int, default=8)
+    args.add_argument('-time_embed_size', type=int, default=16)
+    args.add_argument('-loc_embed_size', type=int, default=32)
     # Attention
     args.add_argument('-att_type', type=str, default='dot',
                       choices=['dot', 'add', 'general', 'mlp'])
@@ -60,26 +63,26 @@ def add_model(args):
 
 def update(args):
     # data
-    args.num_time = (1440 - args.future - args.start) // args.freq
-    args.flow_size_in = args.past // args.freq
-    args.flow_size_out = args.future // args.freq
     if args.dataset is 'highway':
-        args.num_loc = 266
+        args.num_loc = 264
     elif args.dataset is 'metro':
         args.num_loc = 536
+    args.num_time = (1440 - args.future - args.start) // args.freq
+    args.input_size = sum((args.past // args.freq,
+                           args.day_embed_size,
+                           args.time_embed_size,
+                           args.loc_embed_size))
+    args.output_size = args.future // args.freq
 
     # path
     path = args.model
-    # Embedding
-    path += 'Emb' + str(args.emb_size)
     # Att
-    path += 'Map' + args.map_type
-    path += 'Att' + args.att_type
     path += 'Head' + str(args.head)
-    path += 'Res' if args.res else ''
+    path += 'Att' + args.att_type
+    path += 'Map' + args.map_type
     # General
     path += 'Lay' + str(args.num_layers)
-    path += 'Hin' + str(args.hidden_size)
-    path += 'Past' + str(args.past)
-    path += 'Future' + str(args.future)
+    path += 'Hid' + str(args.hidden_size)
+    path += 'Pst' + str(args.past)
+    path += 'Fut' + str(args.future)
     args.path = path
