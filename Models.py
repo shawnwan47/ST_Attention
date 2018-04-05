@@ -51,17 +51,17 @@ class Transformer(ModelBase):
         ) for _ in range(args.num_layers)])
 
     def forward(self, data_num, data_cat):
-        data = super().forward(data_num, data_cat)
+        hid = super().forward(data_num, data_cat)
         atts = []
         for layer in self.layers:
-            data, att = layer(data, data, data)
+            hid, att = layer(hid, self.mask)
             atts.append(att.cpu())
         att = torch.stack(atts, 1) # batch x layer x head x query x context
-        out = self.linear_out(data)
+        out = self.linear_out(hid)
         return out, att
 
 
-class TransformerFusion(ModelBase):
+class TransformerGate(ModelBase):
     def __init__(self, args):
         super().__init__(args)
         self.layers = nn.ModuleList([Layers.MultiSelfAttnGateLayer(
@@ -72,7 +72,7 @@ class TransformerFusion(ModelBase):
         hid = super().forward(data_num, data_cat)
         atts, gates = [], []
         for layer in self.layers:
-            hid, att, gate = layer(hid)
+            hid, att, gate = layer(hid, self.mask)
             atts += att,
             gates += gate,
         out = self.linear_out(hid)
@@ -81,26 +81,9 @@ class TransformerFusion(ModelBase):
         return out, att, gate
 
 
-class AttentionFusion(ModelBase):
+class TransformerFusion(TransformerGate):
     def __init__(self, args):
         super().__init__(args)
-        self.layers = nn.ModuleList([Layers.AttentionFusionLayer(
-            dim=args.hidden_size,
-            head=args.head,
-            att_type=args.att_type,
-            dropout=args.dropout
+        self.layers = nn.ModuleList([Layers.MultiSelfAttnFusionLayer(
+            args.hidden_size, args.head, args.dropout
         ) for _ in range(args.num_layers)])
-
-    def forward(self, data_num, data_cat):
-        data = super().forward(data_num, data_cat)
-        gates, att_fusions, att_heads = [], [], []
-        for layer in self.layers:
-            data, gate, att_fusion, att_head = layer(data, data, self.mask)
-            gates.append(gate)
-            att_fusions.append(att_fusion)
-            att_heads.append(att_head)
-        gates = torch.stack(gates, 1)
-        att_fusions = torch.stack(att_fusions, 1)
-        att_heads = torch.stack(att_heads, 1)
-        out = self.linear_out(data)
-        return out, gates, att_fusions, att_heads

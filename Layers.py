@@ -50,15 +50,28 @@ class AttentionFusionLayer(nn.Module):
 class MultiSelfAttnGateLayer(MultiHeadAttentionLayer):
     def __init__(self, dim, head, dropout):
         super().__init__(dim, head, dropout)
-        self.gate0 = BottleLinear(dim, dim)
-        self.gate1 = BottleLinear(dim, dim)
+        self.gate_data = BottleLinear(dim, dim)
+        self.gate_context = BottleLinear(dim, dim)
 
     def forward(self, data, mask=None):
         '''
         gate: batch x len_q x dim
         '''
         out, att = self.attention(data, data, data, mask)
-        gate = F.sigmoid(self.gate0(data) + self.gate1(out))
+        gate = F.sigmoid(self.gate_data(data) + self.gate_context(out))
+        out = gate * data + (1 - gate) * out
+        out = self.mlp(self.layer_norm(out))
+        return out, att, gate.cpu()
+
+class MultiSelfAttnFusionLayer(MultiHeadAttentionLayer):
+    def __init__(self, dim, head, dropout):
+        super().__init__(dim, head, dropout)
+        self.gate_data = BottleLinear(dim, 1)
+        self.gate_context = BottleLinear(dim, 1)
+
+    def forward(self, data, mask=None):
+        out, att = self.attention(data, data, data, mask)
+        gate = F.sigmoid(self.gate_data(data) + self.gate_context(out))
         out = gate * data + (1 - gate) * out
         out = self.mlp(self.layer_norm(out))
         return out, att, gate.cpu()
