@@ -46,9 +46,9 @@ class Attention(nn.Module):
                 key = self.relu(self.map_qk(key))
             score = torch.bmm(qry, key.transpose(1, 2)) / math.sqrt(dim)
         else:
-            qry = self.map_q(qry).unsqueeze(2).expand(batch, len_q, len_k, -1)
-            key = self.map_k(key).unsqueeze(1).expand(batch, len_q, len_k, -1)
-            score = qry + key
+            sc1 = self.map_q(qry).unsqueeze(2).expand(batch, len_q, len_k, -1)
+            sc2 = self.map_k(key).unsqueeze(1).expand(batch, len_q, len_k, -1)
+            score = sc1 + sc2
             if self.att_type == 'mlp':
                 score = self.map_qk(F.relu(self.dropout(qry)))
         return score.view(batch, len_q, len_k)
@@ -87,13 +87,7 @@ class AttentionFusion(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, dim, head=4, dropout=0.1):
-        '''
-        Args:
-            head(int): number of parallel heads.
-            dim(int): the dimension of keys/values/queries in this
-                MultiHeadAttention, must be divisible by head.
-        '''
+    def __init__(self, dim, head, dropout):
         assert dim % head == 0
         super(MultiHeadAttention, self).__init__()
         self.head = head
@@ -106,10 +100,8 @@ class MultiHeadAttention(nn.Module):
 
     def forward(self, qry, key, val, mask=None):
         '''
-        qry: batch x length_q x dim
-        key: batch x length_c x dim
-        val: batch x length_c x dim
-        att: batch x head x length x dim_head
+        qry, key, val: batch x length x dim
+        att: batch x head x len_q x len_c
         '''
         batch, len_q, dim = qry.size()
         batch_key, len_c, dim_key = key.size()
@@ -142,4 +134,4 @@ class MultiHeadAttention(nn.Module):
         out = torch.bmm(self.dropout(att), val)
         out = self.dropout(unshape_projection(out))
         att = att.view(batch, self.head, len_q, len_c)
-        return out, att
+        return out, att.cpu()

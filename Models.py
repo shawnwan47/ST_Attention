@@ -65,7 +65,7 @@ class AttentionFusion(ModelBase):
             dim=args.hidden_size,
             head=args.head,
             att_type=args.att_type,
-            dropout=dropout
+            dropout=args.dropout
         ) for _ in range(args.num_layers)])
 
     def forward(self, data_num, data_cat):

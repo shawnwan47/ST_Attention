@@ -11,7 +11,7 @@ import Attention
 
 
 class MultiHeadAttentionLayer(nn.Module):
-    def __init__(self, dim, head=1, dropout=0.1):
+    def __init__(self, dim, head, dropout):
         super().__init__()
         self.attention = Attention.MultiHeadAttention(dim, head, dropout)
         self.layer_norm = BottleLayerNorm(dim)
@@ -19,9 +19,8 @@ class MultiHeadAttentionLayer(nn.Module):
 
     def forward(self, qry, key, val, mask=None):
         out, att = self.attention(qry, key, val, mask)
-        out = self.layer_norm(qry + out)
-        out = self.mlp(out)
-        return out, att.cpu()
+        out = self.mlp(self.layer_norm(qry + out))
+        return out, att
 
 
 class AttentionFusionLayer(nn.Module):
@@ -46,31 +45,18 @@ class AttentionFusionLayer(nn.Module):
         return out, gate, att_fusion, att_head
 
 
-class AttentionLayer(nn.Module):
-    def __init__(self, dim, map_type='lin', att_type='dot', res=True, dropout=0.2):
-        super(AttentionLayer, self).__init__()
-        self.dropout = dropout
-        self.map_qry = self.mapper(dim, map_type)
-        self.map_key = self.mapper(dim, map_type)
-        self.map_val = self.mapper(dim, map_type)
-        # self.attention = Attention.Attention(dim, att_type, dropout)
-        self.res = res
-        self.layer_norm = BottleLayerNorm(dim)
-        self.resmlp = ResMLP(dim, dropout)
-
-    def mapper(self, dim, map_type):
-        if map_type == 'lin':
-            return BottleLinear(dim, dim, False)
-        elif map_type == 'mlp':
-            return MLP(dim, dim, self.dropout)
-        elif map_type == 'res':
-            return ResMLP(dim, self.dropout)
+class MultiHeadAttentionGateLayer(MultiHeadAttentionLayer):
+    def __init__(self, dim, head, dropout):
+        super().__init__(dim, head, dropout)
+        self.gate0 = BottleLinear(dim, dim)
+        self.gate1 = BottleLinear(dim, dim)
 
     def forward(self, qry, key, val, mask=None):
-        q, k, v = self.map_qry(qry), self.map_key(key), self.map_val(val)
-        out, att = self.attention(q, k, v, mask)
-        if self.res:
-            out = self.layer_norm(out + qry)
-        if self.mlp:
-            out = self.resmlp(out)
+        '''
+        gate: batch x len_q x dim
+        '''
+        out, att = self.attention(qry, key, val, mask)
+        gate = F.sigmoid(self.gate0(qry) + self.gate1(out))
+        out = gate * qry + (1 - gate) * out
+        out = self.mlp(self.layer_norm(out))
         return out, att
