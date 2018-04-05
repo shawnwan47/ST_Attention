@@ -85,19 +85,8 @@ class AttentionFusion(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-<<<<<<< HEAD
     def __init__(self, dim, head, dropout):
         assert dim % head == 0
-=======
-    def __init__(self, dim, head=4, dropout=0.1):
-        '''
-        Args:
-            head(int): number of parallel heads.
-            dim(int): the dimension of keys/values/queries in this
-                MultiHeadAttention, must be divisible by head.
-        '''
-        assert not dim % head
->>>>>>> 07a51796d7c060b159ce6bbcb4c94fc31ad2cbef
         super(MultiHeadAttention, self).__init__()
         self.head = head
         self.dim = dim
@@ -109,15 +98,8 @@ class MultiHeadAttention(nn.Module):
 
     def forward(self, qry, key, val, mask=None):
         '''
-<<<<<<< HEAD
-        qry, key, val: batch x length x dim
+        qry, key, val: batch x len x dim
         att: batch x head x len_q x len_c
-=======
-        qry: batch x len_q x dim
-        key: batch x len_c x dim
-        val: batch x len_c x dim
-        att: batch x head x length x dim_head
->>>>>>> 07a51796d7c060b159ce6bbcb4c94fc31ad2cbef
         '''
         batch, len_q, dim = qry.size()
         batch_key, len_c, dim_key = key.size()
@@ -149,10 +131,5 @@ class MultiHeadAttention(nn.Module):
 
         out = torch.bmm(self.dropout(att), val)
         out = self.dropout(unshape_projection(out))
-<<<<<<< HEAD
         att = att.view(batch, self.head, len_q, len_c)
         return out, att.cpu()
-=======
-        att = att.view(batch, self.head, len_q, len_c).cpu()
-        return out, att
->>>>>>> 07a51796d7c060b159ce6bbcb4c94fc31ad2cbef

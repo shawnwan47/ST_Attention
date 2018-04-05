@@ -13,7 +13,6 @@ from Regularizer import *
 class ModelBase(nn.Module):
     def __init__(self, args):
         super().__init__()
-        self.num_layers = args.num_layers
         self.embeddings = nn.ModuleList([
             nn.Embedding(args.num_day, args.day_embed_size),
             nn.Embedding(args.num_time, args.time_embed_size),
@@ -49,17 +48,37 @@ class Transformer(ModelBase):
         super().__init__(args)
         self.layers = nn.ModuleList([Layers.MultiHeadAttentionLayer(
             args.hidden_size, args.head, args.dropout
-        ) for _ in range(self.num_layers)])
+        ) for _ in range(args.num_layers)])
 
     def forward(self, data_num, data_cat):
         data = super().forward(data_num, data_cat)
         atts = []
-        for i in range(self.num_layers):
-            data, att = self.layers[i](data, data, data)
+        for layer in self.layers:
+            data, att = layer(data, data, data)
             atts.append(att.cpu())
         att = torch.stack(atts, 1) # batch x layer x head x query x context
         out = self.linear_out(data)
         return out, att
+
+
+class TransformerFusion(ModelBase):
+    def __init__(self, args):
+        super().__init__(args)
+        self.layers = nn.ModuleList([Layers.MultiSelfAttnGateLayer(
+            args.hidden_size, args.head, args.dropout
+        ) for _ in range(args.num_layers)])
+
+    def forward(self, data_num, data_cat):
+        hid = super().forward(data_num, data_cat)
+        atts, gates = [], []
+        for layer in self.layers:
+            hid, att, gate = layer(hid)
+            atts += att,
+            gates += gate,
+        out = self.linear_out(hid)
+        att = torch.stack(atts, 1)
+        gate = torch.stack(gates, 1)
+        return out, att, gate
 
 
 class AttentionFusion(ModelBase):

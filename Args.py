@@ -40,7 +40,7 @@ def add_train(args):
 def add_model(args):
     # general
     args.add_argument('-model', type=str, default='Isolation',
-                      choices=['Isolation', 'Transformer', 'AttentionFusion'])
+                      choices=['Isolation', 'Transformer', 'TransformerFusion'])
     args.add_argument('-num_layers', type=int, default=1)
     args.add_argument('-hidden_size', type=int, default=64)
     args.add_argument('-dropout', type=float, default=0.2)
