@@ -10,16 +10,16 @@ from UtilClass import *
 import Attention
 
 
-class MultiHeadAttentionLayer(nn.Module):
+class TransformerLayer(nn.Module):
     def __init__(self, dim, head, dropout):
         super().__init__()
         self.attention = Attention.MultiHeadAttention(dim, head, dropout)
         self.layer_norm = BottleLayerNorm(dim)
         self.mlp = ResMLP(dim, dropout)
 
-    def forward(self, qry, key, val, mask=None):
-        out, att = self.attention(qry, key, val, mask)
-        out = self.mlp(self.layer_norm(qry + out))
+    def forward(self, data, mask=None):
+        out, att = self.attention(data, data, data, mask)
+        out = self.mlp(self.layer_norm(data + out))
         return out, att
 
 
@@ -47,7 +47,7 @@ class AttentionFusionLayer(nn.Module):
         return out, gate.cpu(), att_fusion, att_head
 
 
-class MultiSelfAttnGateLayer(MultiHeadAttentionLayer):
+class TransformerGateLayer(TransformerLayer):
     def __init__(self, dim, head, dropout):
         super().__init__(dim, head, dropout)
         self.gate_data = BottleLinear(dim, dim)
@@ -63,7 +63,7 @@ class MultiSelfAttnGateLayer(MultiHeadAttentionLayer):
         out = self.mlp(self.layer_norm(out))
         return out, att, gate.cpu()
 
-class MultiSelfAttnFusionLayer(MultiHeadAttentionLayer):
+class TransformerFusionLayer(TransformerLayer):
     def __init__(self, dim, head, dropout):
         super().__init__(dim, head, dropout)
         self.gate_data = BottleLinear(dim, 1)

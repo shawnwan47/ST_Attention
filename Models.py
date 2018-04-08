@@ -46,7 +46,7 @@ class Isolation(ModelBase):
 class Transformer(ModelBase):
     def __init__(self, args):
         super().__init__(args)
-        self.layers = nn.ModuleList([Layers.MultiHeadAttentionLayer(
+        self.layers = nn.ModuleList([Layers.TransformerLayer(
             args.hidden_size, args.head, args.dropout
         ) for _ in range(args.num_layers)])
 
@@ -64,7 +64,7 @@ class Transformer(ModelBase):
 class TransformerGate(ModelBase):
     def __init__(self, args):
         super().__init__(args)
-        self.layers = nn.ModuleList([Layers.MultiSelfAttnGateLayer(
+        self.layers = nn.ModuleList([Layers.TransformerGateLayer(
             args.hidden_size, args.head, args.dropout
         ) for _ in range(args.num_layers)])
 
@@ -84,6 +84,6 @@ class TransformerGate(ModelBase):
 class TransformerFusion(TransformerGate):
     def __init__(self, args):
         super().__init__(args)
-        self.layers = nn.ModuleList([Layers.MultiSelfAttnFusionLayer(
+        self.layers = nn.ModuleList([Layers.TransformerFusionLayer(
             args.hidden_size, args.head, args.dropout
         ) for _ in range(args.num_layers)])
