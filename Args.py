@@ -32,7 +32,7 @@ def add_train(args):
     args.add_argument('-retrain', action='store_true')
     args.add_argument('-epoches', type=int, default=100)
     args.add_argument('-iterations', type=int, default=1)
-    args.add_argument('-batch_size', type=int, default=512)
+    args.add_argument('-batch_size', type=int, default=256)
     args.add_argument('-print_epoches', type=int, default=1)
 
 
@@ -51,6 +51,7 @@ def add_model(args):
     args.add_argument('-loc_embed_size', type=int, default=32)
     # Attention
     args.add_argument('-head', type=int, default=4)
+    args.add_argument('-mask', action='store_true')
     # Save path
     args.add_argument('-path', type=str)
 

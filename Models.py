@@ -21,10 +21,12 @@ class ModelBase(nn.Module):
         self.linear_in = nn.Linear(args.input_size, args.hidden_size)
         self.linear_out = nn.Linear(args.hidden_size, args.output_size)
         self.dropout = nn.Dropout(args.dropout)
-        mask_adj = get_mask_adj(args.dataset)
-        mask_od = get_mask_od(args.num_loc, args.input_od)
-        self.register_buffer('mask', mask_adj | mask_od)
-        print(mask_adj, mask_od, self.mask)
+        if args.mask:
+            mask_adj = get_mask_adj(args.dataset)
+            mask_od = get_mask_od(args.num_loc, args.input_od)
+            self.register_buffer('mask', mask_adj | mask_od)
+        else:
+            self.mask = None
 
     def forward(self, data_num, data_cat):
         embeds = (self.dropout(embedding(data_cat[:, :, i]))
