@@ -24,7 +24,7 @@ from matplotlib import pyplot as plt
 import seaborn as sns
 
 import Args
-import Data
+from Data import Loader
 import Plot
 
 
@@ -37,7 +37,7 @@ reload(Data)
 
 
 DATASET = 'highway'
-FIG_PATH = Path('fig/') / DATASET
+FIG_PATH = Path('./fig/') / DATASET
 
 def make_diag(by='od'):
     assert by in ['o', 'd', 'od']

@@ -5,6 +5,18 @@ import numpy as np
 import Data
 
 
+class MapVisualizer:
+    def __init__(self, dataset):
+        loader = Loader(dataset)
+        self.station = loader.load_station()
+
+
+class ODsVisualizer:
+    def __init__(self, dataset, ods):
+        loader = Loader(dataset)
+        self.station = loader.load_station_raw
+
+
 def savefig(path):
     plt.tight_layout()
     plt.savefig(path + '.png')

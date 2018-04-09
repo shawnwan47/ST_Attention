@@ -17,7 +17,7 @@ class Loader:
         link_idx = list(np.unique(self.load_link()))
         flow_idx = [*self._load_flow('O').columns, *self._load_flow('D').columns]
         station_idx = station_idx.intersection(*[link_idx, flow_idx])
-        idx = station.loc[station_idx].sort_values(['ROUTE']).index
+        idx = station.loc[station_idx].sort_values(['ROUTE', 'STATION']).index
         return idx
 
     def _load_flow(self, od='D'):

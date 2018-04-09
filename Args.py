@@ -2,26 +2,24 @@ def add_data(args):
     # data attribute
     args.add_argument('-dataset', type=str, default='highway',
                       choices=['highway', 'metro'])
-    args.add_argument('-inp', type=str, default='OD')
-    args.add_argument('-out', type=str, default='OD')
+    args.add_argument('-input_od', type=str, default='OD')
+    args.add_argument('-output_od', type=str, default='OD')
 
     args.add_argument('-freq', type=int, default=15)
     args.add_argument('-start', type=int, default=360)
     args.add_argument('-past', type=int, default=120)
     args.add_argument('-future', type=int, default=60)
 
-    args.add_argument('-num_day', type=int, default=7)
-    args.add_argument('-num_time', type=int)
-    args.add_argument('-num_loc', type=int)
 
 def add_train(args):
     # gpu
+    args.add_argument('-cuda', action='store_true')
     args.add_argument('-gpuid', type=int, default=0)
     args.add_argument('-seed', type=int, default=47)
     args.add_argument('-eps', type=float, default=1e-8)
     # optimization
-    args.add_argument('-crit', type=str, default='MSELoss',
-                      choices=['MSEloss', 'L1Loss'])
+    args.add_argument('-loss', type=str, default='mse',
+                      choices=['mse', 'wape'])
     args.add_argument('-optim', type=str, default='Adam',
                       choices=['SGD', 'Adam'])
     args.add_argument('-lr', type=float, default=0.001)
@@ -31,9 +29,10 @@ def add_train(args):
 
     # run
     args.add_argument('-test', action='store_true')
+    args.add_argument('-retrain', action='store_true')
     args.add_argument('-epoches', type=int, default=100)
     args.add_argument('-iterations', type=int, default=1)
-    args.add_argument('-batch_size', type=int, default=256)
+    args.add_argument('-batch_size', type=int, default=512)
     args.add_argument('-print_epoches', type=int, default=1)
 
 
@@ -44,19 +43,15 @@ def add_model(args):
     args.add_argument('-hidden_size', type=int, default=64)
     args.add_argument('-dropout', type=float, default=0.2)
     # Embedding
-    args.add_argument('-embed_size', type=int)
+    args.add_argument('-num_day', type=int, default=7)
+    args.add_argument('-num_time', type=int)
+    args.add_argument('-num_loc', type=int)
     args.add_argument('-day_embed_size', type=int, default=8)
     args.add_argument('-time_embed_size', type=int, default=16)
     args.add_argument('-loc_embed_size', type=int, default=32)
     # Attention
-    args.add_argument('-att_type', type=str, default='dot',
-                      choices=['dot', 'add', 'general', 'mlp'])
     args.add_argument('-head', type=int, default=4)
-    args.add_argument('-map_type', type=str, default='lin',
-                      choices=['lin', 'mlp', 'res'])
-    args.add_argument('-res', action='store_false')
-    args.add_argument('-mlp', action='store_false')
-    # model name to be updated
+    # Save path
     args.add_argument('-path', type=str)
 
 
@@ -74,14 +69,10 @@ def update(args):
     args.output_size = args.future // args.freq
 
     # path
-    path = args.model
-    # Att
-    path += 'Head' + str(args.head)
-    path += 'Att' + args.att_type
-    path += 'Map' + args.map_type
-    # General
-    path += 'Lay' + str(args.num_layers)
-    path += 'Hid' + str(args.hidden_size)
-    path += 'Pst' + str(args.past)
-    path += 'Fut' + str(args.future)
-    args.path = path
+    name = args.model
+    name += '_inp' + str(args.input_size)
+    name += '_out' + str(args.output_size)
+    name += '_hid' + str(args.hidden_size)
+    name += '_lay' + str(args.num_layers)
+    name += '_head' + str(args.head)
+    args.path = args.dataset + '/' + name

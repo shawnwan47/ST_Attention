@@ -30,7 +30,8 @@ def getTrainValidTest(data):
     return data_train, data_valid, data_test
 
 
-def getDataset(dataset='highway', freq=15, start=360, past=120, future=60, batch_size=128):
+def getDataset(dataset='highway', freq=15, start=360, past=120, future=60,
+               batch_size=128, cuda=False):
     dataset = Data.SpatialTraffic(dataset=dataset, freq=freq,
                                   start=start, past=past, future=future)
 
@@ -40,12 +41,14 @@ def getDataset(dataset='highway', freq=15, start=360, past=120, future=60, batch
 
     data = [Dataset3(data_num[i], data_cat[i], targets[i]) for i in range(3)]
 
-    data_train = DataLoader(data[0], batch_size=batch_size, shuffle=True)
-    data_valid = DataLoader(data[1], batch_size=batch_size)
-    data_test = DataLoader(data[2], batch_size=batch_size)
+    data_train = DataLoader(data[0], batch_size=batch_size, shuffle=True, pin_memory=cuda)
+    data_valid = DataLoader(data[1], batch_size=batch_size, pin_memory=cuda)
+    data_test = DataLoader(data[2], batch_size=batch_size, pin_memory=cuda)
 
-    mean = Variable(torch.FloatTensor(dataset.mean)).unsqueeze(0).unsqueeze(-1).cuda()
-    scale = Variable(torch.FloatTensor(dataset.scale)).unsqueeze(0).unsqueeze(-1).cuda()
+    mean = Variable(torch.FloatTensor(dataset.mean)).unsqueeze(0).unsqueeze(-1)
+    scale = Variable(torch.FloatTensor(dataset.scale)).unsqueeze(0).unsqueeze(-1)
+    if cuda:
+        mean, scale = mean.cuda(), scale.cuda()
     return data_train, data_valid, data_test, mean, scale
 
 
@@ -64,25 +67,25 @@ def get_mask_od(num_loc, od):
         mask[:, num_loc/2:] = 1
     if od is 'D':
         mask[:, :num_loc/2] = 1
-    return (mask == 1).cuda()
+    return Variable(mask.byte())
 
 
 def get_mask_adj(dataset, od_ratio=0.01, hops=5):
     loader = Data.Loader(dataset)
-    od = loader.load_od_sum() < od_ratio
-    dist = loader.load_dist() > hops
+    od = loader.load_od_sum()
+    dist = loader.load_dist()
+    mask_od = (od / od.sum()) < od_ratio
+    mask_dist = dist > hops
+    od[mask_od], od[~mask_od] = 1, 0
+    dist[mask_dist], dist[~mask_dist] = 1, 0
     mask = np.vstack((np.hstack((dist, od)), np.hstack((od, dist))))
-    np.fill_diagonal(mask, True)
-    return torch.ByteTensor(mask).cuda()
-
-
-def get_mask_target():
-    pass
+    np.fill_diagonal(mask, 1)
+    return Variable(torch.ByteTensor(mask))
 
 
 def torch2npsave(filename, data):
     def _var2np(x):
-        return x.data.cpu().numpy()
+        return x.data.numpy()
 
     if type(data) in [tuple, list]:
         for i, d in enumerate(data):

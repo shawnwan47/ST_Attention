@@ -11,10 +11,10 @@ import Attention
 
 
 class TransformerLayer(nn.Module):
-    def __init__(self, dim, head, dropout):
+    def __init__(self, head, dim, dropout):
         super().__init__()
-        self.attention = Attention.MultiHeadAttention(dim, head, dropout)
-        self.layer_norm = BottleLayerNorm(dim)
+        self.attention = Attention.MultiHeadedAttention(head, dim, dropout)
+        self.layer_norm = LayerNorm(dim)
         self.mlp = ResMLP(dim, dropout)
 
     def forward(self, data, mask=None):
@@ -23,35 +23,11 @@ class TransformerLayer(nn.Module):
         return out, att
 
 
-class AttentionFusionLayer(nn.Module):
-    def __init__(self, dim, head, att_type, dropout=0.2):
-        super().__init__()
-        self.attention = Attention.AttentionFusion(dim, head, att_type, dropout)
-        self.gate_query = BottleLinear(dim, 1)
-        self.gate_context = BottleLinear(dim, 1)
-        self.layer_norm = LayerNorm(dim)
-        self.mlp = ResMLP(dim, dropout)
-
-    def forward(self, query, context, mask):
-        '''
-        out, query, context: batch x num x features
-        gate: batch x num x 1
-        att_fusion: batch x num x head
-        att_head: batch x num x head x num_key
-        '''
-        context, att_head, att_fusion = self.attention(query, context, context, mask)
-        gate = F.sigmoid(self.gate_query(query) + self.gate_context(context))
-        out = gate * query + (1 - gate) * context
-        out = self.layer_norm(out)
-        out = self.mlp(out)
-        return out, gate.cpu(), att_fusion, att_head
-
-
 class TransformerGateLayer(TransformerLayer):
-    def __init__(self, dim, head, dropout):
-        super().__init__(dim, head, dropout)
-        self.gate_data = BottleLinear(dim, dim)
-        self.gate_context = BottleLinear(dim, dim)
+    def __init__(self, head, dim, dropout):
+        super().__init__(head, dim, dropout)
+        self.gate_data = nn.Linear(dim, dim)
+        self.gate_context = nn.Linear(dim, dim)
 
     def forward(self, data, mask=None):
         '''
@@ -63,11 +39,11 @@ class TransformerGateLayer(TransformerLayer):
         out = self.mlp(self.layer_norm(out))
         return out, att, gate.cpu()
 
-class TransformerFusionLayer(TransformerLayer):
-    def __init__(self, dim, head, dropout):
-        super().__init__(dim, head, dropout)
-        self.gate_data = BottleLinear(dim, 1)
-        self.gate_context = BottleLinear(dim, 1)
+class TransformerFusionLayer(TransformerGateLayer):
+    def __init__(self, head, dim, dropout):
+        super().__init__(head, dim, dropout)
+        self.gate_data = nn.Linear(dim, 1)
+        self.gate_context = nn.Linear(dim, 1)
 
     def forward(self, data, mask=None):
         out, att = self.attention(data, data, data, mask)

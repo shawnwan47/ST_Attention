@@ -54,82 +54,45 @@ class Attention(nn.Module):
         return score.view(batch, len_q, len_k)
 
 
-class AttentionFusion(nn.Module):
-    def __init__(self, dim, head, att_type, dropout):
-        super().__init__()
-        self.head = head
-        self.attention_head = nn.ModuleList([Attention(dim, att_type, dropout)
-                                             for _ in range(head)])
-        self.attention_fusion = Attention(dim, att_type, dropout)
-
-    def forward(self, qry, key, val, mask):
-        '''
-        qry, key, val: batch x num x features
-        contexts: batch x num_qry x head x features
-        att_head: batch x num_qry x num_head x num_key
-        att_fusion: batch x num_qry x num_head
-        '''
-        batch, num, features = qry.size()
-        contexts, att_head = [], []
-        for attention in self.attention_head:
-            ctx, att = attention(qry, key, val, mask)
-            contexts.append(ctx)
-            att_head.append(att)
-        att_head = torch.stack(att_head, -2)
-        contexts = torch.stack(contexts, -2).view(-1, self.head, features)
-        context, att_fusion = self.attention_fusion(qry.view(-1, 1, features),
-                                                    contexts, contexts)
-        context = context.view(batch, num, features)
-        att_fusion = att_fusion.view(batch, num, self.head)
-        return context, att_fusion, att_head
-
-
-class MultiHeadAttention(nn.Module):
-    def __init__(self, dim, head, dropout):
+class MultiHeadedAttention(nn.Module):
+    def __init__(self, head, dim, dropout=0.1):
         assert dim % head == 0
-        super(MultiHeadAttention, self).__init__()
         self.head = head
         self.dim = dim
-        self.w_q = BottleLinear(dim, dim, bias=False)
-        self.w_k = BottleLinear(dim, dim, bias=False)
-        self.w_v = BottleLinear(dim, dim, bias=False)
-        self.softmax = nn.Softmax(2)
+        super().__init__()
+        self.linear_key = nn.Linear(dim, dim)
+        self.linear_value = nn.Linear(dim, dim)
+        self.linear_query = nn.Linear(dim, dim)
+        self.sm = nn.Softmax(dim=-1)
         self.dropout = nn.Dropout(dropout)
+        self.final_linear = nn.Linear(dim, dim)
 
-    def forward(self, qry, key, val, mask=None):
-        '''
-        qry, key, val: batch x len x dim
-        att: batch x head x len_q x len_c
-        '''
-        batch, len_q, dim = qry.size()
-        batch_key, len_c, dim_key = key.size()
-        batch_val, len_c_, dim_val = val.size()
-        aeq(batch, batch_key, batch_val)
-        aeq(dim, dim_key, dim_val, self.dim)
-        aeq(len_c, len_c_)
-        dim_head = dim // self.head
+    def forward(self, key, value, query, mask=None):
+        batch, k_len, dim = key.size()
+        q_len = query.size(1)
+        head = self.head
+        dim_head = dim // head
 
-        def shape_projection(x):
-            return x.view(batch, -1, self.head, dim_head) \
-                .transpose(1, 2).contiguous() \
-                .view(batch * self.head, -1, dim_head)
+        def shape(x):
+            return x.view(batch, -1, head, dim_head).transpose(1, 2)
 
-        def unshape_projection(x):
-            return x.view(batch, self.head, -1, dim_head) \
-                    .transpose(1, 2).contiguous() \
-                    .view(batch, -1, dim)
+        def unshape(x):
+            return x.transpose(1, 2).contiguous().view(batch, -1, dim)
 
-        qry = shape_projection(self.w_q(qry))
-        key = shape_projection(self.w_k(key))
-        val = shape_projection(self.w_v(val))
+        # 1) Project key, value, and query.
+        key_up = shape(self.linear_key(key))
+        value_up = shape(self.linear_value(value))
+        query_up = shape(self.linear_query(query))
 
-        score = torch.bmm(qry, key.transpose(1, 2)) / math.sqrt(dim_head)
+        # 2) Calculate and scale scores.
+        query_up = query_up / math.sqrt(dim_head)
+        scores = torch.matmul(query_up, key_up.transpose(2, 3))
         if mask is not None:
-            score = score.view(batch, self.head, len_q, len_c)
-            score.data.masked_fill_(mask, -float('inf'))
-        att = self.softmax(score.view(-1, len_q, len_c))
+            scores.masked_fill_(mask, -1e8)
 
-        out = torch.bmm(self.dropout(att), val)
-        out = self.dropout(unshape_projection(out))
-        att = att.view(batch, self.head, len_q, len_c)
-        return out, att.cpu()
+        # 3) Apply attention dropout and compute context vectors.
+        attn = self.sm(scores)
+        context = unshape(torch.matmul(self.dropout(attn), value_up))
+        out = self.final_linear(context)
+        attn = attn.view(batch, head, q_len, k_len)
+        return out, attn

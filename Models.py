@@ -18,19 +18,19 @@ class ModelBase(nn.Module):
             nn.Embedding(args.num_time, args.time_embed_size),
             nn.Embedding(args.num_loc, args.loc_embed_size)
         ])
-        self.linear_in = BottleLinear(args.input_size, args.hidden_size)
-        self.linear_out = BottleLinear(args.hidden_size, args.output_size)
+        self.linear_in = nn.Linear(args.input_size, args.hidden_size)
+        self.linear_out = nn.Linear(args.hidden_size, args.output_size)
         self.dropout = nn.Dropout(args.dropout)
         mask_adj = get_mask_adj(args.dataset)
-        mask_od = get_mask_od(args.num_loc, args.inp)
-        self.mask = mask_adj | mask_od
+        mask_od = get_mask_od(args.num_loc, args.input_od)
+        self.register_buffer('mask', mask_adj | mask_od)
+        print(mask_adj, mask_od, self.mask)
 
     def forward(self, data_num, data_cat):
         embeds = (self.dropout(embedding(data_cat[:, :, i]))
                   for i, embedding in enumerate(self.embeddings))
         data = torch.cat((data_num, *embeds), -1)
-        hid = self.dropout(F.relu(self.linear_in(data)))
-        return hid
+        return self.dropout(F.relu(self.linear_in(data)))
 
     def get_embeddings(self):
         return np.stack([embedding.weight.data.cpu().numpy()
@@ -47,43 +47,43 @@ class Transformer(ModelBase):
     def __init__(self, args):
         super().__init__(args)
         self.layers = nn.ModuleList([Layers.TransformerLayer(
-            args.hidden_size, args.head, args.dropout
+            args.head, args.hidden_size, args.dropout
         ) for _ in range(args.num_layers)])
 
     def forward(self, data_num, data_cat):
-        hid = super().forward(data_num, data_cat)
+        hidden = super().forward(data_num, data_cat)
         atts = []
         for layer in self.layers:
-            hid, att = layer(hid, self.mask)
+            hidden, att = layer(hidden, self.mask)
             atts.append(att.cpu())
         att = torch.stack(atts, 1) # batch x layer x head x query x context
-        out = self.linear_out(hid)
-        return out, att
+        output = self.linear_out(hidden)
+        return output, att
 
 
 class TransformerGate(ModelBase):
     def __init__(self, args):
         super().__init__(args)
         self.layers = nn.ModuleList([Layers.TransformerGateLayer(
-            args.hidden_size, args.head, args.dropout
+            args.head, args.hidden_size, args.dropout
         ) for _ in range(args.num_layers)])
 
     def forward(self, data_num, data_cat):
-        hid = super().forward(data_num, data_cat)
+        hidden = super().forward(data_num, data_cat)
         atts, gates = [], []
         for layer in self.layers:
-            hid, att, gate = layer(hid, self.mask)
+            hidden, att, gate = layer(hidden, self.mask)
             atts += att,
             gates += gate,
-        out = self.linear_out(hid)
+        output = self.linear_out(hidden)
         att = torch.stack(atts, 1)
         gate = torch.stack(gates, 1)
-        return out, att, gate
+        return output, att, gate
 
 
 class TransformerFusion(TransformerGate):
     def __init__(self, args):
         super().__init__(args)
         self.layers = nn.ModuleList([Layers.TransformerFusionLayer(
-            args.hidden_size, args.head, args.dropout
+            args.head, args.hidden_size, args.dropout
         ) for _ in range(args.num_layers)])
