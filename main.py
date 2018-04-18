@@ -9,10 +9,11 @@ import torch.nn as nn
 from torch.nn.utils import clip_grad_norm
 from torch.autograd import Variable
 
-import Args
-import Models
-from Loss import Loss
-import Utils
+from models import Models
+import utils
+from utils import Args
+from utils.Loss import Loss
+
 
 args = argparse.ArgumentParser()
 Args.add_data(args)
@@ -92,7 +93,7 @@ def train_model(data):
                 mse.backward()
             elif args.loss is 'wape':
                 wape.backward()
-            clip_grad_norm(model.parameters(), args.max_grad_norm)
+            # clip_grad_norm(model.parameters(), args.max_grad_norm)
             optimizer.step()
             iters += 1
     return mse_avg / iters, wape_avg / iters
@@ -136,4 +137,5 @@ loss_test, wape_test, info = eval_model(data_test)
 print(f'Test loss:{loss_test:.4f} wape:{wape_test:.4f}')
 model.cpu()
 torch.save(model, model_path + '.pt')
-pickle.dump(info, open(model_path + '.pkl', 'wb'))
+if info:
+    pickle.dump(info, open(model_path + '.pkl', 'wb'))

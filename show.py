@@ -6,7 +6,7 @@ The main figs are:
 - Map of traffic stations (fine)
 - Traffic continuity, periodicity(tidal, daily, weekly) to frequencies
 - OD relations
-- attention visualization to reveal traffic dynamics
+- traffic dynamics
     - validate attention with real OD distributions
     - multi-head attention
 - traffic flow prediction results
