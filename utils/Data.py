@@ -105,6 +105,12 @@ class Loader:
         return adj
 
 
+class LosSpeed:
+    def __init__(self):
+        pass
+
+
+
 class TrafficFlow:
     def __init__(self, dataset='highway',
                  freq=15, start=360, past=120, future=60):

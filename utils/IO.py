@@ -4,32 +4,13 @@ import pandas as pd
 
 
 def get_rush_hours_bool_index(df, hours=((7, 10), (17, 20)), weekdays=(0, 5)):
-    """
-    Calculates predator of rush hours: 7:00am - 9:59am,  4:00pm-7:59am, Mon-Fri.
-    :param df:
-    :param hours: a tuple of two, (start_hour, end_hour)
-    :param weekdays: a tuple of two, (start_weekday, end_weekday)
-    """
-    # Week day.
     weekday_predate = (df.index.dayofweek >= weekdays[0]) & (df.index.dayofweek < weekdays[1])
-    # Hours.
     hour_predate = (df.index.time >= datetime.time(hours[0][0], 0)) & (df.index.time < datetime.time(hours[0][1], 0))
     hour_predate |= (df.index.time >= datetime.time(hours[1][0], 0)) & (df.index.time < datetime.time(hours[1][1], 0))
-
     return weekday_predate & hour_predate
 
 
 def generate_io_data(data, seq_len, horizon=1, scaler=None):
-    """
-    Generates input, output data which are
-    Args:
-        :param data: tensor
-        :param seq_len: length of the sequence, or timesteps.
-        :param horizon: the horizon of prediction.
-        :param strides:
-        :param scaler:
-        :return  (X, Y) i.e., input, output
-    """
     xs, ys = [], []
     total_seq_len, _ = data.shape
     assert np.ndim(data) == 2
@@ -47,19 +28,6 @@ def generate_io_data(data, seq_len, horizon=1, scaler=None):
 
 def generate_io_data_with_time(df, batch_size, seq_len, horizon, output_type='point', scaler=None,
                                add_time_in_day=True, add_day_in_week=False):
-    """
-
-    :param df:
-    :param batch_size:
-    :param seq_len:
-    :param horizon:
-    :param output_type: point, range, seq2seq
-    :param scaler:
-    :param add_time_in_day:
-    :param add_day_in_week:
-    :return:
-    x, y, both are 3-D tensors with size (epoch_size, batch_size, input_dim).
-    """
     if scaler:
         df = scaler.transform(df)
     num_samples, num_nodes = df.shape
@@ -97,18 +65,6 @@ def generate_io_data_with_time(df, batch_size, seq_len, horizon, output_type='po
 
 def generate_graph_seq2seq_io_data_with_time(df, batch_size, seq_len, horizon, num_nodes, scaler=None,
                                              add_time_in_day=True, add_day_in_week=False):
-    """
-
-    :param df:
-    :param batch_size:
-    :param seq_len:
-    :param horizon:
-    :param scaler:
-    :param add_day_in_week:
-    :return:
-    x, y, both are 5-D tensors with size (epoch_size, batch_size, seq_len, num_sensors, input_dim).
-    Adjacent batches are continuous sequence, i.e., x[i, j, :, :] is before x[i+1, j, :, :]
-    """
     if scaler:
         df = scaler.transform(df)
     num_samples, _ = df.shape
@@ -144,15 +100,6 @@ def round_down(num, divisor):
 
 
 def separate_seasonal_trend_and_residual(df, period, test_ratio=0.2, null_val=0., epsilon=1e-4):
-    """
-
-    :param df:
-    :param period:
-    :param test_ratio: only use training part to calculate the average.
-    :param null_val: indicator of missing values. Assuming null_val
-    :param epsilon:
-    :return:
-    """
     n_sample, n_sensor = df.shape
     n_test = int(round(n_sample * test_ratio))
     n_train = n_sample - n_test
@@ -171,29 +118,6 @@ def separate_seasonal_trend_and_residual(df, period, test_ratio=0.2, null_val=0.
     residual_df[residual_df == null_val] += epsilon
     residual_df[missing_ind] = null_val
     return seasonal_df, residual_df
-
-
-def train_test_split(x, y, test_ratio=0.2, random=False, granularity=1):
-    """
-    This just splits data to training and testing parts. Default 80% train, 20% test
-    Format : data is in compressed sparse row format
-
-    Args:
-        :param x data
-        :param y label
-        :param test_ratio:
-        :param random: whether to randomize the input data.
-        :param granularity:
-
-    """
-    perms = np.arange(0, x.shape[0])
-    if random:
-        perms = np.random.permutation(np.arange(0, x.shape[0]))
-    n_train = round_down(int(round(x.shape[0] * (1 - test_ratio))), granularity)
-    n_test = round_down(x.shape[0] - n_train, granularity)
-    x_train, y_train = x.take(perms[:n_train], axis=0), y.take(perms[:n_train], axis=0)
-    x_test, y_test = x.take(perms[n_train:n_train + n_test], axis=0), y.take(perms[n_train:n_train + n_test], axis=0)
-    return (x_train, y_train), (x_test, y_test)
 
 
 def train_val_test_split_df(df, val_ratio=0.1, test_ratio=0.2):
