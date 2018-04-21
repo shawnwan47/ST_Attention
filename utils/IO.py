@@ -10,59 +10,6 @@ def get_rush_hours_bool_index(df, hours=((7, 10), (17, 20)), weekdays=(0, 5)):
     return weekday_predate & hour_predate
 
 
-def generate_io_data(data, seq_len, horizon=1, scaler=None):
-    xs, ys = [], []
-    total_seq_len, _ = data.shape
-    assert np.ndim(data) == 2
-    if scaler:
-        data = scaler.transform(data)
-    for i in range(0, total_seq_len - horizon - seq_len + 1):
-        x_i = data[i: i + seq_len, :]
-        y_i = data[i + seq_len + horizon - 1, :]
-        xs.append(x_i)
-        ys.append(y_i)
-    xs = np.stack(xs, axis=0)
-    ys = np.stack(ys, axis=0)
-    return xs, ys
-
-
-def generate_io_data_with_time(df, batch_size, seq_len, horizon, output_type='point', scaler=None,
-                               add_time_in_day=True, add_day_in_week=False):
-    if scaler:
-        df = scaler.transform(df)
-    num_samples, num_nodes = df.shape
-    data = df.values
-    batch_len = num_samples // batch_size
-    data_list = [data]
-    if add_time_in_day:
-        time_ind = (df.index.values - df.index.values.astype('datetime64[D]')) / np.timedelta64(1, 'D')
-        data_list.append(time_ind.reshape(-1, 1))
-    if add_day_in_week:
-        day_in_week = np.zeros(shape=(num_samples, 7))
-        day_in_week[np.arange(num_samples), df.index.dayofweek] = 1
-        data_list.append(day_in_week)
-
-    data = np.concatenate(data_list, axis=-1)
-    data = data[:batch_size * batch_len, :].reshape((batch_size, batch_len, -1))
-    xs, ys = [], []
-    for i in range(seq_len, batch_len - horizon + 1):
-        x_i, y_i = None, None
-        if output_type == 'point':
-            x_i = data[:, i - seq_len: i, :].reshape((batch_size, -1))
-            y_i = data[:, i + horizon - 1, :num_nodes].reshape((batch_size, -1))
-        elif output_type == 'range':
-            x_i = data[:, i - seq_len: i, :].reshape((batch_size, -1))
-            y_i = data[:, i: i + horizon, :num_nodes].reshape((batch_size, -1))
-        elif output_type == 'seq2seq':
-            x_i = data[:, i - seq_len: i, :]
-            y_i = data[:, i: i + horizon, :]
-        xs.append(x_i)
-        ys.append(y_i)
-    xs = np.stack(xs, axis=0)
-    ys = np.stack(ys, axis=0)
-    return xs, ys
-
-
 def generate_graph_seq2seq_io_data_with_time(df, batch_size, seq_len, horizon, num_nodes, scaler=None,
                                              add_time_in_day=True, add_day_in_week=False):
     if scaler:
@@ -93,31 +40,6 @@ def generate_graph_seq2seq_io_data_with_time(df, batch_size, seq_len, horizon, n
     x = np.stack(x, axis=0)
     y = np.stack(y, axis=0)
     return x, y
-
-
-def round_down(num, divisor):
-    return num - (num % divisor)
-
-
-def separate_seasonal_trend_and_residual(df, period, test_ratio=0.2, null_val=0., epsilon=1e-4):
-    n_sample, n_sensor = df.shape
-    n_test = int(round(n_sample * test_ratio))
-    n_train = n_sample - n_test
-    seasonal_trend = np.zeros((period, n_sensor), dtype=np.float32)
-    for i in range(period):
-        inds = [j for j in range(i % period, n_train, period)]
-        historical = df.iloc[inds, :]
-        seasonal_trend[i, :] = historical[historical != null_val].mean()
-    n_repeat = (n_sample + period - 1) // period
-    data = np.tile(seasonal_trend, [n_repeat, 1])[:n_sample, :]
-    seasonal_df = pd.DataFrame(data, index=df.index, columns=df.columns)
-    # Records where null value is happening.
-
-    missing_ind = df == null_val
-    residual_df = df - seasonal_df
-    residual_df[residual_df == null_val] += epsilon
-    residual_df[missing_ind] = null_val
-    return seasonal_df, residual_df
 
 
 def train_val_test_split_df(df, val_ratio=0.1, test_ratio=0.2):

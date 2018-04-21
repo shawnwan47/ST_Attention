@@ -6,9 +6,12 @@ import numpy as np
 from sklearn import preprocessing
 
 
-class Loader:
+DATA_PATH = Path('data/dataset')
+
+
+class BeijingLoader:
     def __init__(self, dataset='highway'):
-        self.DATA_PATH = Path('data') / dataset
+        self.path = DATA_PATH / 'Beijing_' + dataset
         self.idx = self._load_idx()
 
     def _load_idx(self):
@@ -21,23 +24,23 @@ class Loader:
         return idx
 
     def _load_flow(self, od='D'):
-        flow = pd.read_csv(self.DATA_PATH / (od + '.csv'),
+        flow = pd.read_csv(self.path / (od + '.csv'),
                            index_col=0, parse_dates=True)
         flow.columns = list(map(int, flow.columns))
         return flow
 
     def load_station_raw(self):
-        return pd.read_csv(self.DATA_PATH / 'STATION.txt', index_col=0)
+        return pd.read_csv(self.path / 'STATION.txt', index_col=0)
 
     def load_station(self):
         station = self.load_station_raw()
         return station.loc[self.idx]
 
     def load_link(self):
-        return np.genfromtxt(self.DATA_PATH / 'LINK.txt', dtype=int)
+        return np.genfromtxt(self.path / 'LINK.txt', dtype=int)
 
     def load_link_raw(self):
-        return np.genfromtxt(self.DATA_PATH / 'LINK_RAW.txt', dtype=int)
+        return np.genfromtxt(self.path / 'LINK_RAW.txt', dtype=int)
 
     def load_flow(self, od='O', freq='5T'):
         flow = self._load_flow(od)
@@ -47,7 +50,7 @@ class Loader:
         return flow[self.idx]
 
     def load_dist(self):
-        filepath = self.DATA_PATH / 'DIST.csv'
+        filepath = self.path / 'DIST.csv'
         if filepath.exists():
             dist = pd.read_csv(filepath, index_col=0)
             dist.columns = [int(col) for col in dist.columns]
@@ -71,7 +74,7 @@ class Loader:
 
     def load_od(self, od='OD', freq='5T'):
         assert od in ['OD', 'DO']
-        ret = pd.read_csv(self.DATA_PATH / (od + '.csv'),
+        ret = pd.read_csv(self.path / (od + '.csv'),
                           index_col=[0, 1, 2],
                           parse_dates=[0],
                           squeeze=True)
@@ -81,7 +84,7 @@ class Loader:
         return ret
 
     def load_od_sum(self):
-        filepath = self.DATA_PATH / 'ODSUM.csv'
+        filepath = self.path / 'ODSUM.csv'
         if filepath.exists():
             ret = pd.read_csv(filepath, index_col=0)
             ret.columns = [int(col) for col in ret.columns]
@@ -105,9 +108,16 @@ class Loader:
         return adj
 
 
-class LosSpeed:
+class LosLoader:
     def __init__(self):
-        pass
+        self.path = DATA_PATH / 'Los_highway'
+        self.df = pd.read_hdf(self.path / 'df.h5')
+        self.sensor_ids, self.sensor_id_to_ind, self.adj_mx = pickle.load(
+            open(self.path / 'adj_mx.pkl', 'rb'))
+
+
+class TimeSeries:
+    def __init__(self, df, freq, start, end, past, future):
 
 
 

@@ -101,7 +101,6 @@ venv.bak/
 /site
 
 # output files
-model/**
 fig/**
 data/**/od.csv
 data/**/do.csv
