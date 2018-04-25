@@ -102,5 +102,6 @@ venv.bak/
 
 # output files
 fig/**
+data/**/*.h5
 data/**/od.csv
 data/**/do.csv
