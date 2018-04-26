@@ -1,3 +1,5 @@
+from constants import MODEL_PATH
+
 def add_data(args):
     # data attribute
     args.add_argument('-dataset', type=str, default='BJ_highway',
@@ -32,7 +34,6 @@ def add_train(args):
     args.add_argument('-epoches', type=int, default=100)
     args.add_argument('-iterations', type=int, default=1)
     args.add_argument('-batch_size', type=int, default=16)
-    args.add_argument('-print_epoches', type=int, default=1)
 
 
 def add_model(args):
@@ -61,5 +62,4 @@ def update(args):
     name += '_hid' + str(args.hidden_size)
     name += '_lay' + str(args.num_layers)
     name += '_head' + str(args.head)
-    name += '_mask' if args.mask else ''
-    args.path = args.dataset + '/' + name
+    args.path = MODEL_PATH + args.dataset + '/' + name

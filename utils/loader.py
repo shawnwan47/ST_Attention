@@ -112,7 +112,7 @@ class LALoader:
     def __init__(self):
         self._path = DATA_PATH / 'LA_highway'
         self._node = self._path / 'graph_sensor_locations.csv'
-        self._ts = self._path / 'df.h5'
+        self._ts = self._path / 'df_highway_2012_4mon_sample.h5'
         self._link = self._path / 'distances_la_2012.csv'
         self._ids, self.id_to_idx, self.adj = pickle.load(
             open(self._path / 'adj_mx.pkl', 'rb'))
