@@ -4,7 +4,7 @@ from torch.nn import functional as F
 from utils.constants import eps
 
 
-class Statistics(object):
+class Error(object):
     """
     Accumulator for loss statistics.
     Calculating mae, rmse, mape, wape.
@@ -15,35 +15,21 @@ class Statistics(object):
         self.mape = mape
         self.wape = wape
         self.count = count
-        self.start_time = time.time()
+
+    def __repr__(self):
+        return 'mae:{mae:.4f} rmse:{rmse:.4f} mape:{mape:.4f} wape:{wape:.4f}'.format(
+            mae=self.mae / self.count,
+            rmse=self.rmse / self.count,
+            mape=self.mape / self.count,
+            wape=self.wape / self.count
+        )
 
     def update(self, stat):
-        self.loss += stat.loss
-        self.n_words += stat.n_words
-        self.n_correct += stat.n_correct
-
-    def accuracy(self):
-        return 100 * (self.n_correct / self.n_words)
-
-    def xent(self):
-        return self.loss / self.n_words
-
-    def ppl(self):
-        return math.exp(min(self.loss / self.n_words, 100))
-
-    def elapsed_time(self):
-        return time.time() - self.start_time
-
-    def output(self, epoch, batch, n_batches, start):
-        t = self.elapsed_time()
-        print(("Epoch %2d, %5d/%5d; acc: %6.2f; ppl: %6.2f; xent: %6.2f; " +
-               "%3.0f src tok/s; %3.0f tgt tok/s; %6.0f s elapsed") %
-              (epoch, batch,  n_batches,
-               self.accuracy(),
-               self.ppl(),
-               self.xent(),
-               time.time() - start))
-        sys.stdout.flush()
+        self.mae += stat.mae
+        self.rmse += stat.rmse
+        self.mape += stat.mape
+        self.wape += stat.wape
+        self.count += stat.count
 
 
 class Rescaler(nn.Module):
@@ -60,7 +46,7 @@ class Loss(nn.Module):
     def __init__(self, loss, mean, scale):
         assert loss in ('mae', 'rmse')
         super().__init__()
-        self._loss = loss
+        self.loss = loss
         self.rescaler = Rescaler(mean, scale)
 
 
@@ -71,8 +57,8 @@ class Loss(nn.Module):
         rmse = self._compute_rmse(input, target)
         mape = self._compute_mape(input, target)
         wape = self._compute_wape(input, target)
-        error = Error(mae, rmse, mape, wape)
-        return getattr(error, self._loss), error
+        error = Error(mae, rmse, mape, wape, 1)
+        return error
 
     @staticmethod
     def _compute_mae(input, target):

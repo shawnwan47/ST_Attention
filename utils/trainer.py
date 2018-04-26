@@ -13,7 +13,7 @@ class Trainer:
 
     def train(self, dataloader):
         self.model.train()
-        error_avg = None
+        error_total = utils.loss.Error()
         for _ in range(self.iterations):
             for data_num, data_cat, target in dataloader:
                 if self.cuda:
@@ -23,30 +23,35 @@ class Trainer:
                 output = model(data_num, data_cat)
                 if isinstance(output, tuple):
                     output = output[0]
-                loss = self.loss(output, target)
+                error = self.loss(output, target)
+                error_total.update(error)
+                loss = getattr(error, self.loss.loss)
                 # optimization
                 optimizer.zero_grad()
                 loss.backward()
                 clip_grad_norm(self.model.parameters(), self.max_grad_norm)
                 optimizer.step()
-        return mse_avg / iters, wape_avg / iters
+        return error_total
 
 
     def eval(self, dataloader):
         self.model.eval()
-        mse_avg = wape_avg = iters = 0
+        error_total = Error()
         infos = []
         for data_num, data_cat, target in dataloader:
             output = self.model(data_num, data_cat)
-            if type(output) is tuple:
+            if isinstance(output, tuple):
                 output, more = output[0], output[1:]
                 infos.append(more)
-            mse, wape = loss(output, target)
-            mse_avg += mse.data[0]
-            wape_avg += wape.data[0]
-            iters += 1
+            error = loss(output, target)
+            error_total.update(error)
         if infos:
-            infos = [torch.cat(info, 0).cpu().data.numpy() for info in zip(*infos)]
-        return mse_avg / iters, wape_avg / iters, infos
+            infos = [torch.cat(info, 0).cpu().data for info in zip(*infos)]
+        return error_total, infos
 
-    def run(self, data_train, data_valid, data_test):
+    def run_epoch(self, epoch, data_train, data_valid, data_test):
+        error_train = self.train(data_train)
+        error_valid, _ = self.eval(data_valid)
+        error_test, infos = self.eval(data_test)
+        print(epoch, error_train, error_valid, err_test, sep='\t')
+        self.scheduler.step(loss_valid)

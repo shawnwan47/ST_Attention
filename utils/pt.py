@@ -48,13 +48,6 @@ def get_dataset(dataset, freq=15, start=6, end=23, past=12, future=12,
     return data_train, data_valid, data_test, mean, scale, adj
 
 
-def aeq(*args):
-    arguments = (arg for arg in args)
-    first = next(arguments)
-    assert all(arg == first for arg in arguments), \
-        "Not all arguments have the same value: " + str(args)
-
-
 def torch2npsave(filename, data):
     def _var2np(x):
         return x.data.numpy()

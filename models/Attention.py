@@ -96,3 +96,48 @@ class MultiHeadedAttention(nn.Module):
         out = self.final_linear(context)
         attn = attn.view(batch, head, q_len, k_len)
         return out, attn
+
+class Transformer(ModelBase):
+    def __init__(self, args):
+        super().__init__(args)
+        self.layers = nn.ModuleList([Layers.TransformerLayer(
+            args.head, args.hidden_size, args.dropout
+        ) for _ in range(args.num_layers)])
+
+    def forward(self, data_num, data_cat):
+        hidden = super().forward(data_num, data_cat)
+        atts = []
+        for layer in self.layers:
+            hidden, att = layer(hidden, self.mask)
+            atts.append(att.cpu())
+        att = torch.stack(atts, 1) # batch x layer x head x query x context
+        output = self.linear_out(hidden)
+        return output, att
+
+
+class TransformerGate(ModelBase):
+    def __init__(self, args):
+        super().__init__(args)
+        self.layers = nn.ModuleList([Layers.TransformerGateLayer(
+            args.head, args.hidden_size, args.dropout
+        ) for _ in range(args.num_layers)])
+
+    def forward(self, data_num, data_cat):
+        hidden = super().forward(data_num, data_cat)
+        atts, gates = [], []
+        for layer in self.layers:
+            hidden, att, gate = layer(hidden, self.mask)
+            atts += att,
+            gates += gate,
+        output = self.linear_out(hidden)
+        att = torch.stack(atts, 1)
+        gate = torch.stack(gates, 1)
+        return output, att, gate
+
+
+class TransformerFusion(TransformerGate):
+    def __init__(self, args):
+        super().__init__(args)
+        self.layers = nn.ModuleList([Layers.TransformerFusionLayer(
+            args.head, args.hidden_size, args.dropout
+        ) for _ in range(args.num_layers)])

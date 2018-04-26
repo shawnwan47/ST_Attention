@@ -46,12 +46,12 @@ data_train, data_valid, data_test, mean, scale, adj = utils.pt.get_dataset(
 if args.test or args.retrain:
     model = torch.load(args.path + '.pt')
 else:
-    model = getattr(Models, args.model)(args)
+    model = model.Models.build_model(args)
 if args.cuda:
     model.cuda()
 
 # LOSS & OPTIM
-loss = utils.loss.Loss(mean, scale)
+loss = utils.loss.Loss(args.loss, mean, scale)
 
 if args.optim is 'SGD':
     optimizer = optim.SGD(model.parameters(),
@@ -67,19 +67,12 @@ trainer = utils.trainer.Trainer()
 
 if not args.test:
     for epoch in range(args.epoches):
-        loss_train, wape_train = train_model(data_train)
-        loss_valid, wape_valid, _ = eval_model(data_valid)
-
-        print(f'{epoch}\t'
-              f'loss:{loss_train:.4f} {loss_valid:.4f}\t'
-              f'wape:{wape_train:.4f} {wape_valid:.4f}')
-
-        scheduler.step(loss_valid)
-        if optimizer.param_groups[0]['lr'] < args.min_lr:
+        trainer.run_epoch(data_train, data_valid, data_test)
+        if trainer.optimizer.param_groups[0]['lr'] < args.min_lr:
             break
 
-loss_test, wape_test, info = eval_model(data_test)
-print(f'Test loss:{loss_test:.4f} wape:{wape_test:.4f}')
+error, info = trainer.eval(data_test)
+print(f'Test\t{error}')
 model.cpu()
 torch.save(model, args.path + '.pt')
 if info:
