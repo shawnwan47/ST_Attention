@@ -4,26 +4,22 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from Utils import aeq
-from UtilClass import *
+from utils.ttils import aeq
 
 
-class Attention(nn.Module):
+class GlobalAttention(nn.Module):
     def __init__(self, dim, att_type, dropout=0.1):
-        super(Attention, self).__init__()
-        assert att_type in ['dot', 'add', 'general', 'mlp']
+        super().__init__()
+        assert att_type in ['dot', 'general', 'mlp']
         self.dropout = nn.Dropout(dropout)
         self.softmax = nn.Softmax(-1)
         self.att_type = att_type
-        if att_type == 'add':
-            self.map_q = BottleLinear(dim, 1, bias=False)
-            self.map_k = BottleLinear(dim, 1, bias=False)
         elif att_type == 'mlp':
-            self.map_q = BottleLinear(dim, dim, bias=False)
-            self.map_k = BottleLinear(dim, dim, bias=False)
-            self.map_qk = BottleLinear(dim, 1, bias=False)
+            self.map_q = nn.Linear(dim, dim)
+            self.map_k = nn.Linear(dim, dim)
+            self.map_qk = nn.Linear(dim, 1)
         elif att_type == 'general':
-            self.map_qk = BottleLinear(dim, dim, bias=False)
+            self.map_qk = nn.Linear(dim, dim, bias=False)
 
     def forward(self, qry, key, val, mask=None):
         '''
@@ -48,14 +44,12 @@ class Attention(nn.Module):
         else:
             sc1 = self.map_q(qry).unsqueeze(2).expand(batch, len_q, len_k, -1)
             sc2 = self.map_k(key).unsqueeze(1).expand(batch, len_q, len_k, -1)
-            score = sc1 + sc2
-            if self.att_type == 'mlp':
-                score = self.map_qk(F.relu(self.dropout(qry)))
+            score = self.map_qk(F.relu(self.dropout(sc1 + sc2)))
         return score.view(batch, len_q, len_k)
 
 
 class MultiHeadedAttention(nn.Module):
-    def __init__(self, head, dim, dropout=0.1):
+    def __init__(self, head, dim, dropout=0):
         assert dim % head == 0
         self.head = head
         self.dim = dim

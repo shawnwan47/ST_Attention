@@ -43,10 +43,9 @@ data_train, data_valid, data_test, mean, scale, adj = utils.pt.get_dataset(
 )
 
 # MODEL
+model = model.Models.build_model(args)
 if args.test or args.retrain:
-    model = torch.load(args.path + '.pt')
-else:
-    model = model.Models.build_model(args)
+    model.load_state_dict(torch.load(args.path + '.pt'))
 if args.cuda:
     model.cuda()
 
@@ -60,10 +59,12 @@ if args.optim is 'SGD':
                           nesterov=True)
 else:
     optimizer = optim.Adam(model.parameters(), weight_decay=args.weight_decay)
+
 scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True)
 
 # TRAINER
-trainer = utils.trainer.Trainer()
+trainer = utils.trainer.Trainer(model, loss, optimizer, scheduler,
+                                args.max_grad_norm, args.cuda)
 
 if not args.test:
     for epoch in range(args.epoches):
@@ -73,7 +74,6 @@ if not args.test:
 
 error, info = trainer.eval(data_test)
 print(f'Test\t{error}')
-model.cpu()
-torch.save(model, args.path + '.pt')
+torch.save(model.state_dict(), args.path + '.pt')
 if info:
     pickle.dump(info, open(args.path + '.pkl', 'wb'))
