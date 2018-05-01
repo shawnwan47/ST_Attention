@@ -1,57 +1,52 @@
 from torch.nn.utils import clip_grad_norm
-from utils.loss import Error
+from utils.Loss import Error
 
 
 class Trainer:
-    def __init__(self, model, loss, optimizer, scheduler, max_grad_norm, cuda):
+    def __init__(self, model, loss, optimizer, scheduler,
+                 iters, max_grad_norm, cuda):
         self.model = model
         self.loss = loss
         self.optimizer = optimizer
         self.scheduler = scheduler
-        self.max_grad_norm = max_grad_norm
-        self.cuda = cuda
+        self._max_grad_norm = max_grad_norm
+        self._iters = iters
+        self._cuda = cuda
+        self._epoch = 1
 
-    def train(self, dataloader):
-        self.model.train()
-        error_total = utils.loss.Error()
-        for _ in range(self.iterations):
+    def eval(self, dataloader, train=False):
+        if train:
+            self.model.train()
+        else:
+            self.model.eval()
+        error_total = Error()
+        infos = []
+        for _ in range(self._iters):
             for data_num, data_cat, target in dataloader:
-                if self.cuda:
+                if self._cuda:
                     data_num = data_num.cuda()
                     data_cat = data_cat.cuda()
                     target = target.cuda()
-                output = model(data_num, data_cat)
+                output = self.model(data_num, data_cat)
                 if isinstance(output, tuple):
-                    output = output[0]
+                    output, info = output[0], output[1:]
+                    infos.append(info)
                 error = self.loss(output, target)
                 error_total.update(error)
                 loss = getattr(error, self.loss.loss)
                 # optimization
                 optimizer.zero_grad()
                 loss.backward()
-                clip_grad_norm(self.model.parameters(), self.max_grad_norm)
+                clip_grad_norm(self.model.parameters(), self._max_grad_norm)
                 optimizer.step()
-        return error_total
-
-
-    def eval(self, dataloader):
-        self.model.eval()
-        error_total = Error()
-        infos = []
-        for data_num, data_cat, target in dataloader:
-            output = self.model(data_num, data_cat)
-            if isinstance(output, tuple):
-                output, more = output[0], output[1:]
-                infos.append(more)
-            error = loss(output, target)
-            error_total.update(error)
         if infos:
-            infos = [torch.cat(info, 0).cpu().data for info in zip(*infos)]
+            infos = [torch.cat(info) for info in zip(*infos)]
         return error_total, infos
 
-    def run_epoch(self, epoch, data_train, data_valid, data_test):
-        error_train = self.train(data_train)
+    def run_epoch(self, data_train, data_valid, data_test):
+        error_train, _ = self.eval(data_train, True)
         error_valid, _ = self.eval(data_valid)
         error_test, infos = self.eval(data_test)
-        print(epoch, error_train, error_valid, err_test, sep='\t')
+        print(self._epoch, error_train, error_valid, err_test, sep='\t')
         self.scheduler.step(loss_valid)
+        self._epoch += 1

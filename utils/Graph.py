@@ -3,7 +3,16 @@ import numpy as np
 import scipy.sparse as sp
 
 from scipy.sparse import linalg
-from lib.tf_utils import sparse_matrix_to_tf_sparse_tensor
+
+def floyd(adj):
+    idx = adj.index
+    for k in idx:
+        for i in idx:
+            for j in idx:
+                tmp = adj.loc[i, k] + adj.loc[k, j]
+                if adj.loc[i, j] > tmp:
+                    adj.loc[i, j] = tmp
+    return adj
 
 
 def calculate_normalized_laplacian(adj):

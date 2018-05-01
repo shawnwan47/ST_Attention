@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from utils.ttils import aeq
+from utils.utils import aeq
 
 
 class GlobalAttention(nn.Module):
@@ -14,12 +14,12 @@ class GlobalAttention(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.softmax = nn.Softmax(-1)
         self.att_type = att_type
-        elif att_type == 'mlp':
+        if att_type == 'mlp':
             self.map_q = nn.Linear(dim, dim)
             self.map_k = nn.Linear(dim, dim)
             self.map_qk = nn.Linear(dim, 1)
         elif att_type == 'general':
-            self.map_qk = nn.Linear(dim, dim, bias=False)
+            self.map_k = nn.Linear(dim, dim, bias=False)
 
     def forward(self, qry, key, val, mask=None):
         '''
@@ -30,7 +30,7 @@ class GlobalAttention(nn.Module):
         if mask is not None:
             score.data.masked_fill_(mask, -float('inf'))
         att = self.softmax(score)
-        return torch.bmm(self.dropout(att), val), att.cpu()
+        return torch.bmm(self.dropout(att), val), att
 
     def score(self, qry, key):
         batch, len_q, dim = qry.size()
@@ -39,12 +39,12 @@ class GlobalAttention(nn.Module):
         aeq(dim, dim_)
         if self.att_type in ['dot', 'general']:
             if self.att_type == 'general':
-                key = self.relu(self.map_qk(key))
+                key = self.map_k(key)
             score = torch.bmm(qry, key.transpose(1, 2)) / math.sqrt(dim)
         else:
             sc1 = self.map_q(qry).unsqueeze(2).expand(batch, len_q, len_k, -1)
             sc2 = self.map_k(key).unsqueeze(1).expand(batch, len_q, len_k, -1)
-            score = self.map_qk(F.relu(self.dropout(sc1 + sc2)))
+            score = self.map_qk(F.tanh(self.dropout(sc1 + sc2)))
         return score.view(batch, len_q, len_k)
 
 
@@ -90,48 +90,3 @@ class MultiHeadedAttention(nn.Module):
         out = self.final_linear(context)
         attn = attn.view(batch, head, q_len, k_len)
         return out, attn
-
-class Transformer(ModelBase):
-    def __init__(self, args):
-        super().__init__(args)
-        self.layers = nn.ModuleList([Layers.TransformerLayer(
-            args.head, args.hidden_size, args.dropout
-        ) for _ in range(args.num_layers)])
-
-    def forward(self, data_num, data_cat):
-        hidden = super().forward(data_num, data_cat)
-        atts = []
-        for layer in self.layers:
-            hidden, att = layer(hidden, self.mask)
-            atts.append(att.cpu())
-        att = torch.stack(atts, 1) # batch x layer x head x query x context
-        output = self.linear_out(hidden)
-        return output, att
-
-
-class TransformerGate(ModelBase):
-    def __init__(self, args):
-        super().__init__(args)
-        self.layers = nn.ModuleList([Layers.TransformerGateLayer(
-            args.head, args.hidden_size, args.dropout
-        ) for _ in range(args.num_layers)])
-
-    def forward(self, data_num, data_cat):
-        hidden = super().forward(data_num, data_cat)
-        atts, gates = [], []
-        for layer in self.layers:
-            hidden, att, gate = layer(hidden, self.mask)
-            atts += att,
-            gates += gate,
-        output = self.linear_out(hidden)
-        att = torch.stack(atts, 1)
-        gate = torch.stack(gates, 1)
-        return output, att, gate
-
-
-class TransformerFusion(TransformerGate):
-    def __init__(self, args):
-        super().__init__(args)
-        self.layers = nn.ModuleList([Layers.TransformerFusionLayer(
-            args.head, args.hidden_size, args.dropout
-        ) for _ in range(args.num_layers)])

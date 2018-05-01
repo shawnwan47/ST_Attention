@@ -1,7 +1,7 @@
 import sys
 import torch.nn as nn
 from torch.nn import functional as F
-from utils.constants import eps
+from utils.constants import EPS
 
 
 class Error(object):
@@ -52,13 +52,17 @@ class Loss(nn.Module):
 
     def forward(self, input, target):
         input = self.rescaler(input)
-        target = self.rescaler(target)
+        input, target = self.mask(input, target)
         mae = self._compute_mae(input, target)
         rmse = self._compute_rmse(input, target)
         mape = self._compute_mape(input, target)
         wape = self._compute_wape(input, target)
-        error = Error(mae, rmse, mape, wape, 1)
-        return error
+        return Error(mae, rmse, mape, wape, 1)
+
+    @staticmethod
+    def mask(input, target):
+        mask = ~target.isnan(target)
+        return input.masked_select(mask), target.masked_select(mask)
 
     @staticmethod
     def _compute_mae(input, target):
@@ -70,7 +74,7 @@ class Loss(nn.Module):
 
     @staticmethod
     def _compute_mape(input, target):
-        return ((input - target).abs() / (target + eps)).mean()
+        return ((input - target).abs() / (target + EPS)).mean()
 
     @staticmethod
     def _compute_wape(input, target):

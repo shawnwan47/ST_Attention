@@ -6,16 +6,21 @@ import numpy as np
 import torch
 import torch.optim as optim
 
-from models import Models
 import utils
+from utils import config
+from utils import pt_utils
+from utils.Loss import Loss
+from utils.Trainer import Trainer
+
+from models import Models
 
 
 args = argparse.ArgumentParser()
-utils.config.add_data(args)
-utils.config.add_model(args)
-utils.config.add_train(args)
+config.add_data(args)
+config.add_model(args)
+config.add_train(args)
 args = args.parse_args()
-utils.config.update(args)
+config.update(args)
 print(args)
 
 # CUDA
@@ -33,24 +38,24 @@ else:
     print('Using CPU')
 
 # DATA
-data_train, data_valid, data_test, mean, scale, adj = utils.pt.get_dataset(
+data_train, data_valid, data_test, mean, std, adj = pt_utils.get_dataset(
     dataset=args.dataset,
     freq=args.freq,
-    start=args.start,
-    end=args.end,
-    batch_size=args.batch_size,
+    past=args.past,
+    future=args.future,
+    bsz=args.bsz,
     cuda=args.cuda
 )
 
 # MODEL
-model = model.Models.build_model(args)
+model = Models.build_model(args)
 if args.test or args.retrain:
     model.load_state_dict(torch.load(args.path + '.pt'))
 if args.cuda:
     model.cuda()
 
 # LOSS & OPTIM
-loss = utils.loss.Loss(args.loss, mean, scale)
+loss = Loss(args.loss, mean, std)
 
 if args.optim is 'SGD':
     optimizer = optim.SGD(model.parameters(),
@@ -63,13 +68,15 @@ else:
 scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True)
 
 # TRAINER
-trainer = utils.trainer.Trainer(model, loss, optimizer, scheduler,
-                                args.max_grad_norm, args.cuda)
+trainer = Trainer(model, loss, optimizer, scheduler,
+                  max_grad_norm=args.max_grad_norm,
+                  iters=args.iters,
+                  cuda=args.cuda)
 
 if not args.test:
     for epoch in range(args.epoches):
         trainer.run_epoch(data_train, data_valid, data_test)
-        if trainer.optimizer.param_groups[0]['lr'] < args.min_lr:
+        if optimizer.param_groups[0]['lr'] < args.min_lr:
             break
 
 error, info = trainer.eval(data_test)

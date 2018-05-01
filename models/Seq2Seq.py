@@ -28,14 +28,14 @@ class Seq2SeqRNN(Seq2Seq):
         hidden = self.encoder.initHidden(input_num.size(0))
         enc_output, hidden = self.encoder(enc_input, hidden)
         # decoding
-        dec_output = input_num[:, self.enc_len - 1]
+        dec_output = input_num[:, [self.enc_len - 1]]
         output = []
         for i in range(self.dec_len):
             if random.random() < teach:
                 dec_input_num = dec_output.detach()
             else:
-                dec_input_num = input_num[:, self.enc_len + i - 1]
-            dec_input = torch.cat(dec_input_num, embedded[:, i], -1)
+                dec_input_num = input_num[:, [self.enc_len + i - 1]]
+            dec_input = torch.cat(dec_input_num, embedded[:, [i]], -1)
             dec_output, hidden = self.decoder(dec_input, hidden)
             output.append(dec_output)
         return torch.cat(output, -1)
@@ -48,14 +48,14 @@ class Seq2SeqRNNAttn(Seq2Seq):
         hidden = self.encoder.initHidden(input_num.size(0))
         enc_output, hidden = self.encoder(enc_input, hidden)
         # decoding
-        de_output = input_num[:, self.enc_len - 1]
+        de_output = input_num[:, [self.enc_len - 1]]
         output, attn = [], []
         for i in range(self.dec_len):
             if random.random() < teach:
                 dec_input_num = dec_output.detach()
             else:
-                dec_input_num = input_num[:, self.enc_len + i - 1]
-            dec_input = torch.cat(dec_input_num, embedded[:, i], -1)
+                dec_input_num = input_num[:, [self.enc_len + i - 1]]
+            dec_input = torch.cat(dec_input_num, embedded[:, [i]], -1)
             dec_output, hidden, attention = self.decoder(dec_input, hidden, enc_output)
             output.append(dec_output)
             attn.append(attention)
@@ -69,14 +69,14 @@ class Seq2SeqAttn(Seq2Seq):
         hidden = self.encoder.initHidden(input_num.size(0))
         enc_output, hidden = self.encoder(enc_input, hidden)
         # decoding
-        de_output = input_num[:, self.enc_len - 1]
+        de_output = input_num[:, [self.enc_len - 1]]
         output, attn = [], []
         for i in range(self.dec_len):
             if random.random() < teach:
                 dec_input_num = dec_output.detach()
             else:
-                dec_input_num = input_num[:, self.enc_len + i - 1]
-            dec_input = torch.cat(dec_input_num, embedded[:, i], -1)
+                dec_input_num = input_num[:, [self.enc_len + i - 1]]
+            dec_input = torch.cat(dec_input_num, embedded[:, [i]], -1)
             dec_output, hidden, attention = self.decoder(dec_input, hidden, enc_output)
             output.append(dec_output)
             attn.append(attention)
