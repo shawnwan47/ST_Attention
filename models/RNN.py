@@ -28,7 +28,6 @@ class RNN(nn.Module):
             return weight.new_zeros(self.nlayers, bsz, self.nhid)
 
     def forward(self, input, hidden):
-        print(input.size(), hidden.size())
         return self.rnn(input, hidden)
 
 

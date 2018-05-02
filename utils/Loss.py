@@ -1,4 +1,5 @@
 import sys
+import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from utils.constants import EPS
@@ -32,26 +33,16 @@ class Error(object):
         self.count += stat.count
 
 
-class Rescaler(nn.Module):
-    def __init__(self, mean, scale):
-        assert len(mean) == len(scale)
-        super().__init__()
-        self.mean, self.scale = mean, scale
-
-    def forward(self, input):
-        return (input * scale) + mean
-
-
 class Loss(nn.Module):
-    def __init__(self, loss, mean, scale):
+    def __init__(self, loss, mean, std):
         assert loss in ('mae', 'rmse')
         super().__init__()
         self.loss = loss
-        self.rescaler = Rescaler(mean, scale)
+        self.mean, self.std = mean, std
 
 
     def forward(self, input, target):
-        input = self.rescaler(input)
+        input = self.rescale(input)
         input, target = self.mask(input, target)
         mae = self._compute_mae(input, target)
         rmse = self._compute_rmse(input, target)
@@ -59,9 +50,12 @@ class Loss(nn.Module):
         wape = self._compute_wape(input, target)
         return Error(mae, rmse, mape, wape, 1)
 
+    def rescale(self, input):
+        return (input * (self.std + EPS)) + self.mean
+
     @staticmethod
     def mask(input, target):
-        mask = ~target.isnan(target)
+        mask = ~torch.isnan(target)
         return input.masked_select(mask), target.masked_select(mask)
 
     @staticmethod

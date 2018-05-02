@@ -15,7 +15,6 @@ class Seq2Seq(nn.Module):
         self.dec_len = dec_len
 
     def forward(self, input_num, input_cat):
-        assert input_num.size(1) == self.enc_len + self.dec_len - 1
         embedded = self.embedding(input_cat)
         enc_input = torch.cat((input_num[:, :self.enc_len], embedded[:, :self.enc_len]), -1)
         return enc_input, embedded
@@ -32,13 +31,13 @@ class Seq2SeqRNN(Seq2Seq):
         output = []
         for i in range(self.dec_len):
             if random.random() < teach:
-                dec_input_num = dec_output.detach()
-            else:
                 dec_input_num = input_num[:, [self.enc_len + i - 1]]
-            dec_input = torch.cat(dec_input_num, embedded[:, [i]], -1)
+            else:
+                dec_input_num = dec_output.detach()
+            dec_input = torch.cat((dec_input_num, embedded[:, [i]]), -1)
             dec_output, hidden = self.decoder(dec_input, hidden)
             output.append(dec_output)
-        return torch.cat(output, -1)
+        return torch.cat(output, 1)
 
 
 class Seq2SeqRNNAttn(Seq2Seq):
