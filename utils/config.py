@@ -2,8 +2,8 @@ from utils.constants import MODEL_PATH
 
 def add_data(args):
     # data attribute
-    args.add_argument('-dataset', type=str, default='LA_highway',
-                      choices=['LA_highway', 'BJ_highway', 'BJ_metro'])
+    args.add_argument('-dataset', type=str, default='LA',
+                      choices=['LA', 'BJ_highway', 'BJ_metro'])
 
     args.add_argument('-freq', type=int, default=5)
     args.add_argument('-past', type=int, default=12)
@@ -40,7 +40,8 @@ def add_model(args):
     # framework and model
     args.add_argument('-framework', type=str, default='seq2seq',
                       choices=['seq2seq', 'tensor2tensor'])
-    args.add_argument('-model', type=str, default='RNN')
+    args.add_argument('-model', type=str, default='RNN',
+                      choices=['RNN', 'RNNAttn', 'Transformer'])
     # model parameters
     args.add_argument('-nin', type=int)
     args.add_argument('-nout', type=int)
@@ -72,7 +73,7 @@ def update(args):
         args.nodes = 438
     elif args.dataset == 'BJ_highway':
         args.nodes = 266
-    elif args.dataset == 'LA_highway':
+    elif args.dataset == 'LA':
         args.nodes = 207
 
     # model io
@@ -88,5 +89,6 @@ def update(args):
     name = args.model
     name += '_hid' + str(args.nhid)
     name += '_lay' + str(args.nlayers)
-    name += '_head' + str(args.head)
+    if args.model == 'Transformer':
+        name += '_head' + str(args.head)
     args.path = MODEL_PATH + args.dataset + '/' + name
