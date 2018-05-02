@@ -25,36 +25,68 @@ class Error(object):
             wape=self.wape / self.count
         )
 
-    def update(self, stat):
-        self.mae += stat.mae
-        self.rmse += stat.rmse
-        self.mape += stat.mape
-        self.wape += stat.wape
-        self.count += stat.count
+    def update(self, error):
+        self.mae += error.mae
+        self.rmse += error.rmse
+        self.mape += error.mape
+        self.wape += error.wape
+        self.count += error.count
+
+
+class MultiError(object):
+    def __init__(self, errors):
+        self.errors = errors
+
+    def update(self, errors):
+        for error1, error2 in zip(self.errors, errors):
+            error1.update(error2)
+
+    def __repr__(self):
+        return '\t'.join(self.errors)
 
 
 class Loss(nn.Module):
-    def __init__(self, loss, mean, std):
+    def __init__(self, loss, futures, mean, std):
         assert loss in ('mae', 'rmse')
         super().__init__()
         self.loss = loss
+        self.futures = futures
         self.mean, self.std = mean, std
 
-
     def forward(self, input, target):
+        '''
+        input, target: batch x len x num
+        loss: masked reduced loss
+        errors: multi-step errors
+        '''
         input = self.rescale(input)
-        input, target = self.mask(input, target)
+        loss = getattr(self._compute_error(input, target), self.loss)
+        errors = [self._compute_error(input[:, i], target[:, i])
+                  for i in self.futures]
+        return loss, errors
+
+    def rescale(self, input):
+        return (input * (self.std + EPS)) + self.mean
+
+    @staticmethod
+    def _compute_loss(input, target):
+        input, target = self._mask_select(input, target)
+        if self.loss == 'mae':
+            return self._compute_mae(input, target)
+        elif self.loss == 'rmse':
+            return self._compute_rmse(input, target)
+
+    @staticmethod
+    def _compute_error(input, target):
+        input, target = self._mask_select(input, target)
         mae = self._compute_mae(input, target)
         rmse = self._compute_rmse(input, target)
         mape = self._compute_mape(input, target)
         wape = self._compute_wape(input, target)
         return Error(mae, rmse, mape, wape, 1)
 
-    def rescale(self, input):
-        return (input * (self.std + EPS)) + self.mean
-
     @staticmethod
-    def mask(input, target):
+    def _mask_select(input, target):
         mask = ~torch.isnan(target)
         return input.masked_select(mask), target.masked_select(mask)
 

@@ -55,7 +55,7 @@ if args.cuda:
     model.cuda()
 
 # LOSS & OPTIM
-loss = Loss(args.loss, mean, std)
+loss = Loss(args.loss, args.futures, mean, std)
 
 if args.optim is 'SGD':
     optimizer = optim.SGD(model.parameters(),

@@ -5,13 +5,14 @@ import pandas as pd
 import numpy as np
 from geopy.distance import geodesic
 
-from utils.constants import DATA_PATH
+from utils.constants import DATA_PATH, BJ_HIGHWAY_PATH, BJ_METRO_PATH, LA_PATH
 from utils.graph import floyd
 
 
 class BJLoader:
     def __init__(self, dataset='highway'):
-        self._path = Path(DATA_PATH) / ('BJ_' + dataset)
+        self._path = Path(DATA_PATH)
+        self._path /= BJ_HIGHWAY_PATH if dataset == 'highway' else BJ_METRO_PATH
         self._node = self._path / 'STATION.txt'
         self._link = self._path / 'LINK.txt'
         self._link_raw = self._path / 'LINK_RAW.txt'
@@ -119,7 +120,7 @@ class BJLoader:
 
 class LALoader:
     def __init__(self):
-        self._path = Path(DATA_PATH) / 'LA_highway'
+        self._path = Path(DATA_PATH) / LA_PATH
         self._ids, self.id_to_idx, self.adj = pickle.load(
             open(self._path / 'adj_mx.pkl', 'rb'))
         self._node = self._path / 'graph_sensor_locations.csv'

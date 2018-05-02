@@ -6,8 +6,10 @@ def add_data(args):
                       choices=['LA', 'BJ_highway', 'BJ_metro'])
 
     args.add_argument('-freq', type=int, default=5)
-    args.add_argument('-past', type=int, default=12)
-    args.add_argument('-future', type=int, default=12)
+    args.add_argument('-past', type=int, default=60)
+    args.add_argument('-future', type=int, default=60)
+
+    args.add_argument('-futures', nargs='+', default=[15, 30, 60])
 
     args.add_argument('-nodes', type=int)
 
@@ -75,6 +77,10 @@ def update(args):
         args.nodes = 266
     elif args.dataset == 'LA':
         args.nodes = 207
+
+    args.past //= args.freq
+    args.future //= args.freq
+    args.futures = [t // args.freq - 1 for t in args.futures]
 
     # model io
     embed_size = args.day_size + args.time_size

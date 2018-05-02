@@ -1,4 +1,5 @@
 import numpy as np
+import scipy as sp
 import torch
 from torch.utils.data import Dataset, DataLoader
 
@@ -19,15 +20,7 @@ class TrafficDataset(Dataset):
         return self.target.size(0)
 
 
-def get_dataset(dataset, freq=15, past=12, future=12, bsz=16, cuda=False):
-    freq = str(freq) + 'min'
-    if dataset == 'BJ_highway':
-        dataset = Loader.BJLoader('highway')
-    elif dataset == 'BJ_metro':
-        dataset = Loader.BJLoader('metro')
-    elif dataset == 'LA_highway':
-        dataset = Loader.LALoader()
-    ts, adj = dataset.load_ts(freq), dataset.load_adj()
+def get_ts_pt(ts):
     io = TimeSeries(ts)
     data_tvt = [io.gen_seq2seq_io(data, past, future, i==0)
                 for i, data in enumerate(
@@ -39,10 +32,30 @@ def get_dataset(dataset, freq=15, past=12, future=12, bsz=16, cuda=False):
         DataLoader(dataset, batch_size=bsz, pin_memory=cuda, shuffle=i==0)
         for i, dataset in enumerate(dataset_tvt)
     )
+    return dataloader_train, dataloader_valid, dataloader_test
 
+
+def get_adj_pt(adj):
+    adj_sp = sp.sparse.coo_matrix(adj)
+    i = torch.LongTensor([adj_sp.row, adj_sp.col])
+    v = torch.FloatTensor(adj_sp.data)
+    adj_pt = torch.sparse.FloatTensor(i, v)
+    return adj_pt
+
+
+def get_dataset(dataset, freq=15, past=12, future=12, bsz=16, cuda=False):
+    freq = str(freq) + 'min'
+    if dataset == 'BJ_highway':
+        dataset = Loader.BJLoader('highway')
+    elif dataset == 'BJ_metro':
+        dataset = Loader.BJLoader('metro')
+    elif dataset == 'LA_highway':
+        dataset = Loader.LALoader()
+    ts, adj = dataset.load_ts(freq), dataset.load_adj()
+    dataloader_train, dataloader_valid, dataloader_test = get_ts_pt(ts)
+    adj = get_adj_pt(adj)
     mean = torch.FloatTensor(io.mean)
     std = torch.FloatTensor(io.std)
-    adj = torch.FloatTensor(adj)
     if cuda:
         mean, std, adj = mean.cuda(), std.cuda(), adj.cuda()
     return dataloader_train, dataloader_valid, dataloader_test, mean, std, adj

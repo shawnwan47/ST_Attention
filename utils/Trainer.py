@@ -32,7 +32,7 @@ class Trainer:
                 if isinstance(output, tuple):
                     output, info = output[0], output[1:]
                     infos.append(info)
-                error = self.loss(output, target)
+                loss, errors = self.loss(output, target)
                 error_total.update(error)
                 loss = getattr(error, self.loss.loss)
                 # optimization
@@ -48,6 +48,6 @@ class Trainer:
         error_train, _ = self.eval(data_train, True)
         error_valid, _ = self.eval(data_valid)
         error_test, infos = self.eval(data_test)
-        print(self._epoch, error_train, error_valid, error_test, sep='\t')
+        print(self._epoch, error_train, error_valid, error_test, sep='\n')
         self.scheduler.step(getattr(error_valid, self.loss.loss))
         self._epoch += 1
