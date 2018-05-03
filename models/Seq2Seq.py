@@ -24,8 +24,7 @@ class Seq2SeqRNN(Seq2Seq):
     def forward(self, input_num, input_cat, teach=0.5):
         enc_input, embedded = super().forward(input_num, input_cat)
         # encoding
-        hidden = self.encoder.initHidden(input_num.size(0))
-        enc_output, hidden = self.encoder(enc_input, hidden)
+        enc_output, hidden = self.encoder(enc_input)
         # decoding
         dec_output = input_num[:, [self.enc_len - 1]]
         output = []
@@ -44,8 +43,7 @@ class Seq2SeqRNNAttn(Seq2Seq):
     def forward(self, input_num, input_cat, teach):
         enc_input, embedded = super().forward(input_num, input_cat)
         # encoding
-        hidden = self.encoder.initHidden(input_num.size(0))
-        enc_output, hidden = self.encoder(enc_input, hidden)
+        enc_output, hidden = self.encoder(enc_input)
         # decoding
         de_output = input_num[:, [self.enc_len - 1]]
         output, attn = [], []
@@ -65,8 +63,7 @@ class Seq2SeqAttn(Seq2Seq):
     def forward(self, input_num, input_cat, teach):
         enc_input, embedded = super().forward(input_num, input_cat)
         # encoding
-        hidden = self.encoder.initHidden(input_num.size(0))
-        enc_output, hidden = self.encoder(enc_input, hidden)
+        enc_output, hidden = self.encoder(enc_input)
         # decoding
         de_output = input_num[:, [self.enc_len - 1]]
         output, attn = [], []

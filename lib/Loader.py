@@ -5,8 +5,8 @@ import pandas as pd
 import numpy as np
 from geopy.distance import geodesic
 
-from utils.constants import DATA_PATH, BJ_HIGHWAY_PATH, BJ_METRO_PATH, LA_PATH
-from utils.graph import floyd
+from constants import DATA_PATH, BJ_HIGHWAY_PATH, BJ_METRO_PATH, LA_PATH
+from lib.graph import floyd
 
 
 class BJLoader:

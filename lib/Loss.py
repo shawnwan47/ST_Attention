@@ -2,7 +2,7 @@ import sys
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-from utils.constants import EPS
+from constants import EPS
 
 
 class Error(object):
@@ -61,7 +61,7 @@ class Loss(nn.Module):
         '''
         input = self.rescale(input)
         loss = getattr(self._compute_error(input, target), self.loss)
-        errors = [self._compute_error(input[:, i], target[:, i])
+        errors = [self._compute_error(input[i], target[i])
                   for i in self.futures]
         return loss, errors
 

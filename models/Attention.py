@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from utils.utils import aeq
+from lib.utils import aeq
 
 
 class GlobalAttention(nn.Module):

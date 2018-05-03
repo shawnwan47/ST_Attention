@@ -16,16 +16,7 @@ class RNN(nn.Module):
             hidden_size=nhid,
             num_layers=nlayers,
             nonlinearity=activation,
-            batch_first=True,
             dropout=pdrop)
-
-    def initHidden(self, bsz):
-        weight = next(self.parameters())
-        if self.rnn_type == 'LSTM':
-            return (weight.new_zeros(self.nlayers, bsz, self.nhid),
-                    weight.new_zeros(self.nlayers, bsz, self.nhid))
-        else:
-            return weight.new_zeros(self.nlayers, bsz, self.nhid)
 
     def forward(self, input, hidden):
         return self.rnn(input, hidden)

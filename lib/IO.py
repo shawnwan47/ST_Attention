@@ -3,8 +3,8 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
-from utils.utils import aeq
-from utils.constants import EPS
+from constants import EPS
+from lib.utils import aeq
 
 
 class TimeSeries:
@@ -36,7 +36,7 @@ class TimeSeries:
 
     @staticmethod
     def _gen_seq(arr, length, n_sample):
-        return np.stack([arr[i:i+length] for i in range(n_sample)])
+        return np.stack([arr[i:i+length] for i in range(n_sample)], 1)
 
     @staticmethod
     def _gen_daytime(index):

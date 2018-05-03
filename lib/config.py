@@ -1,4 +1,4 @@
-from utils.constants import MODEL_PATH
+from constants import MODEL_PATH
 
 def add_data(args):
     # data attribute

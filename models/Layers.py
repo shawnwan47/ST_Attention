@@ -5,8 +5,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 from torch.nn import functional as F
 
-from Utils import aeq
-from UtilClass import *
+from lib import aeq
 import Attention
 
 
