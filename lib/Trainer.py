@@ -13,6 +13,7 @@ class Trainer:
         self._iters = iters
         self._cuda = cuda
         self._teach = 1.
+        self._epoch = 1
 
     def eval(self, dataloader, train=False):
         if train:
@@ -50,6 +51,8 @@ class Trainer:
         error_train, _ = self.eval(data_train, True)
         error_valid, _ = self.eval(data_valid)
         error_test, infos = self.eval(data_test)
+        print(f'Epoch: {self._epoch}')
         print(str(error_train), str(error_valid), str(error_test), sep='\n')
+        self._epoch += 1
         self.scheduler.step()
-        self._teach *= 0.9
+        self._teach *= 0.98

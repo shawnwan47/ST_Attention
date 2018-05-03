@@ -35,7 +35,7 @@ def add_train(args):
     args.add_argument('-retrain', action='store_true')
     args.add_argument('-epoches', type=int, default=100)
     args.add_argument('-iters', type=int, default=1)
-    args.add_argument('-bsz', type=int, default=128)
+    args.add_argument('-bsz', type=int, default=512)
 
 
 def add_model(args):

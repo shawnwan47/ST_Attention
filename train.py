@@ -74,7 +74,6 @@ trainer = Trainer(model, loss, optimizer, scheduler,
 
 if not args.test:
     for epoch in range(args.epoches):
-        print(f'Epoch: {epoch}')
         trainer.run_epoch(data_train, data_valid, data_test)
         if optimizer.param_groups[0]['lr'] < args.min_lr:
             break
