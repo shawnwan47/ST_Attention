@@ -17,7 +17,7 @@ class Error(object):
         self.wape = wape
         self.count = count
 
-    def __repr__(self):
+    def __str__(self):
         return 'mae:{mae:.4f} rmse:{rmse:.4f} mape:{mape:.4f} wape:{wape:.4f}'.format(
             mae=self.mae / self.count,
             rmse=self.rmse / self.count,
@@ -34,15 +34,18 @@ class Error(object):
 
 
 class MultiError(object):
-    def __init__(self, errors):
-        self.errors = errors
+    def __init__(self):
+        self.errors = None
 
     def update(self, errors):
-        for error1, error2 in zip(self.errors, errors):
-            error1.update(error2)
+        if self.errors is None:
+            self.errors = errors
+        else:
+            for error1, error2 in zip(self.errors, errors):
+                error1.update(error2)
 
-    def __repr__(self):
-        return '\t'.join(self.errors)
+    def __str__(self):
+        return '\t'.join([str(error) for error in self.errors])
 
 
 class Loss(nn.Module):
@@ -59,25 +62,23 @@ class Loss(nn.Module):
         loss: masked reduced loss
         errors: multi-step errors
         '''
-        input = self.rescale(input)
-        loss = getattr(self._compute_error(input, target), self.loss)
+        input = self._rescale(input)
+        loss = self._compute_loss(input, target)
         errors = [self._compute_error(input[i], target[i])
                   for i in self.futures]
         return loss, errors
 
-    def rescale(self, input):
+    def _rescale(self, input):
         return (input * (self.std + EPS)) + self.mean
 
-    @staticmethod
-    def _compute_loss(input, target):
+    def _compute_loss(self, input, target):
         input, target = self._mask_select(input, target)
         if self.loss == 'mae':
             return self._compute_mae(input, target)
         elif self.loss == 'rmse':
             return self._compute_rmse(input, target)
 
-    @staticmethod
-    def _compute_error(input, target):
+    def _compute_error(self, input, target):
         input, target = self._mask_select(input, target)
         mae = self._compute_mae(input, target)
         rmse = self._compute_rmse(input, target)

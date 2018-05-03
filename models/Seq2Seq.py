@@ -16,7 +16,7 @@ class Seq2Seq(nn.Module):
 
     def forward(self, input_num, input_cat):
         embedded = self.embedding(input_cat)
-        enc_input = torch.cat((input_num[:, :self.enc_len], embedded[:, :self.enc_len]), -1)
+        enc_input = torch.cat((input_num[:self.enc_len], embedded[:self.enc_len]), -1)
         return enc_input, embedded
 
 
@@ -26,17 +26,17 @@ class Seq2SeqRNN(Seq2Seq):
         # encoding
         enc_output, hidden = self.encoder(enc_input)
         # decoding
-        dec_output = input_num[:, [self.enc_len - 1]]
+        dec_output = input_num[[self.enc_len - 1]]
         output = []
         for i in range(self.dec_len):
             if random.random() < teach:
-                dec_input_num = input_num[:, [self.enc_len + i - 1]]
+                dec_input_num = input_num[[self.enc_len + i - 1]]
             else:
                 dec_input_num = dec_output.detach()
-            dec_input = torch.cat((dec_input_num, embedded[:, [i]]), -1)
+            dec_input = torch.cat((dec_input_num, embedded[[i]]), -1)
             dec_output, hidden = self.decoder(dec_input, hidden)
             output.append(dec_output)
-        return torch.cat(output, 1)
+        return torch.cat(output)
 
 
 class Seq2SeqRNNAttn(Seq2Seq):
@@ -45,18 +45,18 @@ class Seq2SeqRNNAttn(Seq2Seq):
         # encoding
         enc_output, hidden = self.encoder(enc_input)
         # decoding
-        de_output = input_num[:, [self.enc_len - 1]]
+        de_output = input_num[[self.enc_len - 1]]
         output, attn = [], []
         for i in range(self.dec_len):
             if random.random() < teach:
                 dec_input_num = dec_output.detach()
             else:
-                dec_input_num = input_num[:, [self.enc_len + i - 1]]
-            dec_input = torch.cat(dec_input_num, embedded[:, [i]], -1)
+                dec_input_num = input_num[[self.enc_len + i - 1]]
+            dec_input = torch.cat(dec_input_num, embedded[[i]], -1)
             dec_output, hidden, attention = self.decoder(dec_input, hidden, enc_output)
             output.append(dec_output)
             attn.append(attention)
-        return torch.cat(output, -1), torch.cat(attn, -2)
+        return torch.cat(output), torch.cat(attn, -2)
 
 
 class Seq2SeqAttn(Seq2Seq):
@@ -65,15 +65,15 @@ class Seq2SeqAttn(Seq2Seq):
         # encoding
         enc_output, hidden = self.encoder(enc_input)
         # decoding
-        de_output = input_num[:, [self.enc_len - 1]]
+        de_output = input_num[[self.enc_len - 1]]
         output, attn = [], []
         for i in range(self.dec_len):
             if random.random() < teach:
                 dec_input_num = dec_output.detach()
             else:
-                dec_input_num = input_num[:, [self.enc_len + i - 1]]
-            dec_input = torch.cat(dec_input_num, embedded[:, [i]], -1)
+                dec_input_num = input_num[[self.enc_len + i - 1]]
+            dec_input = torch.cat(dec_input_num, embedded[[i]], -1)
             dec_output, hidden, attention = self.decoder(dec_input, hidden, enc_output)
             output.append(dec_output)
             attn.append(attention)
-        return torch.cat(output, -1), torch.cat(attn, -2)
+        return torch.cat(output), torch.cat(attn, -2)

@@ -13,13 +13,13 @@ class TimeSeries:
         self.mean, self.std = self.data_train.mean(), self.data_train.std()
 
     def gen_seq2seq_io(self, df, seq_in_len, seq_out_len, train=False):
-        n_sample = df.shape[0] - seq_in_len - seq_out_len + 1
-        targets = self._gen_seq(df.values[seq_in_len:], seq_out_len, n_sample)
-        if train:
-            seq_in_len += seq_out_len - 1
+        seq_len = seq_in_len + seq_out_len
+        n_sample = df.shape[0] - seq_len + 1
+        data_len = (seq_len - 1) if train else seq_in_len
         daytime = self._gen_daytime(df.index)
-        data_cat = self._gen_seq(daytime, seq_in_len, n_sample)
-        data_num = self._gen_seq(self.whiten(df).values, seq_in_len, n_sample)
+        data_cat = self._gen_seq(daytime, data_len, n_sample)
+        data_num = self._gen_seq(self.whiten(df).values, data_len, n_sample)
+        targets = self._gen_seq(df.values[seq_in_len:], seq_out_len, n_sample)
         data_num[np.isnan(data_num)] = 0
         return data_num, data_cat, targets
 
@@ -36,7 +36,7 @@ class TimeSeries:
 
     @staticmethod
     def _gen_seq(arr, length, n_sample):
-        return np.stack([arr[i:i+length] for i in range(n_sample)], 1)
+        return np.stack([arr[i:i+length] for i in range(n_sample)])
 
     @staticmethod
     def _gen_daytime(index):

@@ -6,11 +6,10 @@ import numpy as np
 import torch
 import torch.optim as optim
 
-import utils
-from utils import config
-from utils import pt_utils
-from utils.Loss import Loss
-from utils.Trainer import Trainer
+from lib import config
+from lib import pt_utils
+from lib.Loss import Loss
+from lib.Trainer import Trainer
 
 from models import Models
 
@@ -65,7 +64,7 @@ if args.optim is 'SGD':
 else:
     optimizer = optim.Adam(model.parameters(), weight_decay=args.weight_decay)
 
-scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True)
+scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epoches)
 
 # TRAINER
 trainer = Trainer(model, loss, optimizer, scheduler,
@@ -75,6 +74,7 @@ trainer = Trainer(model, loss, optimizer, scheduler,
 
 if not args.test:
     for epoch in range(args.epoches):
+        print(f'Epoch: {epoch}')
         trainer.run_epoch(data_train, data_valid, data_test)
         if optimizer.param_groups[0]['lr'] < args.min_lr:
             break

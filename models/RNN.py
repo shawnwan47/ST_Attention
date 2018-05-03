@@ -18,7 +18,7 @@ class RNN(nn.Module):
             nonlinearity=activation,
             dropout=pdrop)
 
-    def forward(self, input, hidden):
+    def forward(self, input, hidden=None):
         return self.rnn(input, hidden)
 
 

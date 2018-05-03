@@ -1,5 +1,5 @@
 from torch.nn.utils import clip_grad_norm_
-from utils.Loss import Error
+from lib.Loss import MultiError
 
 
 class Trainer:
@@ -12,29 +12,31 @@ class Trainer:
         self._max_grad_norm = max_grad_norm
         self._iters = iters
         self._cuda = cuda
-        self._epoch = 1
+        self._teach = 1.
 
     def eval(self, dataloader, train=False):
         if train:
             self.model.train()
         else:
             self.model.eval()
-        error_total = Error()
+        errors = MultiError()
         infos = []
         for _ in range(self._iters):
             for data_num, data_cat, target in dataloader:
+                data_num = data_num.transpose(0, 1)
+                data_cat = data_cat.transpose(0, 1)
+                target = target.transpose(0, 1)
                 if self._cuda:
                     data_num = data_num.cuda()
                     data_cat = data_cat.cuda()
                     target = target.cuda()
-                teach = 0.5 if train else 0
+                teach = self._teach if train else 0
                 output = self.model(data_num, data_cat, teach=teach)
                 if isinstance(output, tuple):
                     output, info = output[0], output[1:]
                     infos.append(info)
-                loss, errors = self.loss(output, target)
-                error_total.update(error)
-                loss = getattr(error, self.loss.loss)
+                loss, error = self.loss(output, target)
+                errors.update(error)
                 # optimization
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -42,12 +44,12 @@ class Trainer:
                 self.optimizer.step()
         if infos:
             infos = [torch.cat(info) for info in zip(*infos)]
-        return error_total, infos
+        return errors, infos
 
     def run_epoch(self, data_train, data_valid, data_test):
         error_train, _ = self.eval(data_train, True)
         error_valid, _ = self.eval(data_valid)
         error_test, infos = self.eval(data_test)
-        print(self._epoch, error_train, error_valid, error_test, sep='\n')
-        self.scheduler.step(getattr(error_valid, self.loss.loss))
-        self._epoch += 1
+        print(str(error_train), str(error_valid), str(error_test), sep='\n')
+        self.scheduler.step()
+        self._teach *= 0.9
