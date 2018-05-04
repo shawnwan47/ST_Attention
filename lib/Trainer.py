@@ -3,13 +3,11 @@ from lib.Loss import MultiError
 
 
 class Trainer:
-    def __init__(self, model, loss, optimizer, scheduler,
-                 iters, max_grad_norm, cuda):
+    def __init__(self, model, loss, optimizer, scheduler, iters, cuda):
         self.model = model
         self.loss = loss
         self.optimizer = optimizer
         self.scheduler = scheduler
-        self._max_grad_norm = max_grad_norm
         self._iters = iters
         self._cuda = cuda
         self._teach = 1.
@@ -24,9 +22,6 @@ class Trainer:
         infos = []
         for _ in range(self._iters):
             for data_num, data_cat, target in dataloader:
-                data_num = data_num.transpose(0, 1)
-                data_cat = data_cat.transpose(0, 1)
-                target = target.transpose(0, 1)
                 if self._cuda:
                     data_num = data_num.cuda()
                     data_cat = data_cat.cuda()
@@ -41,7 +36,6 @@ class Trainer:
                 # optimization
                 self.optimizer.zero_grad()
                 loss.backward()
-                clip_grad_norm_(self.model.parameters(), self._max_grad_norm)
                 self.optimizer.step()
         if infos:
             infos = [torch.cat(info) for info in zip(*infos)]

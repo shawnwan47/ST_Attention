@@ -11,7 +11,7 @@ from lib import pt_utils
 from lib.Loss import Loss
 from lib.Trainer import Trainer
 
-from models import Models
+from models import builder
 
 
 args = argparse.ArgumentParser()
@@ -47,7 +47,7 @@ data_train, data_valid, data_test, mean, std, adj = pt_utils.get_dataset(
 )
 
 # MODEL
-model = Models.build_model(args)
+model = builder.build_model(args)
 if args.test or args.retrain:
     model.load_state_dict(torch.load(args.path + '.pt'))
 if args.cuda:
@@ -67,10 +67,7 @@ else:
 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epoches)
 
 # TRAINER
-trainer = Trainer(model, loss, optimizer, scheduler,
-                  max_grad_norm=args.max_grad_norm,
-                  iters=args.iters,
-                  cuda=args.cuda)
+trainer = Trainer(model, loss, optimizer, scheduler, args.iters, args.cuda)
 
 if not args.test:
     for epoch in range(args.epoches):

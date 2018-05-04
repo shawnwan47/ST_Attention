@@ -11,41 +11,46 @@ class GlobalAttention(nn.Module):
     def __init__(self, dim, att_type, dropout=0.1):
         super().__init__()
         assert att_type in ['dot', 'general', 'mlp']
-        self.dropout = nn.Dropout(dropout)
-        self.softmax = nn.Softmax(-1)
         self.att_type = att_type
         if att_type == 'mlp':
-            self.map_q = nn.Linear(dim, dim)
-            self.map_k = nn.Linear(dim, dim)
-            self.map_qk = nn.Linear(dim, 1)
+            self.linear_query = nn.Linear(dim, dim, bias=False)
+            self.linear_context = nn.Linear(dim, dim)
+            self.linear_score = nn.Linear(dim, 1)
         elif att_type == 'general':
-            self.map_k = nn.Linear(dim, dim, bias=False)
+            self.linear_context = nn.Linear(dim, dim, bias=False)
+        self.softmax = nn.Softmax(-1)
+        self.tanh = nn.Tanh()
+        self.linear_out_query = nn.Linear(dim, dim, False)
+        self.linear_out_context = nn.Linear(dim, dim, bias=att_type=='mlp')
 
-    def forward(self, qry, key, val, mask=None):
+    def forward(self, query, bank, mask=None):
         '''
-        qry, key, val: batch x num x features
+        query, bank: batch x num x features
         att: batch x num_qry x num_key
         '''
-        score = self.score(qry, key)
+        score = self.score(query, bank)
         if mask is not None:
             score.data.masked_fill_(mask, -float('inf'))
-        att = self.softmax(score)
-        return torch.bmm(self.dropout(att), val), att
+        attn = self.softmax(score)
+        context = torch.matmul(attn, bank)
+        output = self.linear_out_context(context) + self.linear_out_query(query)
+        return output, attn
 
-    def score(self, qry, key):
-        batch, len_q, dim = qry.size()
-        batch_, len_k, dim_ = key.size()
+    def score(self, query, context):
+        batch, len_q, dim = query.size()
+        batch_, len_c, dim_ = context.size()
         aeq(batch, batch_)
         aeq(dim, dim_)
         if self.att_type in ['dot', 'general']:
             if self.att_type == 'general':
-                key = self.map_k(key)
-            score = torch.bmm(qry, key.transpose(1, 2)) / math.sqrt(dim)
+                context = self.linear_context(context)
+            score = torch.bmm(query, context.transpose(1, 2)) / math.sqrt(dim)
         else:
-            sc1 = self.map_q(qry).unsqueeze(2).expand(batch, len_q, len_k, -1)
-            sc2 = self.map_k(key).unsqueeze(1).expand(batch, len_q, len_k, -1)
-            score = self.map_qk(F.tanh(self.dropout(sc1 + sc2)))
-        return score.view(batch, len_q, len_k)
+            score_size = (batch, len_q, len_c, dim)
+            sc1 = self.linear_query(query).unsqueeze(2).expand(score_size)
+            sc2 = self.linear_context(context).unsqueeze(1).expand(score_size)
+            score = self.linear_score(F.tanh(sc1 + sc2))
+        return score.view(batch, len_q, len_c)
 
 
 class MultiHeadedAttention(nn.Module):

@@ -2,7 +2,7 @@ from constants import MODEL_PATH
 
 def add_data(args):
     # data attribute
-    args.add_argument('-dataset', type=str, default='LA',
+    args.add_argument('-dataset', default='LA',
                       choices=['LA', 'BJ_highway', 'BJ_metro'])
 
     args.add_argument('-freq', type=int, default=5)
@@ -21,9 +21,9 @@ def add_train(args):
     args.add_argument('-seed', type=int, default=47)
     args.add_argument('-eps', type=float, default=1e-8)
     # optimization
-    args.add_argument('-loss', type=str, default='mae',
+    args.add_argument('-loss', default='mae',
                       choices=['mae', 'rmse'])
-    args.add_argument('-optim', type=str, default='Adam',
+    args.add_argument('-optim', default='Adam',
                       choices=['SGD', 'Adam'])
     args.add_argument('-lr', type=float, default=0.001)
     args.add_argument('-min_lr', type=float, default=1e-6)
@@ -40,32 +40,27 @@ def add_train(args):
 
 def add_model(args):
     # framework and model
-    args.add_argument('-framework', type=str, default='seq2seq',
-                      choices=['seq2seq', 'tensor2tensor'])
-    args.add_argument('-model', type=str, default='RNN',
-                      choices=['RNN', 'RNNAttn', 'Transformer'])
-    # model parameters
+    args.add_argument('-model', default='RNN',
+                      choices=['RNN', 'RNNAttn', 'GCRNN'])
+    # general parameters
     args.add_argument('-nin', type=int)
     args.add_argument('-nout', type=int)
     args.add_argument('-nlayers', type=int, default=1)
     args.add_argument('-nhid', type=int, default=64)
-    args.add_argument('-activation', type=str, default='relu',
-                      choices=['relu', 'tanh'])
     args.add_argument('-pdrop', type=float, default=0.2)
-    # RNN
-    args.add_argument('-rnn_type', type=str, default='RNN',
-    choices=['RNN', 'GRU', 'LSTM'])
     # Embedding
     args.add_argument('-day_count', type=int, default=7)
     args.add_argument('-day_size', type=int, default=8)
     args.add_argument('-time_count', type=int)
     args.add_argument('-time_size', type=int, default=16)
+    # RNN
+    args.add_argument('-rnn_type', default='RNN', choices=['RNN', 'GRU', 'LSTM'])
     # Attention
-    args.add_argument('-attn_type', type=str, default='dot',
+    args.add_argument('-attn_type', default='dot',
                       choices=['dot', 'global', 'mlp', 'multi'])
     args.add_argument('-head', type=int, default=4)
     # Save path
-    args.add_argument('-path', type=str)
+    args.add_argument('-path')
 
 
 def update(args):
@@ -84,12 +79,12 @@ def update(args):
 
     # model io
     embed_size = args.day_size + args.time_size
-    if args.framework == 'tensor2tensor':
-        args.nin = args.nodes * args.past + embed_size
-        args.nout = args.nodes * args.future
-    else:
+    if args.model in ['RNN', 'RNNAttn']:
         args.nin = args.nodes + embed_size
         args.nout = args.nodes
+    if args.model == 'GCRNN':
+        args.nin = 1
+        args.nout = 1
 
     # path
     name = args.model

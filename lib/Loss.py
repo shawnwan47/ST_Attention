@@ -64,7 +64,7 @@ class Loss(nn.Module):
         '''
         input = self._rescale(input)
         loss = self._compute_loss(input, target)
-        errors = [self._compute_error(input[i], target[i])
+        errors = [self._compute_error(input[:, i], target[:, i])
                   for i in self.futures]
         return loss, errors
 
