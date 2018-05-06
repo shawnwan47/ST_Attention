@@ -19,11 +19,11 @@ class DayTimeEmbedding(nn.Module):
         return self.dropout(torch.cat((embedded_time, embedded_day), dim=-1))
 
 
-def build_model(args):
+def build_model(args, adj):
     if args.model in ['RNN', 'RNNAttn']:
         model = build_rnn(args)
     elif args.model == 'GCRNN':
-        model = build_gcrnn(args)
+        model = build_gcrnn(args, adj)
     elif args.model == 'Transformer':
         model = build_transformer(args)
     return model
@@ -61,7 +61,7 @@ def build_rnn(args):
                        args.past, args.future)
 
 
-def build_gcrnn(args):
+def build_gcrnn(args, adj):
     pass
 
 

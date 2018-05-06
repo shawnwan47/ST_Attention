@@ -7,7 +7,28 @@ from constants import EPS
 from lib.utils import aeq
 
 
-class TimeSeries:
+class IO:
+    @staticmethod
+    def _split_data(df, val_ratio=0.1, test_ratio=0.2):
+        n_sample = df.shape[0]
+        n_val = int(round(n_sample * val_ratio))
+        n_test = int(round(n_sample * test_ratio))
+        n_train = n_sample - n_val - n_test
+        return df.iloc[:n_train], df.iloc[n_train:-n_test], df.iloc[-n_test:]
+
+    @staticmethod
+    def _gen_seq(arr, length, n_sample):
+        return np.stack([arr[i:i+length] for i in range(n_sample)])
+
+    @staticmethod
+    def _gen_daytime(date_index):
+        day = date_index.weekday
+        _, time = np.unique(date_index.time, return_inverse=True)
+        daytime = np.stack((day, time), -1)
+        return daytime
+
+
+class TimeSeries(IO):
     def __init__(self, df):
         self.data_train, self.data_valid, self.data_test = self._split_data(df)
         self.mean, self.std = self.data_train.mean(), self.data_train.std()
@@ -26,21 +47,7 @@ class TimeSeries:
     def whiten(self, df):
         return (df - self.mean) / (self.std + EPS)
 
-    @staticmethod
-    def _split_data(df, val_ratio=0.1, test_ratio=0.2):
-        n_sample = df.shape[0]
-        n_val = int(round(n_sample * val_ratio))
-        n_test = int(round(n_sample * test_ratio))
-        n_train = n_sample - n_val - n_test
-        return df.iloc[:n_train], df.iloc[n_train:-n_test], df.iloc[-n_test:]
 
-    @staticmethod
-    def _gen_seq(arr, length, n_sample):
-        return np.stack([arr[i:i+length] for i in range(n_sample)])
-
-    @staticmethod
-    def _gen_daytime(index):
-        day = index.weekday
-        _, time = np.unique(index.time, return_inverse=True)
-        daytime = np.stack((day, time), -1)
-        return daytime
+class SparseTimeSeries(IO):
+    def __init__(self, df):
+        self.data_train, self.data_valid, self.data_test = self._split_data(df)

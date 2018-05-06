@@ -15,6 +15,12 @@ def floyd(adj):
     return adj
 
 
+def calculate_dist_adj(dist):
+    adj = np.exp(-np.square(dist / dist.std()))
+    adj[adj < 0.1] = 0
+    return adj
+
+
 def calculate_normalized_laplacian(adj):
     """
     # L = D^-1/2 (D-A) D^-1/2 = I - D^-1/2 A D^-1/2

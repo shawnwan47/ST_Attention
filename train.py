@@ -47,7 +47,7 @@ data_train, data_valid, data_test, mean, std, adj = pt_utils.get_dataset(
 )
 
 # MODEL
-model = builder.build_model(args)
+model = builder.build_model(args, adj)
 if args.test or args.retrain:
     model.load_state_dict(torch.load(args.path + '.pt'))
 if args.cuda:
@@ -67,7 +67,8 @@ else:
 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epoches)
 
 # TRAINER
-trainer = Trainer(model, loss, optimizer, scheduler, args.iters, args.cuda)
+trainer = Trainer(model, loss, optimizer, scheduler, args.cuda)
+
 
 if not args.test:
     for epoch in range(args.epoches):

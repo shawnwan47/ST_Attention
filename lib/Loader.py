@@ -93,7 +93,7 @@ class BJLoader:
             dist.to_csv(self._dist, index=True)
         return dist.loc[self._idx, self._idx].as_matrix()
 
-    def load_ts_od(self, od='OD', freq='15min'):
+    def load_ts_od(self, od='OD', freq='5min'):
         assert od in ['OD', 'DO']
         filepath = self._ts_od if od == 'OD' else self._ts_do
         ret = pd.read_csv(filepath,
@@ -110,7 +110,7 @@ class BJLoader:
             ret = pd.read_csv(self._od_sum, index_col=0)
             ret.columns = [int(col) for col in ret.columns]
         else:
-            od = self.load_od(freq='1d').groupby(['Entry', 'Exit']).sum()
+            od = self.load_ts_od(freq='1d').groupby(['Entry', 'Exit']).sum()
             od = od.unstack().fillna(0)
             ret = pd.DataFrame(0, index=self._idx, columns=self._idx)
             ret.loc[od.index, od.columns] = od

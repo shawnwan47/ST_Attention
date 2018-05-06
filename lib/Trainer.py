@@ -3,12 +3,11 @@ from lib.Loss import MultiError
 
 
 class Trainer:
-    def __init__(self, model, loss, optimizer, scheduler, iters, cuda):
+    def __init__(self, model, loss, optimizer, scheduler, cuda):
         self.model = model
         self.loss = loss
         self.optimizer = optimizer
         self.scheduler = scheduler
-        self._iters = iters
         self._cuda = cuda
         self._teach = 1.
         self._epoch = 1
@@ -20,20 +19,20 @@ class Trainer:
             self.model.eval()
         errors = MultiError()
         infos = []
-        for _ in range(self._iters):
-            for data_num, data_cat, target in dataloader:
-                if self._cuda:
-                    data_num = data_num.cuda()
-                    data_cat = data_cat.cuda()
-                    target = target.cuda()
-                teach = self._teach if train else 0
-                output = self.model(data_num, data_cat, teach=teach)
-                if isinstance(output, tuple):
-                    output, info = output[0], output[1:]
-                    infos.append(info)
-                loss, error = self.loss(output, target)
-                errors.update(error)
-                # optimization
+        for data_num, data_cat, target in dataloader:
+            if self._cuda:
+                data_num = data_num.cuda()
+                data_cat = data_cat.cuda()
+                target = target.cuda()
+            teach = self._teach if train else 0
+            output = self.model(data_num, data_cat, teach=teach)
+            if isinstance(output, tuple):
+                output, info = output[0], output[1:]
+                infos.append(info)
+            loss, error = self.loss(output, target)
+            errors.update(error)
+            # optimization
+            if train:
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()

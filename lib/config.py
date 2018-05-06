@@ -19,23 +19,19 @@ def add_train(args):
     args.add_argument('-cuda', action='store_true')
     args.add_argument('-gpuid', type=int, default=3)
     args.add_argument('-seed', type=int, default=47)
-    args.add_argument('-eps', type=float, default=1e-8)
     # optimization
-    args.add_argument('-loss', default='mae',
-                      choices=['mae', 'rmse'])
-    args.add_argument('-optim', default='Adam',
-                      choices=['SGD', 'Adam'])
+    args.add_argument('-loss', default='mae', choices=['mae', 'rmse'])
+    args.add_argument('-optim', default='Adam', choices=['SGD', 'Adam'])
     args.add_argument('-lr', type=float, default=0.001)
     args.add_argument('-min_lr', type=float, default=1e-6)
     args.add_argument('-weight_decay', type=float, default=1e-5)
-    args.add_argument('-max_grad_norm', type=float, default=1)
 
     # run
     args.add_argument('-test', action='store_true')
     args.add_argument('-retrain', action='store_true')
     args.add_argument('-epoches', type=int, default=100)
     args.add_argument('-iters', type=int, default=1)
-    args.add_argument('-bsz', type=int, default=512)
+    args.add_argument('-bsz', type=int, default=256)
 
 
 def add_model(args):
@@ -45,8 +41,8 @@ def add_model(args):
     # general parameters
     args.add_argument('-nin', type=int)
     args.add_argument('-nout', type=int)
-    args.add_argument('-nlayers', type=int, default=1)
-    args.add_argument('-nhid', type=int, default=64)
+    args.add_argument('-nlayers', type=int, default=2)
+    args.add_argument('-nhid', type=int, default=256)
     args.add_argument('-pdrop', type=float, default=0.2)
     # Embedding
     args.add_argument('-day_count', type=int, default=7)
@@ -67,9 +63,9 @@ def update(args):
     # data
     args.time_count = 1440 // args.freq
     if args.dataset == 'BJ_metro':
-        args.nodes = 438
+        args.nodes = 536
     elif args.dataset == 'BJ_highway':
-        args.nodes = 266
+        args.nodes = 264
     elif args.dataset == 'LA':
         args.nodes = 207
 
