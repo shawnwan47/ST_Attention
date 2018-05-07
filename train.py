@@ -19,7 +19,8 @@ config.add_data(args)
 config.add_model(args)
 config.add_train(args)
 args = args.parse_args()
-config.update(args)
+config.update_data(args)
+config.update_model(args)
 print(args)
 
 # CUDA

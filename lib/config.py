@@ -7,13 +7,14 @@ def add_data(args):
 
     args.add_argument('-freq', type=int, default=5)
     args.add_argument('-start', type=int, default=6)
-    args.add_argument('-end', type=int, default=23)
+    args.add_argument('-end', type=int, default=22)
     args.add_argument('-past', type=int, default=60)
     args.add_argument('-future', type=int, default=60)
-
     args.add_argument('-futures', nargs='+', default=[15, 30, 60])
 
     args.add_argument('-nodes', type=int)
+
+    args.add_argument('-period', choices=['continous', 'daily', 'weekly'])
 
 
 def add_train(args):
@@ -61,7 +62,7 @@ def add_model(args):
     args.add_argument('-path')
 
 
-def update(args):
+def update_data(args):
     # data
     args.time_count = 1440 // args.freq
     if args.dataset == 'BJ_metro':
@@ -75,7 +76,8 @@ def update(args):
     args.future //= args.freq
     args.futures = [t // args.freq - 1 for t in args.futures]
 
-    # model io
+
+def update_model(args):
     embed_size = args.day_size + args.time_size
     if args.model in ['RNN', 'RNNAttn']:
         args.nin = args.nodes + embed_size

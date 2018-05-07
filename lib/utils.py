@@ -1,4 +1,3 @@
-from scipy.stats import entropy
 
 
 def aeq(*args):
@@ -8,7 +7,7 @@ def aeq(*args):
         "Not all arguments have the same value: " + str(args)
 
 
-def KL_od(od_p, od_q):
+def od_distance(od_p, od_q):
     m, n = od_p.shape
     kl = 0
     for i in range(m):
