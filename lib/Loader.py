@@ -36,7 +36,7 @@ class BJLoader:
 
     def _load_ts(self, od='D'):
         filepath = self._ts_o if od is 'O' else self._ts_d
-        ts = pd.read_csv(filepath, index_col=0, parse_dates=True)
+        ts = pd.read_csv(filepath, index_col=0, parse_dates=True, dtype=float)
         ts.columns = [int(col) for col in ts.columns]
         return ts
 

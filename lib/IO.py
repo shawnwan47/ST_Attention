@@ -9,43 +9,64 @@ from lib.utils import aeq
 
 class IO:
     @staticmethod
-    def _split_data(df, val_ratio=0.1, test_ratio=0.2):
-        n_sample = df.shape[0]
-        n_val = int(round(n_sample * val_ratio))
-        n_test = int(round(n_sample * test_ratio))
-        n_train = n_sample - n_val - n_test
-        return df.iloc[:n_train], df.iloc[n_train:-n_test], df.iloc[-n_test:]
+    def _get_days(index):
+        date_s, date_e = index[0], index[-1]
+        days = (date_e - date_s).days + 1
+        assert (len(index) % days) == 0
+        return days
+
+
+    def _split_data(self, df, train_ratio=0.7, test_ratio=0.2):
+        days = self._get_days(df.index)
+        days_train = pd.Timedelta(days=round(days * train_ratio))
+        days_test = pd.Timedelta(days=round(days * test_ratio))
+        index_train = df.index.date < (df.index[0].date() + days_train)
+        index_test = df.index.date >= (df.index[-1].date() - days_test)
+        index_valid = (~index_train) & (~index_test)
+        return df[index_train], df[index_valid], df[index_test]
 
     @staticmethod
-    def _gen_seq(arr, length, n_sample):
-        return np.stack([arr[i:i+length] for i in range(n_sample)])
-
-    @staticmethod
-    def _gen_daytime(date_index):
-        day = date_index.weekday
-        _, time = np.unique(date_index.time, return_inverse=True)
-        daytime = np.stack((day, time), -1)
-        return daytime
+    def _gen_seq(arr, seq_len, samples):
+        seq = np.stack([arr[:, i:i + seq_len] for i in range(samples)], axis=1)
+        seq = seq.reshape(-1, seq_len, seq.shape[-1])
+        return seq
 
 
 class TimeSeries(IO):
-    def __init__(self, df):
+    def __init__(self, df, start=0, end=24):
+        df = df[(df.index.hour >= start) & (df.index.hour < end)]
         self.data_train, self.data_valid, self.data_test = self._split_data(df)
-        self.mean, self.std = self.data_train.mean(), self.data_train.std()
+        self.mean = self.data_train.mean().values
+        self.std = self.data_train.std().values
 
     def gen_seq2seq_io(self, df, seq_in_len, seq_out_len, train=False):
+        # reshape to days x times x dim
+        days = self._get_days(df.index)
+        times = len(df.index) // days
+        new_shape = (days, times, -1)
+        targets = df.values.reshape(new_shape)
+        data_cat = self._gen_daytime(df.index).reshape(new_shape)
+        data_num = self.scale(df.values).reshape(new_shape)
+        data_num[np.isnan(data_num)] = 0.
+        # gen seq
         seq_len = seq_in_len + seq_out_len
-        n_sample = df.shape[0] - seq_len + 1
         data_len = (seq_len - 1) if train else seq_in_len
-        daytime = self._gen_daytime(df.index)
-        data_cat = self._gen_seq(daytime, data_len, n_sample)
-        data_num = self._gen_seq(self.whiten(df).values, data_len, n_sample)
-        targets = self._gen_seq(df.values[seq_in_len:], seq_out_len, n_sample)
-        data_num[np.isnan(data_num)] = 0
+        samples = times - seq_len + 1
+        data_cat = self._gen_seq(data_cat, data_len, samples)
+        data_num = self._gen_seq(self.scale(df).values, data_len, samples)
+        targets = self._gen_seq(df.values[seq_in_len:], seq_out_len, samples)
         return data_num, data_cat, targets
 
-    def whiten(self, df):
+    def scale(self, df):
         return (df - self.mean) / (self.std + EPS)
+
+    @staticmethod
+    def _gen_daytime(index):
+        day = index.weekday
+        _, time = np.unique(index.time, return_inverse=True)
+        daytime = np.stack((day, time), -1)
+        return daytime
+
 
 
 class SparseTimeSeries(IO):

@@ -20,7 +20,7 @@ class MyDataset(Dataset):
         return self.target.size(0)
 
 
-def get_dataset(dataset, freq=15, past=12, future=12, bsz=128, cuda=False):
+def get_dataset(dataset, freq, start, end, past, future, bsz, cuda):
     # dataset
     freq = str(freq) + 'min'
     if dataset == 'BJ_highway':

@@ -40,6 +40,8 @@ else:
 data_train, data_valid, data_test, mean, std, adj = pt_utils.get_dataset(
     dataset=args.dataset,
     freq=args.freq,
+    start=args.start,
+    end=args.end,
     past=args.past,
     future=args.future,
     bsz=args.bsz,
