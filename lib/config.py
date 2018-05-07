@@ -2,7 +2,7 @@ from constants import MODEL_PATH
 
 def add_data(args):
     # data attribute
-    args.add_argument('-dataset', default='LA',
+    args.add_argument('-dataset', default='BJ_highway',
                       choices=['LA', 'BJ_highway', 'BJ_metro'])
 
     args.add_argument('-freq', type=int, default=5)
@@ -13,8 +13,6 @@ def add_data(args):
     args.add_argument('-futures', nargs='+', default=[15, 30, 60])
 
     args.add_argument('-nodes', type=int)
-
-    args.add_argument('-period', choices=['continous', 'daily', 'weekly'])
 
 
 def add_train(args):
@@ -63,7 +61,6 @@ def add_model(args):
 
 
 def update_data(args):
-    # data
     args.time_count = 1440 // args.freq
     if args.dataset == 'BJ_metro':
         args.nodes = 536

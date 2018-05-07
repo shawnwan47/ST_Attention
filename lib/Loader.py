@@ -23,15 +23,16 @@ class BJLoader:
         self._ts_od = self._path / 'OD.csv'
         self._ts_do = self._path / 'DO.csv'
         self._od_sum = self._path / 'ODSUM.csv'
-        self._idx = self._load_idx()
+        self.ids = self._loadids()
+        self.id_to_idx = {id: i for i, id in enumerate(self.ids)}
 
-    def _load_idx(self):
+    def _loadids(self):
         node = self.load_node(raw=True)
-        node_idx = set(node.index)
-        link_idx = list(np.unique(self.load_link()))
-        ts_idx = [*self._load_ts('O').columns, *self._load_ts('D').columns]
-        node_idx = node_idx.intersection(*[link_idx, ts_idx])
-        idx = node.loc[node_idx].sort_values(['ROUTE', 'STATION']).index
+        nodeids = set(node.index)
+        linkids = list(np.unique(self.load_link()))
+        tsids = [*self._load_ts('O').columns, *self._load_ts('D').columns]
+        nodeids = nodeids.intersection(*[linkids, tsids])
+        idx = node.loc[nodeids].sort_values(['ROUTE', 'STATION']).index
         return idx
 
     def _load_ts(self, od='D'):
@@ -42,15 +43,15 @@ class BJLoader:
 
     def load_node(self, raw=False):
         station = pd.read_csv(self._node, index_col=0)
-        return station if raw else station.loc[self._idx]
+        return station if raw else station.loc[self.ids]
 
     def load_link(self, raw=False):
         filepath = self._link_raw if raw else self._link
         return np.genfromtxt(filepath, dtype=int)
 
     def load_ts(self, freq='5min'):
-        o = self._load_ts('O').loc[:, self._idx]
-        d = self._load_ts('D').loc[:, self._idx]
+        o = self._load_ts('O').loc[:, self.ids]
+        d = self._load_ts('D').loc[:, self.ids]
         return pd.concat((o, d), axis=1).resample(freq).sum()
 
     def load_hop(self):
@@ -68,7 +69,7 @@ class BJLoader:
                 hop.loc[i, i] = 0
             hop = floyd(hop)
             hop.to_csv(self._hop, index=True)
-        return hop.loc[self._idx, self._idx].as_matrix()
+        return hop.loc[self.ids, self.ids].as_matrix()
 
     def load_dist(self):
         if self._dist.exists():
@@ -91,7 +92,7 @@ class BJLoader:
                 dist.loc[i, i] = 0
             dist = floyd(dist)
             dist.to_csv(self._dist, index=True)
-        return dist.loc[self._idx, self._idx].as_matrix()
+        return dist.loc[self.ids, self.ids].as_matrix()
 
     def load_ts_od(self, od='OD', freq='5min'):
         assert od in ['OD', 'DO']
@@ -102,7 +103,12 @@ class BJLoader:
                           squeeze=True)
         names = ret.index.names
         ret = ret.groupby([pd.Grouper(level=names[0], freq=freq),
-                           names[1], names[2]]).sum()
+                           names[1], names[2]]).sum().to_sparse()
+        _, entry, exit = ret.index.levels
+        entry = [self.id_to_idx[ent] for ent in entry]
+        exit = [self.id_to_idx[exi] for exi in exit]
+        ret.index.set_levels(entry, level=1, inplace=True)
+        ret.index.set_levels(exit, level=2, inplace=True)
         return ret
 
     def load_adj_od(self):
@@ -112,7 +118,7 @@ class BJLoader:
         else:
             od = self.load_ts_od(freq='1d').groupby(['Entry', 'Exit']).sum()
             od = od.unstack().fillna(0)
-            ret = pd.DataFrame(0, index=self._idx, columns=self._idx)
+            ret = pd.DataFrame(0, index=self.ids, columns=self.ids)
             ret.loc[od.index, od.columns] = od
             ret.to_csv(self._od_sum, index=True)
         return ret.as_matrix()
@@ -121,14 +127,14 @@ class BJLoader:
 class LALoader:
     def __init__(self):
         self._path = Path(DATA_PATH) / LA_PATH
-        self._ids, self.id_to_idx, self.adj = pickle.load(
+        self.ids, self.id_to_idx, self.adj = pickle.load(
             open(self._path / 'adj_mx.pkl', 'rb'))
         self._node = self._path / 'graph_sensor_locations.csv'
         self._ts = self._path / 'df_highway_2012_4mon_sample.h5'
         self._link = self._path / 'distances_la_2012.csv'
 
     def load_ts(self, freq='5min'):
-        ts = pd.read_hdf(self._ts).loc[:, self._ids]
+        ts = pd.read_hdf(self._ts).loc[:, self.ids]
         ts[ts==0.] = np.nan
         return ts.resample(freq).mean()
 
