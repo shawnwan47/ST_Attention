@@ -53,8 +53,8 @@ class TimeSeries(IO):
         data_len = (seq_len - 1) if train else seq_in_len
         samples = times - seq_len + 1
         data_cat = self._gen_seq(data_cat, data_len, samples)
-        data_num = self._gen_seq(self.scale(df).values, data_len, samples)
-        targets = self._gen_seq(df.values[seq_in_len:], seq_out_len, samples)
+        data_num = self._gen_seq(data_num, data_len, samples)
+        targets = self._gen_seq(targets[:, seq_in_len:], seq_out_len, samples)
         return data_num, data_cat, targets
 
     def scale(self, df):
