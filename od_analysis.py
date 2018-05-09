@@ -78,17 +78,14 @@ def od_distance(od, od_):
     shape = (args.nodes // 2, args.nodes // 2)
     pk = coo_matrix((pdata, (prow, pcol)), shape=shape)
     qk = coo_matrix((qdata, (qrow, qcol)), shape=shape)
-    p_sum = pk.sum(1)
-    pk = normalize(pk, norm='l1', axis=1)
-    qk = normalize(qk, norm='l1', axis=1)
+    pk /= pk.sum()
+    qk /= qk.sum()
     distances = hellinger_distance(pk, qk)
-    distance = np.nansum(np.multiply(distances, p_sum)) / p_sum.sum()
-    # print(f'distance: {distance}')
     return distance
 
 
 def hellinger_distance(pk, qk):
-    BC = pk.multiply(qk).sqrt().sum(1)
+    BC = np.multiply(pk, qk).sqrt().sum()
     return np.sqrt(1 - BC)
 
 

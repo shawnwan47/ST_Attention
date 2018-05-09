@@ -23,16 +23,16 @@ class BJLoader:
         self._ts_od = self._path / 'OD.csv'
         self._ts_do = self._path / 'DO.csv'
         self._od_sum = self._path / 'ODSUM.csv'
-        self.ids = self._loadids()
+        self.ids = self._load_ids()
         self.id_to_idx = {id: i for i, id in enumerate(self.ids)}
 
-    def _loadids(self):
+    def _load_ids(self):
         node = self.load_node(raw=True)
-        nodeids = set(node.index)
+        node_ids = set(node.index)
         linkids = list(np.unique(self.load_link()))
         tsids = [*self._load_ts('O').columns, *self._load_ts('D').columns]
-        nodeids = nodeids.intersection(*[linkids, tsids])
-        idx = node.loc[nodeids].sort_values(['ROUTE', 'STATION']).index
+        node_ids = node_ids.intersection(*[linkids, tsids])
+        idx = node.loc[node_ids].sort_values(['ROUTE', 'STATION']).index
         return idx
 
     def _load_ts(self, od='D'):
@@ -50,9 +50,11 @@ class BJLoader:
         return np.genfromtxt(filepath, dtype=int)
 
     def load_ts(self, freq='5min'):
-        o = self._load_ts('O').loc[:, self.ids]
-        d = self._load_ts('D').loc[:, self.ids]
-        return pd.concat((o, d), axis=1).resample(freq).sum()
+        o = self._load_ts('O').reindex(columns=self.ids)
+        d = self._load_ts('D').reindex(columns=self.ids)
+        ts = pd.concat((o, d), axis=1).fillna(0)
+        ts = ts.resample(freq).sum()
+        return ts
 
     def load_hop(self):
         if self._hop.exists():
