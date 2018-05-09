@@ -1,23 +1,21 @@
 import numpy as np
 import scipy as sp
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, TensorDataset, DataLoader
 
 from lib import Loader
 from lib.IO import TimeSeries
 
 
-class MyDataset(Dataset):
-    def __init__(self, data_num, data_cat, target):
-        self.data_num = torch.FloatTensor(data_num)
-        self.data_cat = torch.LongTensor(data_cat)
-        self.target = torch.FloatTensor(target)
-
-    def __getitem__(self, index):
-        return (self.data_num[index], self.data_cat[index], self.target[index])
+class SparseDataset(Dataset):
+    def __init__(self, values, rows, cols):
+        pass
 
     def __len__(self):
-        return self.target.size(0)
+        pass
+
+    def __getitem__(self):
+        pass
 
 
 def get_dataset(dataset, freq, start, end, past, future, bsz, cuda):
@@ -37,7 +35,7 @@ def get_dataset(dataset, freq, start, end, past, future, bsz, cuda):
                 for i, data in enumerate(
                     [io.data_train, io.data_valid, io.data_test])]
 
-    dataset_tvt = [MyDataset(data[0], data[1], data[2]) for data in data_tvt]
+    dataset_tvt = [TensorDataset(data[0], data[1], data[2]) for data in data_tvt]
 
     data_train, data_valid, data_test = (
         DataLoader(dataset, batch_size=bsz, pin_memory=cuda, shuffle=i==0)

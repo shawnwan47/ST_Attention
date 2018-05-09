@@ -14,3 +14,8 @@ def od_distance(od_p, od_q):
         kl += entropy(od_p[i], od_q[i]) * od_p[i].sum()
     kl /= od_p.sum()
     return kl
+
+
+def cat_strs(*args):
+    args = [arg for arg in args if isinstance(arg, str)]
+    return '_'.join(args)
