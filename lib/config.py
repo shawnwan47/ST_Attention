@@ -6,8 +6,8 @@ def add_data(args):
                       choices=['LA', 'BJ_highway', 'BJ_metro'])
 
     args.add_argument('-freq', type=int, default=5)
-    args.add_argument('-start', type=int, default=6)
-    args.add_argument('-end', type=int, default=22)
+    args.add_argument('-start', type=int, default=0)
+    args.add_argument('-end', type=int, default=24)
     args.add_argument('-past', type=int, default=60)
     args.add_argument('-future', type=int, default=60)
     args.add_argument('-futures', nargs='+', default=[15, 30, 60])

@@ -96,7 +96,7 @@ class BJLoader:
             dist.to_csv(self._dist, index=True)
         return dist.loc[self.ids, self.ids].as_matrix()
 
-    def load_ts_od(self, od='OD', freq='15min'):
+    def load_ts_od(self, od='OD', freq='5min'):
         assert od in ['OD', 'DO']
         filepath = self._ts_od if od == 'OD' else self._ts_do
         ret = pd.read_csv(filepath,

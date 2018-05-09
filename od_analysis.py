@@ -19,7 +19,7 @@ args = args.parse_args()
 config.update_data(args)
 
 assert args.dataset in ['BJ_highway', 'BJ_metro']
-FREQS = ['15min', '30min', '1h', '3h', '6h', '12h', '1d']
+FREQS = ['5min', '10min', '15min', '30min', '1h', '3h', '6h', '12h', '1d']
 PERIODS = ['last', 'day', 'week']
 
 
@@ -65,7 +65,7 @@ def compute_distances(od, index, od_=None, index_=None):
 
 
 def od_distance(od, od_):
-    if not pdata or not qdata:
+    if od.empty or od_.empty:
         return np.nan
     pdata = (od.values / od.values.sum()).tolist()
     prow = od.index.get_level_values(0).tolist()
@@ -120,7 +120,7 @@ def dump_results():
         od_freq, do_freq = asfreq(od, freq), asfreq(do, freq)
         dump_od_symmetric(od_freq, do_freq, freq)
         for period in PERIODS:
-            dump_od_dynamic(od_freq, freq, period, 'od')
+            dump_od_dynamic(od_freq, freq, period)
 
 
 ################################################################################
