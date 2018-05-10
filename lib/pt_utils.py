@@ -8,14 +8,20 @@ from lib.IO import TimeSeries
 
 
 class SparseDataset(Dataset):
-    def __init__(self, values, rows, cols):
-        pass
+    def __init__(self, coo, size):
+        self.data = [torch.sparse.FloatTensor(torch.LongTensor(i),
+                                              torch.FloatTensor(v),
+                                              torch.Size(size)) for i, v in coo]
 
     def __len__(self):
-        pass
+        return len(self.data)
 
-    def __getitem__(self):
-        pass
+    def __getitem__(self, index):
+        return data[index]
+
+
+class HybridDataset():
+    pass
 
 
 def get_dataset(dataset, freq, start, end, past, future, bsz, cuda):

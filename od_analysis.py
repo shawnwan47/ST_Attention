@@ -21,25 +21,46 @@ config.update_data(args)
 assert args.dataset in ['BJ_highway', 'BJ_metro']
 FREQS = ['5min', '10min', '15min', '30min', '1h', '3h', '6h', '12h', '1d']
 PERIODS = ['last', 'day', 'week']
+PRE_OD = 'OD'
+PRE_DOD = 'DOD'
 
 
-def load_od(od='OD'):
+################################################################################
+# IO
+################################################################################
+def csvpath(*strs):
+    name = cat_strs(*strs) + '.csv'
+    return Path(RESULT_PATH) / args.dataset / name
+
+
+def pngpath(*strs):
+    name = cat_strs(*strs) + '.png'
+    return Path(FIG_PATH) / args.dataset / name
+
+
+def read_csv_series(path):
+    return pd.read_csv(path,
+                       header=None,
+                       squeeze=True,
+                       index_col=0,
+                       parse_dates=True)
+
+
+def load_od():
     if args.dataset == 'BJ_highway': loader = Loader.BJLoader('highway')
     else: loader = Loader.BJLoader('metro')
-    return loader.load_ts_od(od=od)
+    return loader.load_ts_od(od='OD'), loader.load_ts_od('DO')
 
 
 def asfreq(OD, freq):
     names = OD.index.names
     datetime_group = pd.Grouper(level=names[0], freq=freq)
     od_freq = OD.groupby([datetime_group, names[1], names[2]]).sum()
-    print(f'Transformed OD to {freq}...')
     return od_freq
 
 
 def get_week_index(datetime):
-    week = datetime.weekofyear == (datetime.weekofyear[0] + 2)
-    return datetime[week]
+    return datetime[datetime.weekofyear == (datetime.weekofyear[0] + 2)]
 
 
 def get_period_index(datetime, period):
@@ -55,15 +76,6 @@ def get_period_index(datetime, period):
 ################################################################################
 # Computing
 ################################################################################
-def compute_distances(od, index, od_=None, index_=None):
-    if od_ is None:
-        od_ = od
-    if index_ is None:
-        index_ = index
-    return [od_distance(od[idx], od_[idx_])
-            for idx, idx_ in zip(index, index_)]
-
-
 def od_distance(od, od_):
     if od.empty or od_.empty:
         return np.nan
@@ -76,111 +88,74 @@ def od_distance(od, od_):
     shape = (args.nodes // 2, args.nodes // 2)
     pk = coo_matrix((pdata, (prow, pcol)), shape=shape)
     qk = coo_matrix((qdata, (qrow, qcol)), shape=shape)
-    distance = hellinger_distance(pk, qk)
-    return distance
+    return hellinger_distance(pk, qk)
+
+
+def hellinger_distance(pk, qk):
+    BC = pk.multiply(qk).sqrt().sum()
+    return np.sqrt(1 - BC)
 
 
 ################################################################################
 # dump results
 ################################################################################
-def hellinger_distance(pk, qk):
-    BC = np.multiply(pk, qk).sqrt().sum()
-    return np.sqrt(1 - BC)
 
-
-def get_csv_path(*features):
-    filename = cat_strs(*features) + '.csv'
-    path = Path(RESULT_PATH) / args.dataset / filename
-    return path
-
-
-def dump_od_dynamic(od, freq='1h', period='last'):
-    path = get_csv_path(freq, period)
-    index = get_week_index(od.index.levels[0])
-    index_ = get_period_index(index, period)
-    dynamic = compute_distances(od=od, index=index, index_=index_)
-    sym_df = pd.Series(dynamic, index=index)
-    sym_df.to_csv(path, index=True)
-    return sym_df
-
-
-def dump_od_symmetric(od, do, freq='1h'):
-    path = get_csv_path('sym', freq)
-    index = get_week_index(od.index.levels[0])
-    symetric = compute_distances(od=od, od_=do, index=index)
-    sym_df = pd.Series(symetric, index=index)
-    sym_df.to_csv(path, index=True)
-    return sym_df
-
-
-def dump_results():
-    od = load_od('OD')
-    do = load_od('DO')
+def calc_dump_results():
+    od, do = load_od()
     for freq in FREQS:
         od_freq, do_freq = asfreq(od, freq), asfreq(do, freq)
-        dump_od_symmetric(od_freq, do_freq, freq)
+        print(f'Transformed OD to {freq}...')
+        symmetric = calc_od_symmetric(od_freq, do_freq)
+        symmetric.to_csv(csvpath(PRE_DOD, freq))
         for period in PERIODS:
-            dump_od_dynamic(od_freq, freq, period)
+            dynamic = calc_od_dynamic(od_freq, period)
+            dynamic.to_csv(csvpath(PRE_OD, freq, period))
+
+
+def calc_od_dynamic(od, period='last'):
+    index = get_week_index(od.index.levels[0])
+    index_ = get_period_index(index, period)
+    distances = [od_distance(od[idx], od[idx_])
+                 for idx, idx_ in zip(index, index_)]
+    return pd.Series(distances, index=index)
+
+
+def calc_od_symmetric(od, do):
+    index = get_week_index(od.index.levels[0])
+    distances = [od_distance(od[idx], do[idx]) for idx in index]
+    return pd.Series(distances, index=index)
 
 
 ################################################################################
 # PLOTTING
 ################################################################################
-def get_fig_path(*features):
-    filename = cat_strs(*features) + '.png'
-    return Path(FIG_PATH) / args.dataset / filename
 
-
-def read_csv_series(path):
-    return pd.read_csv(path,
-                       header=None,
-                       squeeze=True,
-                       index_col=0,
-                       parse_dates=True)
-
-
-def plot_dynamic(od, freq, period=None, label=None):
-    filepath = get_csv_path(od, freq, period)
-    series = read_csv_series(filepath)
-    series.plot(label=label)
-
-
-def plot_freq(od, period=None):
-    path = get_fig_path(od, period)
-    # path = '/'.join(path.parts)
-    plt.figure()
-    plt.ylim(0, 1)
-    for freq in FREQS:
-        plot_dynamic(od, freq, period, label=freq)
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(path)
-    plt.close()
-
-
-def plot_period(od, freq):
-    path = get_fig_path(od, freq)
-    # path = '/'.join(path.parts)
+def plot_series(prefix, on=None):
+    figpath = pngpath(prefix, on)
     fig = plt.figure()
+    if on in FREQS:
+        for period in PERIODS:
+            read_csv_series(csvpath(prefix, on, period)).plot(label=period)
+    else:
+        for freq in FREQS:
+            read_csv_series(csvpath(prefix, freq, on)).plot(label=freq)
     plt.ylim(0, 1)
-    for i, period in enumerate(PERIODS):
-        series = read_csv_series(get_csv_path(od, freq, period))
-        series.plot(label=period)
-        # axes[i].set_ylim(0, 1)
     plt.legend()
     plt.tight_layout()
-    plt.savefig(path)
+    plt.savefig(figpath)
     plt.close()
 
 
 def plot_results():
-    plot_freq('sym')
+    plot_series(PRE_DOD)
     for freq in FREQS:
-        plot_period('od', freq)
+        plot_series(PRE_OD, freq)
     for period in PERIODS:
-        plot_freq('od', period)
+        plot_series(PRE_OD, period)
 
 
 if __name__ == '__main__':
-    dump_results()
-    plot_results()
+    calc_dump_results()
+    # plot_results()
+
+    pass
