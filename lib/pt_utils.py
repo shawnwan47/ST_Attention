@@ -5,6 +5,7 @@ from torch.utils.data import Dataset, TensorDataset, DataLoader
 
 from lib import Loader
 from lib.IO import TimeSeries
+from lib.utils import aeq
 
 
 class SparseDataset(Dataset):
@@ -20,8 +21,16 @@ class SparseDataset(Dataset):
         return data[index]
 
 
-class HybridDataset():
-    pass
+class HybridDataset(Dataset):
+    def __init__(self, *datasets):
+        aeq(*[len(dataset) for dataset in datasets])
+        self.datasets = datasets
+
+    def __len__(self):
+        return len(self.datasets[0])
+
+    def __getitem__(self, index):
+        return (*dataset[index] for dataset in self.datasets)
 
 
 def get_dataset(dataset, freq, start, end, past, future, bsz, cuda):
@@ -33,15 +42,15 @@ def get_dataset(dataset, freq, start, end, past, future, bsz, cuda):
         loader = Loader.BJLoader('metro')
     elif dataset == 'LA':
         loader = Loader.LALoader()
-    ts, adj = loader.load_ts(freq), loader.load_adj()
+    ts = loader.load_ts(freq)
 
     # time series
-    io = TimeSeries(ts)
-    data_tvt = [io.gen_seq2seq_io(data, past, future, i==0)
-                for i, data in enumerate(
-                    [io.data_train, io.data_valid, io.data_test])]
+    io = TimeSeries(ts, start, end, past, future)
 
-    dataset_tvt = [TensorDataset(data[0], data[1], data[2]) for data in data_tvt]
+    dataset_tvt = [TensorDataset(torch.FloatTensor(data[0]),
+                                 torch.LongTensor(data[1]),
+                                 torch.FloatTensor(data[2]))
+                   for data in (ts.data_train, ts.data_valid, ts.data_test)]
 
     data_train, data_valid, data_test = (
         DataLoader(dataset, batch_size=bsz, pin_memory=cuda, shuffle=i==0)
