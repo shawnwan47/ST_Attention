@@ -11,8 +11,9 @@ def add_data(args):
     args.add_argument('-past', type=int, default=60)
     args.add_argument('-future', type=int, default=60)
     args.add_argument('-futures', nargs='+', default=[15, 30, 60])
-
-    args.add_argument('-nodes', type=int)
+    args.add_argument('-day_count', type=int, default=7)
+    args.add_argument('-time_count', type=int)
+    args.add_argument('-node_count', type=int)
 
 
 def add_train(args):
@@ -40,16 +41,16 @@ def add_model(args):
     args.add_argument('-model', default='RNN',
                       choices=['RNN', 'RNNAttn', 'GCRNN'])
     # general parameters
-    args.add_argument('-nin', type=int)
-    args.add_argument('-nout', type=int)
+    args.add_argument('-input_size', type=int)
+    args.add_argument('-output_size', type=int)
     args.add_argument('-nlayers', type=int, default=2)
     args.add_argument('-nhid', type=int, default=256)
     args.add_argument('-pdrop', type=float, default=0.2)
     # Embedding
-    args.add_argument('-day_count', type=int, default=7)
-    args.add_argument('-day_size', type=int, default=8)
-    args.add_argument('-time_count', type=int)
+    args.add_argument('-flow_size', type=int, default=16)
+    args.add_argument('-day_size', type=int, default=16)
     args.add_argument('-time_size', type=int, default=16)
+    args.add_argument('-node_size', type=int, default=16)
     # RNN
     args.add_argument('-rnn_type', default='RNN', choices=['RNN', 'GRU', 'LSTM'])
     # Attention
@@ -63,11 +64,11 @@ def add_model(args):
 def update_data(args):
     args.time_count = 1440 // args.freq
     if args.dataset == 'BJ_metro':
-        args.nodes = 536
+        args.node_count = 536
     elif args.dataset == 'BJ_highway':
-        args.nodes = 264
+        args.node_count = 264
     elif args.dataset == 'LA':
-        args.nodes = 207
+        args.node_count = 207
 
     args.past //= args.freq
     args.future //= args.freq
@@ -77,11 +78,11 @@ def update_data(args):
 def update_model(args):
     embed_size = args.day_size + args.time_size
     if args.model in ['RNN', 'RNNAttn']:
-        args.nin = args.nodes + embed_size
-        args.nout = args.nodes
-    if args.model == 'GCRNN':
-        args.nin = 1
-        args.nout = 1
+        args.input_size = args.node_count + embed_size
+        args.output_size = args.node_count
+    if args.model in ['GCRNN', 'GARNN']:
+        args.input_size = sum(args.flow_size, args.day_size, args.time_size, args.node_size)
+        args.output_size = 1
 
     # path
     name = args.model
