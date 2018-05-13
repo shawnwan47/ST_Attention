@@ -1,52 +1,18 @@
-import math
-
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
-
-class GraphConvolution(nn.Module):
-    def __init__(self, nin, nout, graph):
-        super().__init__()
-        self.graph = graph
-        self.linear = nn.Linear(nin, nout)
-
-    def forward(self, input):
-        assert input.size(-2) == len(self.graph)
-        return self.graph.matmul(self.linear(input))
-
-
-class DiffusionConvolution(nn.Module):
-    def __init__(self, nin, nout, graph, hops=1, reversed=False):
-        super().__init__()
-        self.gc_kernels = nn.ModuleList()
-        graph_t = graph.t()
-        graph /= graph.sum(0)
-        graph_t /= graph_t.sum(0)
-        graph_k = graph[:]
-        for hop in range(hops):
-            graph_k.matmul(graph)
-            self.gc_kernels.append(GraphConvolution(nin, nout, graph_k))
-        if reversed:
-            graph_k = graph_t[:]
-            for hop in range(hops):
-                graph_k.matmul(graph_t)
-                self.gc_kernels.append(GraphConvolution(nin, nout, graph_k))
-
-    def forward(self, input):
-        return torch.sum((gc(input) for gc in self.gc_kernels), -1)
+import torch.nn
 
 
 class GCRNNCell(nn.Module):
-    def __init__(self, rnn_type, nin, nout, graph, hops=1, reversed=False):
+    def __init__(self, rnn_type, input_size, output_size,
+                 func, *args, **kwargs):
         assert rnn_type in ['RNNtanh', 'RNNrelu', 'GRU', 'LSTM']
         super().init()
         self.rnn_type = rnn_type
-        ngate = nout
-        if self.rnn_type == 'GRU': ngate *= 3
-        elif self.rnn_type == 'LSTM': ngate *= 4
-        self.gc_i = DiffusionConvolution(nin, ngate, graph, hops, reversed)
-        self.gc_h = DiffusionConvolution(nout, ngate, graph, hops, reversed)
+        gate_size = output_size
+        if self.rnn_type == 'GRU': gate_size *= 3
+        elif self.rnn_type == 'LSTM': gate_size *= 4
+        self.func_i = func(input_size, gate_size, *args, **kwargs)
+        self.func_h = func(output_size, gate_size, *args, **kwargs)
 
     def forward(self, input, hidden):
         if self.rnn_type == 'RNNtanh':
@@ -60,11 +26,11 @@ class GCRNNCell(nn.Module):
         return output
 
     def rnn(self, input, hidden):
-        return self.gc_i(input) + self.gc_h(hidden)
+        return self.func_i(input) + self.func_h(hidden)
 
     def gru(self, input, hidden):
-        gi = self.gc_i(input)
-        gh = self.gc_h(hidden)
+        gi = self.func_i(input)
+        gh = self.func_h(hidden)
         i_r, i_i, i_n = gi.chunk(3, 1)
         h_r, h_i, h_n = gh.chunk(3, 1)
 
@@ -76,7 +42,7 @@ class GCRNNCell(nn.Module):
 
     def lstm(self, input, hidden):
         hx, cx = hidden
-        gates = self.gc_i(input) + self.gc_h(hx)
+        gates = self.func_i(input) + self.func_h(hx)
         ingate, forgetgate, cellgate, outgate = gates.chunk(4, 1)
 
         ingate = F.sigmoid(ingate)
@@ -90,42 +56,49 @@ class GCRNNCell(nn.Module):
 
 
 class GCRNN(nn.Module):
-    def __init__(self, rnn_type, nnode, nin, nhid, nlayers,
-                 graph, hops=1, reversed=True, pdrop=0):
+    def __init__(self, rnn_type, node_count,
+                 input_size, hidden_size, num_layers, p_dropout,
+                 func, *args, **kwargs):
         super().__init__()
         self.rnn_type = rnn_type
-        self.nnode = nnode
-        self.nhid = nhid
-        self.nlayers = nlayers
-        self.layers = nn.ModuleList((GCRNNCell(rnn_type, nin, nhid, graph)))
-        self.layers.extend((GCRNNCell(rnn_type, nhid, nhid, graph, hops, reversed)
-                            for i in range(nlayers - 1)))
-        self.dropout = nn.Dropout(pdrop)
+        self.node_count = node_count
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.layers = nn.ModuleList()
+        self.layers.append(
+            GCRNNCell(rnn_type, input_size, hidden_size, func, *args, **kwargs)
+        )
+        self.layers.extend((
+            GCRNNCell(rnn_type, hidden_size, hidden_size, func, *args, **kwargs)
+            for i in range(num_layers - 1)
+        ))
+        self.dropout = nn.Dropout(p_dropout)
 
-    def forward(self, input, hidden=None):
-        bsz, seq_len, nnode, nin = input.size()
-        if hidden is None:
-            hidden = self.init_hidden(bsz)
-        output = []
-        for idx in range(seq_len):
-            out_i = input[idx]
-            for lay in range(self.nlayers):
-                if self.rnn_type == 'LSTM':
-                    hidden[0][:, lay], hidden[1][:, lay] = self.layers[lay](
-                        out_i, (hidden[0][:, lay], hidden[1][:, lay]))
-                    out_i = hidden[0][:, lay]
-                else:
-                    hidden[:, lay] = self.layers[lay](out_i, hidden[:, lay])
-                    out_i = hidden[:, lay]
-                out_i = self.dropout(out_i)
-            output.append(out_i)
-        output = torch.stack(output)
-        return output, hidden
-
-    def init_hidden(self, bsz):
+    def init_hidden(self, batch_size):
         weight = next(self.parameters())
-        size = (bsz, self.nlayers, self.nnode, self.nhid)
+        size = (batch_size, self.num_layers, self.node_count, self.hidden_size)
         if self.rnn_type == 'LSTM':
             return (weight.new_zeros(size), weight.new_zeros(size))
         else:
             return weight.new_zeros(size)
+
+    def forward(self, input, hidden=None):
+        batch_size, seq_len, node_count, input_size = input.size()
+        if hidden is None:
+            hidden = self.init_hidden(batch_size)
+        output = []
+        for idx in range(seq_len):
+            output_i = input[idx]
+            for ilay, layer in enumerate(self.layers):
+                if self.rnn_type == 'LSTM':
+                    hidden[0][:, ilay], hidden[1][:, ilay] = layer(
+                        output_i, (hidden[0][:, ilay], hidden[1][:, ilay]))
+                    output_i = hidden[0][:, ilay]
+                else:
+                    hidden[:, ilay] = layer(output_i, hidden[:, ilay])
+                    output_i = hidden[:, ilay]
+                if ilay < self.num_layers - 1:
+                    output_i = self.dropout(output_i)
+            output.append(output_i)
+        output = torch.stack(output, 1)
+        return output, hidden

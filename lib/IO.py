@@ -44,12 +44,12 @@ class TimeSeries:
         df = df[(df.index.hour >= start) & (df.index.hour < end)]
         df_train, df_valid, df_test = split_data(df)
         self.mean, self.std = df_train.mean().values, df_train.std().values
-        self.data_train = self._gen_seq2seq_io(df_train, train=True)
+        self.data_train = self._gen_seq2seq_io(df_train)
         self.data_valid = self._gen_seq2seq_io(df_valid)
         self.data_test = self._gen_seq2seq_io(df_test)
 
 
-    def _gen_seq2seq_io(self, df, train=False):
+    def _gen_seq2seq_io(self, df):
 
         def _gen_daytime(index):
             day = index.weekday
@@ -57,7 +57,8 @@ class TimeSeries:
             daytime = np.stack((day, time), -1)
             return daytime
 
-        def _gen_seq(arr, seq_len, samples):
+        def _gen_seq(arr, seq_len):
+            samples = arr.shape[1] - seq_len + 1
             seq = np.stack([arr[:, i:i + seq_len] for i in range(samples)], axis=1)
             seq = seq.reshape(-1, seq_len, seq.shape[-1])
             return seq
@@ -72,12 +73,10 @@ class TimeSeries:
         data_num, data_cat, targets = (dat.reshape(days, times, -1)
                                        for dat in (data_num, data_cat, targets))
         # gen seq
-        seq_len = self.seq_len_in + self.seq_len_out
-        data_len = (seq_len - 1) if train else self.seq_len_in
-        samples = times - seq_len + 1
-        data_cat = _gen_seq(data_cat, data_len, samples)
-        data_num = _gen_seq(data_num, data_len, samples)
-        targets = _gen_seq(targets[:, self.seq_len_in:], self.seq_len_out, samples)
+        data_len = self.seq_len_in + self.seq_len_out - 1
+        data_cat = _gen_seq(data_cat[:, :-1], data_len)
+        data_num = _gen_seq(data_num[:, :-1], data_len)
+        targets = _gen_seq(targets[:, self.seq_len_in:], self.seq_len_out)
         return data_num, data_cat, targets
 
     def _scale(self, df):
@@ -85,17 +84,17 @@ class TimeSeries:
 
 
 class SparseTimeSeries:
-    def __init__(self, ss, start=0, end=24, seq_len_in=12, seq_len_out=12):
+    def __init__(self, ts, start=0, end=24, seq_len_in=12, seq_len_out=12):
         self.seq_len_in = seq_len_in
         self.seq_len_out = seq_len_out
-        ss_train, ss_valid, ss_test = split_data(ss)
+        ss_train, ss_valid, ss_test = split_data(ts)
         self.data_train = self._gen_seq_coo(ss_train)
         self.data_valid = self._gen_seq_coo(ss_valid)
         self.data_test = self._gen_seq_coo(ss_test)
 
-    def _gen_seq_coo(self, ss):
-        coos = self.ss_to_coo(ss)
-        days = get_days(ss.index.levels[0])
+    def _gen_seq_coo(self, ts):
+        coos = self.ss_to_coo(ts)
+        days = get_days(ts.index.levels[0])
         times = len(coos) // days
         samples = times - self.seq_len_out - self.seq_len_in + 1
         ret = []
@@ -106,11 +105,11 @@ class SparseTimeSeries:
         return ret
 
     @staticmethod
-    def ss_to_coo(ss):
+    def ss_to_coo(ts):
         coos = []
-        for datetime in ss.index.levels[0]:
-            val = ss[datetime].values.tolist()
-            row = ss[datetime].index.get_level_values(0).tolist()
-            col = ss[datetime].index.get_level_values(1).tolist()
+        for datetime in ts.index.levels[0]:
+            val = ts[datetime].values.tolist()
+            row = ts[datetime].index.get_level_values(0).tolist()
+            col = ts[datetime].index.get_level_values(1).tolist()
             coos.append(((row, col), val))
         return coos

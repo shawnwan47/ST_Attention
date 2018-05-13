@@ -11,6 +11,7 @@ def add_data(args):
     args.add_argument('-past', type=int, default=60)
     args.add_argument('-future', type=int, default=60)
     args.add_argument('-futures', nargs='+', default=[15, 30, 60])
+
     args.add_argument('-day_count', type=int, default=7)
     args.add_argument('-time_count', type=int)
     args.add_argument('-node_count', type=int)
@@ -33,7 +34,7 @@ def add_train(args):
     args.add_argument('-retrain', action='store_true')
     args.add_argument('-epoches', type=int, default=100)
     args.add_argument('-iters', type=int, default=1)
-    args.add_argument('-bsz', type=int, default=256)
+    args.add_argument('-batch_size', type=int, default=256)
 
 
 def add_model(args):
@@ -43,9 +44,11 @@ def add_model(args):
     # general parameters
     args.add_argument('-input_size', type=int)
     args.add_argument('-output_size', type=int)
-    args.add_argument('-nlayers', type=int, default=2)
-    args.add_argument('-nhid', type=int, default=256)
-    args.add_argument('-pdrop', type=float, default=0.2)
+    args.add_argument('-num_layers', type=int, default=2,
+                      choices=[1, 2, 3])
+    args.add_argument('-hidden_size', type=int, default=256,
+                      choices=[16, 32, 64, 128, 256, 512])
+    args.add_argument('-p_dropout', type=float, default=0.2)
     # Embedding
     args.add_argument('-flow_size', type=int, default=16)
     args.add_argument('-day_size', type=int, default=16)
@@ -56,7 +59,7 @@ def add_model(args):
     # Attention
     args.add_argument('-attn_type', default='dot',
                       choices=['dot', 'global', 'mlp', 'multi'])
-    args.add_argument('-head', type=int, default=4)
+    args.add_argument('-head_count', type=int, default=4)
     # Save path
     args.add_argument('-path')
 
@@ -66,13 +69,14 @@ def update_data(args):
     if args.dataset == 'BJ_metro':
         args.node_count = 536
     elif args.dataset == 'BJ_highway':
-        args.node_count = 264
+        args.node_count = 268
     elif args.dataset == 'LA':
         args.node_count = 207
 
     args.past //= args.freq
     args.future //= args.freq
     args.futures = [t // args.freq - 1 for t in args.futures]
+    args.freq = str(args.freq) + 'min'
 
 
 def update_model(args):
@@ -86,8 +90,8 @@ def update_model(args):
 
     # path
     name = args.model
-    name += '_hid' + str(args.nhid)
-    name += '_lay' + str(args.nlayers)
+    name += '_hid' + str(args.hidden_size)
+    name += '_lay' + str(args.num_layers)
     if args.model == 'Transformer':
         name += '_head' + str(args.head)
     args.path = MODEL_PATH + args.dataset + '/' + name

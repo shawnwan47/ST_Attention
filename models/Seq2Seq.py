@@ -5,57 +5,48 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class Seq2Seq(nn.Module):
-    def __init__(self, model, embedding, encoder, decoder, enc_len, dec_len):
+
+class Seq2SeqBase(nn.Module):
+    def __init__(self, embedding, encoder, decoder, seq_len_in, seq_len_out):
         super().__init__()
-        assert model in ['RNN', 'RNNAttn', 'GCRNN']
-        self.model = model
         self.embedding = embedding
         self.encoder = encoder
         self.decoder = decoder
-        self.enc_len = enc_len
-        self.dec_len = dec_len
-
-    def forward(self, input_num, input_cat):
-        embedded = self.embedding(input_cat)
-        enc_input = torch.cat((input_num[:self.enc_len], embedded[:self.enc_len]), -1)
-        return enc_input, embedded
+        self.seq_len_in = seq_len_in
+        self.seq_len_out = seq_len_out
 
 
-class Seq2SeqRNN(Seq2Seq):
-    def forward(self, input_num, input_cat, teach=0.5):
-        enc_input, embedded = super().forward(input_num, input_cat)
-        # encoding
-        enc_output, hidden = self.encoder(enc_input)
-        # decoding
-        dec_output = input_num[[self.enc_len - 1]]
-        output = []
-        for i in range(self.dec_len):
-            if random.random() < teach:
-                dec_input_num = input_num[[self.enc_len + i - 1]]
-            else:
-                dec_input_num = dec_output.detach()
-            dec_input = torch.cat((dec_input_num, embedded[[i]]), -1)
-            dec_output, hidden = self.decoder(dec_input, hidden)
-            output.append(dec_output)
-        return torch.cat(output)
+class Seq2SeqRNN(nn.Module):
+    def __init__(self, model, embedding, encoder, decoder,
+                 seq_len_in, seq_len_out):
+        assert model in ['RNN', 'RNNAttn', 'GCRNN', 'GCRNNAttn']
+        super().__init__(embedding, encoder, decoder, seq_len_in, seq_len_out)
+        self.model = model
 
-
-class Seq2SeqRNNAttn(Seq2Seq):
     def forward(self, input_num, input_cat, teach):
-        enc_input, embedded = super().forward(input_num, input_cat)
+        # embedding
+        embedded = self.embedding(input_cat)
         # encoding
-        enc_output, hidden = self.encoder(enc_input)
+        encoder_input = torch.cat((input_num[:, :self.seq_len_in],
+                                   embedded[:, :self.seq_len_in]), dim=-1)
+        encoder_output, hidden = self.encoder(encoder_input)
         # decoding
-        de_output = input_num[[self.enc_len - 1]]
-        output, attn = [], []
-        for i in range(self.dec_len):
+        decoder_output = input_num[:, [self.seq_len_in - 1]]
+        output, attns = [], []
+        for i in range(self.seq_len_out):
             if random.random() < teach:
-                dec_input_num = dec_output.detach()
+                decoder_input_num = input_num[:, [self.seq_len_in + i - 1]]
             else:
-                dec_input_num = input_num[[self.enc_len + i - 1]]
-            dec_input = torch.cat(dec_input_num, embedded[[i]], -1)
-            dec_output, hidden, attention = self.decoder(dec_input, hidden, enc_output)
-            output.append(dec_output)
-            attn.append(attention)
-        return torch.cat(output), torch.cat(attn, -2)
+                decoder_input_num = decoder_output.detach()
+            decoder_input = torch.cat((decoder_input_num, embedded[:, [i]]), -1)
+            if self.model == 'RNN':
+                decoder_output, hidden = self.decoder(decoder_input, hidden)
+            else:
+                decoder_output, hidden, attn = self.decoder(
+                    decoder_input, hidden, enc_output)
+                attns.append(attn)
+            output.append(decoder_output)
+        if self.model == 'RNN':
+            return torch.cat(output, 1)
+        else:
+            return torch.cat(output, 1), torch.cat(attns, 1)
