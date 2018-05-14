@@ -19,7 +19,7 @@ class GraphConvolution(nn.Module):
 
 
 class DiffusionConvolution(nn.Module):
-    def __init__(self, input_size, output_size, graph, hops=1, reversed=False):
+    def __init__(self, input_size, output_size, graph, hops=1, uni=False):
         super().__init__()
         self.gc_kernels = nn.ModuleList()
         graph_t = graph.t()
@@ -29,7 +29,7 @@ class DiffusionConvolution(nn.Module):
         for hop in range(hops):
             graph_k.matmul(graph)
             self.gc_kernels.append(GraphConvolution(input_size, output_size, graph_k))
-        if reversed:
+        if not uni:
             graph_k = graph_t[:]
             for hop in range(hops):
                 graph_k.matmul(graph_t)

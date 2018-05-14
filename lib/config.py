@@ -2,7 +2,7 @@ from constants import MODEL_PATH
 
 def add_data(args):
     # data attribute
-    args.add_argument('-dataset', default='BJ_highway',
+    args.add_argument('-dataset', default='LA',
                       choices=['LA', 'BJ_highway', 'BJ_metro'])
 
     args.add_argument('-freq', type=int, default=5)
@@ -41,13 +41,12 @@ def add_model(args):
     # framework and model
     args.add_argument('-model', default='RNN',
                       choices=['RNN', 'RNNAttn', 'GCRNN'])
-    # general parameters
+    # general
     args.add_argument('-input_size', type=int)
     args.add_argument('-output_size', type=int)
     args.add_argument('-num_layers', type=int, default=2,
                       choices=[1, 2, 3])
-    args.add_argument('-hidden_size', type=int, default=256,
-                      choices=[16, 32, 64, 128, 256, 512])
+    args.add_argument('-hidden_size', type=int)
     args.add_argument('-p_dropout', type=float, default=0.2)
     # Embedding
     args.add_argument('-flow_size', type=int, default=16)
@@ -55,17 +54,31 @@ def add_model(args):
     args.add_argument('-time_size', type=int, default=16)
     args.add_argument('-node_size', type=int, default=16)
     # RNN
-    args.add_argument('-rnn_type', default='RNN', choices=['RNN', 'GRU', 'LSTM'])
+    args.add_argument('-rnn_type', default='GRU',
+                      choices=['RNNTanh', 'RNNReLU', 'GRU', 'LSTM'])
     # Attention
-    args.add_argument('-attn_type', default='dot',
-                      choices=['dot', 'global', 'mlp', 'multi'])
-    args.add_argument('-head_count', type=int, default=4)
+    args.add_argument('-attn_type', default='general',
+                      choices=['dot', 'general', 'mlp'])
+    args.add_argument('-head_count', type=int, default=1)
     # DCRNN
-    args.add_argument('-hops', type=int, default=1)
-    args.add_argument('-reversed', action='store_true')
-    # Gated Graph Attention
+    args.add_argument('-hops', type=int)
+    args.add_argument('-uni', action='store_false')
     # Save path
     args.add_argument('-path')
+
+
+def _set_args(args, **kwargs):
+    for key, value in kwargs.items():
+        if getattr(args, key) is None:
+            setattr(args, key, value)
+
+
+def get_model_config(model):
+    assert model in ['RNN', 'GCRNN']
+    if model == 'RNN':
+        return {'hidden_size': 256}
+    elif model == 'GCRNN':
+        return {'hidden_size': 64}
 
 
 def update_data(args):
@@ -89,7 +102,7 @@ def update_model(args):
         args.input_size = args.node_count + embed_size
         args.output_size = args.node_count
     if args.model in ['GCRNN', 'GARNN']:
-        args.input_size = sum(args.flow_size, args.day_size, args.time_size, args.node_size)
+        args.input_size = sum(args.day_size, args.time_size, args.node_size) + 1
         args.output_size = 1
 
     # path
