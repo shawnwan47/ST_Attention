@@ -60,6 +60,10 @@ def add_model(args):
     args.add_argument('-attn_type', default='dot',
                       choices=['dot', 'global', 'mlp', 'multi'])
     args.add_argument('-head_count', type=int, default=4)
+    # DCRNN
+    args.add_argument('-hops', type=int, default=1)
+    args.add_argument('-reversed', action='store_true')
+    # Gated Graph Attention
     # Save path
     args.add_argument('-path')
 

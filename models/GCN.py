@@ -37,12 +37,3 @@ class DiffusionConvolution(nn.Module):
 
     def forward(self, input):
         return torch.sum((gc(input) for gc in self.gc_kernels), -1)
-
-
-class DCRNN(GCRNN):
-    def __init__(self, rnn_type, node_count,
-                 input_size, hidden_size, num_layers, p_dropout,
-                 graph, hops=1, reversed=False):
-        super().__init__(rnn_type, node_count,
-                         input_size, hidden_size, num_layers, p_dropout,
-                         DiffusionConvolution, graph, hops, reversed)

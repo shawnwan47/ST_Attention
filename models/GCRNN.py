@@ -88,7 +88,7 @@ class GCRNN(nn.Module):
             hidden = self.init_hidden(batch_size)
         output = []
         for idx in range(seq_len):
-            output_i = input[idx]
+            output_i = input[:, idx]
             for ilay, layer in enumerate(self.layers):
                 if self.rnn_type == 'LSTM':
                     hidden[0][:, ilay], hidden[1][:, ilay] = layer(
@@ -102,3 +102,35 @@ class GCRNN(nn.Module):
             output.append(output_i)
         output = torch.stack(output, 1)
         return output, hidden
+
+
+class GCRNNDecoder(GCRNN):
+    def __init__(self, rnn_type, node_count,
+                 input_size, output_size, hidden_size, num_layers, p_dropout,
+                 func, *args, **kwargs):
+        super().__init__(self, rnn_type, node_count,
+                         input_size, hidden_size, num_layers, p_dropout,
+                         func, *args, **kwargs)
+        self.linear_out = nn.Linear(hidden_size, output_size)
+
+    def forward(self, input, hidden=None):
+        output, hidden = super().forward(input, hidden)
+        output = self.linear_out(self.dropout(output))
+        return output, hidden
+
+
+class GCRNNAttnDecoder(GCRNN):
+    def __init__(self, rnn_type, attn_type, node_count,
+                 input_size, output_size, hidden_size, num_layers, p_dropout,
+                 func, *args, **kwargs):
+        super().__init__(self, rnn_type, node_count,
+                         input_size, hidden_size, num_layers, p_dropout,
+                         func, *args, **kwargs)
+        self.attn = Attention.GlobalAttention(hidden_size, attn_type)
+        self.linear_out = nn.Linear(hidden_size, output_size)
+
+    def forward(self, input, hidden=None, context=None):
+        output, hidden = super().forward(input, hidden)
+        output, attention = self.attn(output, context)
+        output = self.linear_out(self.dropout(output))
+        return output, hidden, attention

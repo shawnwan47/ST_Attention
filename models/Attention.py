@@ -54,53 +54,12 @@ class GlobalAttention(nn.Module):
 
 
 class MultiHeadedAttention(nn.Module):
-    def __init__(self, head, dim, p_dropout=0):
-        assert dim % head == 0
-        super().__init__()
-        self.head = head
-        self.dim = dim
-        self.linear_key = nn.Linear(dim, dim)
-        self.linear_value = nn.Linear(dim, dim)
-        self.linear_query = nn.Linear(dim, dim)
-        self.softmax = nn.Softmax(dim=-1)
-        self.dropout = nn.Dropout(p_dropout)
-        self.linear_out = nn.Linear(dim, dim)
-
-    def forward(self, key, value, query, mask=None):
-        batch, k_len, dim = key.size()
-        q_len = query.size(1)
-        head = self.head
-        dim_head = dim // head
-
-        def shape(x):
-            return x.view(batch, -1, head, dim_head).transpose(1, 2)
-
-        def unshape(x):
-            return x.transpose(1, 2).contiguous().view(batch, -1, dim)
-
-        # 1) Project key, value, and query.
-        key_up = shape(self.linear_key(key))
-        value_up = shape(self.linear_value(value))
-        query_up = shape(self.linear_query(query))
-
-        # 2) Calculate and scale scores.
-        query_up = query_up / math.sqrt(dim_head)
-        scores = torch.matmul(query_up, key_up.transpose(2, 3))
-        if mask is not None:
-            scores.masked_fill_(mask, -1e8)
-
-        # 3) Apply attention dropout and compute context vectors.
-        attn = self.softmax(scores)
-        context = unshape(torch.matmul(self.dropout(attn), value_up))
-        out = self.linear_out(context)
-        attn = attn.view(batch, head, q_len, k_len)
-        return out, attn
-
-
-class MultiHeadedAttention(nn.Module):
-    def __init__(self, input_size, output_size, head_count, p_dropout=0):
+    def __init__(self, input_size, output_size, head_count, p_dropout=0,
+                 return_head=False):
         assert output_size % head_count == 0
         super().__init__()
+        self.input_size = input_size
+        self.output_size = output_size
         self.head_count = head_count
         self.head_size = output_size // head_count
         self.linear_key = nn.Linear(input_size, output_size)
@@ -108,34 +67,40 @@ class MultiHeadedAttention(nn.Module):
         self.linear_query = nn.Linear(input_size, output_size)
         self.softmax = nn.Softmax(dim=-1)
         self.dropout = nn.Dropout(p_dropout)
-        self.linear_out = nn.Linear(dim, dim)
+        self.return_head = return_head
 
     def forward(self, key, value, query, mask=None):
-        batch, k_len, dim = key.size()
-        q_len = query.size(1)
-        head_count = self.head_count
-        dim_head = dim // head_count
+        batch, len_key, key_size = key.size()
+        batch_query, len_query, query_size = query.size()
+        batch_value, len_value, value_size = values.size()
+        aeq(batch, batch_query, batch_value)
+        aeq(len_key, len_value)
+        aeq(self.input_size, key_size, value_size, query_size)
 
         def shape(x):
-            return x.view(batch, -1, head_count, dim_head).transpose(1, 2)
+            y = x.view(batch, -1, self.head_count, self.head_size)
+            return y.transpose(-1, -2).contiguous()
 
         def unshape(x):
-            return x.transpose(1, 2).contiguous().view(batch, -1, dim)
+            y = x.transpose(-1, -2).contiguous()
+            if self.return_head:
+                return y.view(batch, -1, self.output_size)
+            else:
+                return y
 
         # 1) Project key, value, and query.
-        key_up = shape(self.linear_key(key))
-        value_up = shape(self.linear_value(value))
-        query_up = shape(self.linear_query(query))
+        key = shape(self.linear_key(key))
+        value = shape(self.linear_value(value))
+        query = shape(self.linear_query(query))
 
         # 2) Calculate and scale scores.
-        query_up = query_up / math.sqrt(dim_head)
-        scores = torch.matmul(query_up, key_up.transpose(2, 3))
+        scores = torch.matmul(query, key.transpose(-1, -2))
+        scores /= math.sqrt(self.head_size)
         if mask is not None:
             scores.masked_fill_(mask, -1e8)
 
         # 3) Apply attention dropout and compute context vectors.
-        attn = self.softmax(scores)
-        context = unshape(torch.matmul(self.dropout(attn), value_up))
-        out = self.linear_out(context)
-        attn = attn.view(batch, head_count, q_len, k_len)
-        return out, attn
+        attention = self.softmax(scores)
+        output = unshape(torch.matmul(self.dropout(attention), value))
+        attention = attention.view(batch, self.head_count, len_query, len_key)
+        return output, attention
