@@ -21,7 +21,7 @@ config.add_train(args)
 args = args.parse_args()
 config.update_data(args)
 config.update_model(args)
-print(args)
+print(str(args))
 
 # CUDA
 args.cuda = args.cuda and torch.cuda.is_available()
@@ -38,16 +38,14 @@ else:
     print('Using CPU')
 
 # DATA
-data_train, data_valid, data_test, mean, std, adj = pt_utils.get_dataset(
-    dataset=args.dataset,
-    freq=args.freq,
-    start=args.start,
-    end=args.end,
-    past=args.past,
-    future=args.future,
-    bsz=args.bsz,
-    cuda=args.cuda
+data_train, data_valid, data_test, mean, std = pt_utils.load_dataset(args)
+data_train, data_valid, data_test = pt_utils.dataset_to_dataloader(
+    data_train, data_valid, data_test, args.batch_size
 )
+adj = pt_utils.load_adj(args.dataset)
+
+if args.cuda:
+    mean, std, adj = mean.cuda(), std.cuda(), adj.cuda()
 
 # MODEL
 model = builder.build_model(args, adj)

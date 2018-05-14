@@ -19,17 +19,13 @@ class Seq2SeqBase(nn.Module):
 class Seq2SeqRNN(Seq2SeqBase):
     def __init__(self, model, embedding, encoder, decoder,
                  seq_len_in, seq_len_out):
-        assert model in ['RNN', 'RNNAttn']
+        assert 'RNN' in model
         super().__init__(embedding, encoder, decoder, seq_len_in, seq_len_out)
         self.model = model
 
-    def pre_forward(self, input_num, input_cat):
+    def forward(self, input_num, input_cat, teach=0):
         # embedding
         embedded = self.embedding(input_cat)
-        return input_num, embedded
-
-    def forward(self, input_num, input_cat, teach=0):
-        input_num, embedded = self.pre_forward(input_num, input_cat)
         # encoding
         encoder_input = torch.cat((input_num[:, :self.seq_len_in],
                                    embedded[:, :self.seq_len_in]), dim=-1)
@@ -43,12 +39,12 @@ class Seq2SeqRNN(Seq2SeqBase):
             else:
                 decoder_input_num = decoder_output.detach()
             decoder_input = torch.cat((decoder_input_num, embedded[:, [i]]), -1)
-            if self.model == 'RNN':
-                decoder_output, hidden = self.decoder(decoder_input, hidden)
-            else:
+            if 'Attn' in self.model:
                 decoder_output, hidden, attn = self.decoder(
                     decoder_input, hidden, enc_output)
                 attns.append(attn)
+            else:
+                decoder_output, hidden = self.decoder(decoder_input, hidden)
             output.append(decoder_output)
         if self.model == 'RNN':
             return torch.cat(output, 1)
@@ -57,8 +53,11 @@ class Seq2SeqRNN(Seq2SeqBase):
 
 
 class Seq2SeqGCRNN(Seq2SeqRNN):
-    def pre_forward(self, input_num, input_cat, teach):
+    def forward(self, input_num, input_cat, teach):
         # embedding
-        embedded = self.embedding(input_cat)
         input_num = input_num.unsqueeze(-1)
-        return input_num, embedded
+        output = super().forward(input_num, input_cat, teach)
+        if self.model == 'GCRNN':
+            return output.squeeze(-1)
+        else:
+            return output[0].squeeze(-1), output[1]

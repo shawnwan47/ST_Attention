@@ -6,7 +6,7 @@ import numpy as np
 from geopy.distance import geodesic
 
 from constants import DATA_PATH, BJ_HIGHWAY_PATH, BJ_METRO_PATH, LA_PATH
-from lib.graph import floyd
+from lib import graph
 
 
 class BJLoader:
@@ -56,46 +56,6 @@ class BJLoader:
         ts = ts.resample(freq).sum()
         return ts
 
-    def load_hop(self):
-        if self._hop.exists():
-            hop = pd.read_csv(self._hop, index_col=0)
-            hop.columns = [int(col) for col in hop.columns]
-        else:
-            link = self.load_link()
-            idx = np.unique(link)
-            hop = pd.DataFrame(2**31, index=idx, columns=idx)
-            for i in range(link.shape[0]):
-                i0, i1 = link[i, 0], link[i, 1]
-                hop.loc[i0, i1] = link.loc[i1, i0] = 1
-            for i in idx:
-                hop.loc[i, i] = 0
-            hop = floyd(hop)
-            hop.to_csv(self._hop, index=True)
-        return hop.loc[self.ids, self.ids].as_matrix()
-
-    def load_dist(self):
-        if self._dist.exists():
-            dist = pd.read_csv(self._dist, index_col=0)
-            dist.columns = [int(col) for col in dist.columns]
-        else:
-            node = self.load_node()
-            link = self.load_link()
-            idx = np.unique(link)
-            dist = pd.DataFrame(float('inf'), index=idx, columns=idx)
-            for i in range(link.shape[0]):
-                i0, i1 = link[i, 0], link[i, 1]
-                try:
-                    loc0 = (node.LAT[i0], node.LON[i0])
-                    loc1 = (node.LAT[i1], node.LON[i1])
-                    dist.loc[i0, i1] = geodesic(loc0, loc1).kilometers
-                except KeyError:
-                    continue
-            for i in idx:
-                dist.loc[i, i] = 0
-            dist = floyd(dist)
-            dist.to_csv(self._dist, index=True)
-        return dist.loc[self.ids, self.ids].as_matrix()
-
     def load_ts_od(self, od='OD', freq='5min'):
         assert od in ['OD', 'DO']
         filepath = self._ts_od if od == 'OD' else self._ts_do
@@ -113,7 +73,47 @@ class BJLoader:
         ret.index.set_levels(exit, level=2, inplace=True)
         return ret
 
-    def load_adj_od(self):
+    def load_hop(self):
+        if self._hop.exists():
+            hop = pd.read_csv(self._hop, index_col=0)
+            hop.columns = [int(col) for col in hop.columns]
+        else:
+            link = self.load_link()
+            ids = np.unique(link)
+            hop = pd.DataFrame(2**31, index=ids, columns=ids)
+            for i in range(link.shape[0]):
+                i0, i1 = link[i, 0], link[i, 1]
+                hop.loc[i0, i1] = link.loc[i1, i0] = 1
+            for i in ids:
+                hop.loc[i, i] = 0
+            hop = graph.floyd(hop)
+            hop.to_csv(self._hop, index=True)
+        return hop.loc[self.ids, self.ids].as_matrix()
+
+    def load_dist(self):
+        if self._dist.exists():
+            dist = pd.read_csv(self._dist, index_col=0)
+            dist.columns = [int(col) for col in dist.columns]
+        else:
+            node = self.load_node(raw=True)
+            link = self.load_link(raw=True)
+            idx = np.unique(link)
+            dist = pd.DataFrame(float('inf'), index=idx, columns=idx)
+            for i in range(link.shape[0]):
+                i0, i1 = link[i, 0], link[i, 1]
+                try:
+                    loc0 = (node.LAT[i0], node.LON[i0])
+                    loc1 = (node.LAT[i1], node.LON[i1])
+                    dist.loc[i0, i1] = geodesic(loc0, loc1).kilometers
+                except KeyError:
+                    continue
+            for i in idx:
+                dist.loc[i, i] = 0
+            dist = graph.floyd(dist)
+            dist.to_csv(self._dist, index=True)
+        return dist.loc[self.ids, self.ids].as_matrix()
+
+    def load_od(self):
         if self._od_sum.exists():
             ret = pd.read_csv(self._od_sum, index_col=0)
             ret.columns = [int(col) for col in ret.columns]
@@ -124,6 +124,14 @@ class BJLoader:
             ret.loc[od.index, od.columns] = od
             ret.to_csv(self._od_sum, index=True)
         return ret.as_matrix()
+
+    def load_adj(self):
+        dist = graph.calculate_dist_adj(self.load_dist())
+        od = self.load_od()
+        od = od / od.sum() * dist.sum()
+        adj0, adj1 = np.hstack((dist, od)), np.hstack((od, dist))
+        adj = np.vstack((adj0, adj1))
+        return adj
 
 
 class LALoader:

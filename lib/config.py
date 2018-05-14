@@ -32,25 +32,23 @@ def add_train(args):
     # run
     args.add_argument('-test', action='store_true')
     args.add_argument('-retrain', action='store_true')
+    args.add_argument('-batch_size', type=int, default=128)
     args.add_argument('-epoches', type=int, default=100)
     args.add_argument('-iters', type=int, default=1)
-    args.add_argument('-batch_size', type=int, default=256)
 
 
 def add_model(args):
     # framework and model
-    args.add_argument('-model', default='RNN',
-                      choices=['RNN', 'RNNAttn', 'GCRNN'])
+    args.add_argument('-model')
     # general
     args.add_argument('-input_size', type=int)
     args.add_argument('-output_size', type=int)
     args.add_argument('-num_layers', type=int, default=2,
                       choices=[1, 2, 3])
     args.add_argument('-hidden_size', type=int)
-    args.add_argument('-p_dropout', type=float, default=0.2)
+    args.add_argument('-dropout', type=float, default=0.2)
     # Embedding
-    args.add_argument('-flow_size', type=int, default=16)
-    args.add_argument('-day_size', type=int, default=16)
+    args.add_argument('-day_size', type=int, default=4)
     args.add_argument('-time_size', type=int, default=16)
     args.add_argument('-node_size', type=int, default=16)
     # RNN
@@ -61,13 +59,13 @@ def add_model(args):
                       choices=['dot', 'general', 'mlp'])
     args.add_argument('-head_count', type=int, default=1)
     # DCRNN
-    args.add_argument('-hops', type=int)
+    args.add_argument('-hops', type=int, default=3)
     args.add_argument('-uni', action='store_false')
     # Save path
     args.add_argument('-path')
 
 
-def _set_args(args, **kwargs):
+def _set_args(args, kwargs):
     for key, value in kwargs.items():
         if getattr(args, key) is None:
             setattr(args, key, value)
@@ -86,7 +84,7 @@ def update_data(args):
     if args.dataset == 'BJ_metro':
         args.node_count = 536
     elif args.dataset == 'BJ_highway':
-        args.node_count = 268
+        args.node_count = 264
     elif args.dataset == 'LA':
         args.node_count = 207
 
@@ -97,16 +95,20 @@ def update_data(args):
 
 
 def update_model(args):
-    embed_size = args.day_size + args.time_size
     if args.model in ['RNN', 'RNNAttn']:
-        args.input_size = args.node_count + embed_size
+        args.input_size = args.node_count + args.day_size + args.time_size
         args.output_size = args.node_count
-    if args.model in ['GCRNN', 'GARNN']:
-        args.input_size = sum(args.day_size, args.time_size, args.node_size) + 1
+        _set_args(args, get_model_config('RNN'))
+    elif args.model in ['DCRNN', 'GARNN']:
+        args.input_size = args.day_size + args.time_size + args.node_size + 1
         args.output_size = 1
+        _set_args(args, get_model_config('GCRNN'))
+    else:
+        raise NameError('model {0} invalid!'.format(args.model))
 
     # path
     name = args.model
+    name += args.freq
     name += '_hid' + str(args.hidden_size)
     name += '_lay' + str(args.num_layers)
     if args.model == 'Transformer':

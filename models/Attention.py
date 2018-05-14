@@ -54,7 +54,7 @@ class GlobalAttention(nn.Module):
 
 
 class MultiHeadedAttention(nn.Module):
-    def __init__(self, input_size, output_size, head_count, p_dropout=0,
+    def __init__(self, input_size, output_size, head_count, dropout=0,
                  return_head=False):
         assert output_size % head_count == 0
         super().__init__()
@@ -66,7 +66,7 @@ class MultiHeadedAttention(nn.Module):
         self.linear_value = nn.Linear(input_size, output_size)
         self.linear_query = nn.Linear(input_size, output_size)
         self.softmax = nn.Softmax(dim=-1)
-        self.dropout = nn.Dropout(p_dropout)
+        self.dropout = nn.Dropout(dropout)
         self.return_head = return_head
 
     def forward(self, key, value, query, mask=None):

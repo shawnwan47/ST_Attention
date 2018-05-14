@@ -1,23 +1,23 @@
 import torch
-import torch.nn
+import torch.nn as nn
 
 
 class GCRNNCell(nn.Module):
     def __init__(self, rnn_type, input_size, output_size,
-                 func, *args, **kwargs):
-        assert rnn_type in ['RNNtanh', 'RNNrelu', 'GRU', 'LSTM']
-        super().init()
+                 func, **kwargs):
+        assert rnn_type in ['RNN', 'RNNReLU', 'GRU', 'LSTM']
+        super().__init__()
         self.rnn_type = rnn_type
         gate_size = output_size
         if self.rnn_type == 'GRU': gate_size *= 3
         elif self.rnn_type == 'LSTM': gate_size *= 4
-        self.func_i = func(input_size, gate_size, *args, **kwargs)
-        self.func_h = func(output_size, gate_size, *args, **kwargs)
+        self.gc_i = func(input_size, gate_size, **kwargs)
+        self.gc_h = func(output_size, gate_size, **kwargs)
 
     def forward(self, input, hidden):
-        if self.rnn_type == 'RNNtanh':
+        if self.rnn_type == 'RNN':
             output = F.tanh(self.rnn(input, hidden))
-        elif self.rnn_type == 'RNNrelu':
+        elif self.rnn_type == 'RNNReLU':
             output = F.relu(self.rnn(input, hidden))
         elif self.rnn_type == 'GRU':
             output = self.gru(input, hidden)
@@ -26,11 +26,11 @@ class GCRNNCell(nn.Module):
         return output
 
     def rnn(self, input, hidden):
-        return self.func_i(input) + self.func_h(hidden)
+        return self.gc_i(input) + self.gc_h(hidden)
 
     def gru(self, input, hidden):
-        gi = self.func_i(input)
-        gh = self.func_h(hidden)
+        gi = self.gc_i(input)
+        gh = self.gc_h(hidden)
         i_r, i_i, i_n = gi.chunk(3, 1)
         h_r, h_i, h_n = gh.chunk(3, 1)
 
@@ -42,7 +42,7 @@ class GCRNNCell(nn.Module):
 
     def lstm(self, input, hidden):
         hx, cx = hidden
-        gates = self.func_i(input) + self.func_h(hx)
+        gates = self.gc_i(input) + self.gc_h(hx)
         ingate, forgetgate, cellgate, outgate = gates.chunk(4, 1)
 
         ingate = F.sigmoid(ingate)
@@ -57,8 +57,8 @@ class GCRNNCell(nn.Module):
 
 class GCRNN(nn.Module):
     def __init__(self, rnn_type, node_count,
-                 input_size, hidden_size, num_layers, p_dropout,
-                 func, *args, **kwargs):
+                 input_size, hidden_size, num_layers, dropout,
+                 func, **kwargs):
         super().__init__()
         self.rnn_type = rnn_type
         self.node_count = node_count
@@ -66,13 +66,13 @@ class GCRNN(nn.Module):
         self.num_layers = num_layers
         self.layers = nn.ModuleList()
         self.layers.append(
-            GCRNNCell(rnn_type, input_size, hidden_size, func, *args, **kwargs)
+            GCRNNCell(rnn_type, input_size, hidden_size, func, **kwargs)
         )
         self.layers.extend((
-            GCRNNCell(rnn_type, hidden_size, hidden_size, func, *args, **kwargs)
+            GCRNNCell(rnn_type, hidden_size, hidden_size, func, **kwargs)
             for i in range(num_layers - 1)
         ))
-        self.dropout = nn.Dropout(p_dropout)
+        self.dropout = nn.Dropout(dropout)
 
     def init_hidden(self, batch_size):
         weight = next(self.parameters())
@@ -106,11 +106,11 @@ class GCRNN(nn.Module):
 
 class GCRNNDecoder(GCRNN):
     def __init__(self, rnn_type, node_count,
-                 input_size, output_size, hidden_size, num_layers, p_dropout,
-                 func, *args, **kwargs):
-        super().__init__(self, rnn_type, node_count,
-                         input_size, hidden_size, num_layers, p_dropout,
-                         func, *args, **kwargs)
+                 input_size, output_size, hidden_size, num_layers, dropout,
+                 func, **kwargs):
+        super().__init__(rnn_type, node_count,
+                         input_size, hidden_size, num_layers, dropout,
+                         func, **kwargs)
         self.linear_out = nn.Linear(hidden_size, output_size)
 
     def forward(self, input, hidden=None):
@@ -121,11 +121,11 @@ class GCRNNDecoder(GCRNN):
 
 class GCRNNAttnDecoder(GCRNN):
     def __init__(self, rnn_type, attn_type, node_count,
-                 input_size, output_size, hidden_size, num_layers, p_dropout,
-                 func, *args, **kwargs):
-        super().__init__(self, rnn_type, node_count,
-                         input_size, hidden_size, num_layers, p_dropout,
-                         func, *args, **kwargs)
+                 input_size, output_size, hidden_size, num_layers, dropout,
+                 func, **kwargs):
+        super().__init__(rnn_type, node_count,
+                         input_size, hidden_size, num_layers, dropout,
+                         func, **kwargs)
         self.attn = Attention.GlobalAttention(hidden_size, attn_type)
         self.linear_out = nn.Linear(hidden_size, output_size)
 

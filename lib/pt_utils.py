@@ -51,36 +51,33 @@ def _get_loader(dataset):
 
 def dataset_to_dataloader(data_train, data_valid, data_test, batch_size):
     return (DataLoader(dataset, batch_size, shuffle=i==0, pin_memory=True)
-            for i, dataset in enumerate(data_train, data_valid, data_test))
+            for i, dataset in enumerate((data_train, data_valid, data_test)))
 
 
-def load_dataset(dataset, freq='5min', start=0, end=24, past=12, future=12):
-    loader = _get_loader(dataset)
-    ts = IO.TimeSeries(loader.load_ts(freq), start, end, past, future)
-    mean = torch.FloatTensor(ts.mean)
-    std = torch.FloatTensor(ts.std)
+def load_dataset(args):
+    io = IO.TimeSeries(_get_loader(args.dataset).load_ts(args.freq),
+                       args.start, args.end, args.past, args.future)
+    mean = torch.FloatTensor(io.mean)
+    std = torch.FloatTensor(io.std)
 
     data_train, data_valid, data_test = (
         TensorDataset(torch.FloatTensor(data[0]),
                       torch.LongTensor(data[1]),
                       torch.FloatTensor(data[2]))
-        for data in (ts.data_train, ts.data_valid, ts.data_test)
+        for data in (io.data_train, io.data_valid, io.data_test)
     )
 
     return data_train, data_valid, data_test, mean, std
 
 
-def load_dataset_od(
-    dataset, node_count, freq='5min', start=0, end=24, past=12, future=12):
-    data_train, data_valid, data_test, mean, std = load_dataset(
-        dataset, freq, start, end, past, future
-    )
+def load_dataset_od(args):
+    data_train, data_valid, data_test, mean, std = load_dataset(args)
 
-    loader = _get_loader(dataset)
-    od = loader.load_ts_od('DO', freq)
-    ts = IO.SparseTimeSeries(od, start, end, past, future)
+    loader = _get_loader(args.dataset)
+    od = loader.load_ts_od('DO', args.freq)
+    ts = IO.SparseTimeSeries(od, args.start, args.end, args.past, args.future)
     od_train, od_valid, od_test = (
-        SparseDataset(coo_seqs, (node_count, node_count))
+        SparseDataset(coo_seqs, (args.node_count, args.node_count))
         for coo_seqs in (ts.data_train, ts.data_valid, ts.data_test)
     )
 
@@ -93,10 +90,10 @@ def load_dataset_od(
     return data_train, data_valid, data_test, mean, std
 
 
-def load_adj(dataset, cuda=False):
+def load_adj(dataset):
     adj = _get_loader(dataset).load_adj()
     adj = torch.FloatTensor(adj)
-    return adj.cuda() if cuda else adj
+    return adj
 
 
 def torch2npsave(filename, data):

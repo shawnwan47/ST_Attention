@@ -18,6 +18,8 @@ def build_model(args, adj):
         model = build_gcrnn(args, adj)
     elif args.model in ['Transformer', 'ST_Transformer']:
         model = build_transformer(args)
+    else:
+        raise NameError('model {0} unfound!'.format(model))
     return model
 
 
@@ -25,14 +27,14 @@ def build_rnn(args):
     embedding = Embedding.DayTimeEmbedding(
         day_count=args.day_count, day_size=args.day_size,
         time_count=args.time_count, time_size=args.time_size,
-        p_dropout=args.p_dropout)
+        dropout=args.dropout)
 
     kwargs = {
         'rnn_type': args.rnn_type,
         'input_size': args.input_size,
         'hidden_size': args.hidden_size,
         'num_layers': args.num_layers,
-        'p_dropout': args.p_dropout
+        'dropout': args.dropout
     }
 
     encoder = RNN.RNN(**kwargs)
@@ -53,48 +55,35 @@ def build_gcrnn(args, adj):
         node_count=args.node_count, node_size=args.node_size,
         day_count=args.day_count, day_size=args.day_size,
         time_count=args.time_count, time_size=args.time_size,
-        p_dropout=args.p_dropout)
+        dropout=args.dropout)
+
+    kwargs = {
+        'rnn_type': args.rnn_type,
+        'node_count': args.node_count,
+        'input_size': args.input_size,
+        'hidden_size': args.hidden_size,
+        'num_layers': args.num_layers,
+        'dropout': args.dropout}
 
     if args.model == 'DCRNN':
-        gcn_func = GCN.DiffusionConvolution
-        gcn_kwargs = {'hops': args.hops, 'reveresed': args.reversed}
+        gc_kwargs = {
+            'func': GCN.DiffusionConvolution,
+            'adj': adj,
+            'hops': args.hops,
+            'uni': args.uni
+        }
     elif args.model == 'GARNN':
-        gcn_func = GAT.GAT
-        gcn_kwargs = {'head_count': args.head_count,
-                      'p_dropout': args.p_dropout}
-    elif args.model == 'ResGARNN':
-        gcn_func = GAT.ResGAT
-        gcn_kwargs = {'head_count': args.head_count,
-                      'p_dropout': args.p_dropout}
+        gc_kwargs = {
+            'func': GAT.GAT,
+            'head_count': args.head_count,
+            'dropout': args.dropout
+        }
 
-    encoder = GCRNN.GCRNN(
-        rnn_type=args.rnn_type,
-        node_count=args.node_count,
-        input_size=args.input_size,
-        hidden_size=args.hidden_size,
-        num_layers=args.num_layers,
-        p_dropout=args.p_dropout,
-        func=gcn_func, **gcn_kwargs)
-    if args.model == 'GCRNN':
-        decoder = GCRNN.GCRNN(
-            rnn_type=args.rnn_type,
-            node_count=args.node_count,
-            input_size=args.input_size,
-            output_size=args.output_size,
-            hidden_size=args.hidden_size,
-            num_layers=args.num_layers,
-            p_dropout=args.p_dropout,
-            func=gcn_func, **gcn_kwargs)
-    else:
-        decoder = GCRNN.GCRNN(
-            rnn_type=args.rnn_type,
-            attn_type=args.attn_type,
-            node_count=args.node_count,
-            input_size=args.input_size,
-            output_size=args.output_size,
-            hidden_size=args.hidden_size,
-            num_layers=args.num_layers,
-            p_dropout=args.p_dropout,
-            func=gcn_func, **gcn_kwargs)
+    kwargs.update(gc_kwargs)
+
+    encoder = GCRNN.GCRNN(**kwargs)
+
+    kwargs['output_size'] = args.output_size
+    decoder = GCRNN.GCRNNDecoder(**kwargs)
     return Seq2Seq.Seq2SeqGCRNN(
         args.model, embedding, encoder, decoder, args.past, args.future)

@@ -5,10 +5,10 @@ from models import Attention
 
 
 class GAT(nn.Module):
-    def __init__(self, input_size, output_size, head_count, p_dropout):
+    def __init__(self, input_size, output_size, head_count, dropout):
         super().__init__()
         self.attn = Attention.MultiHeadedAttention(
-            input_size, output_size, head_count, p_dropout
+            input_size, output_size, head_count, dropout
         )
         self.layer_norm = nn.LayerNorm(output_size)
         self.linear_query = nn.Linear(input_size, output_size)
@@ -27,11 +27,11 @@ class GAT(nn.Module):
 
 
 class ResGAT(nn.Module):
-    def __init__(self, input_size, head_count, p_dropout):
+    def __init__(self, input_size, head_count, dropout):
         super().__init__()
         self.layer_norm = nn.LayerNorm(input_size)
         self.attn = Attention.MultiHeadedAttention(
-            input_size, input_size, head_count, p_dropout
+            input_size, input_size, head_count, dropout
         )
         self.linear_context = nn.Linear(output_size, output_size)
         self.relu = nn.ReLU()
@@ -44,10 +44,10 @@ class ResGAT(nn.Module):
 
 
 class GatedGAT(GAT):
-    def __init__(self, input_size, output_size, head_count, p_dropout):
+    def __init__(self, input_size, output_size, head_count, dropout):
         super().__init__()
         self.attn = Attention.MultiHeadedAttention(
-            input_size, output_size, head_count, p_dropout, return_head=True
+            input_size, output_size, head_count, dropout, return_head=True
         )
         self.layer_norm = nn.LayerNorm(output_size)
         self.linear_query = nn.Linear(input_size, output_size)

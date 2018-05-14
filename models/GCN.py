@@ -1,39 +1,34 @@
-import math
-
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-
-from models import GCRNN
 
 
 class GraphConvolution(nn.Module):
-    def __init__(self, input_size, output_size, graph):
+    def __init__(self, input_size, output_size, adj):
         super().__init__()
-        self.graph = graph
+        self.adj = adj
         self.linear = nn.Linear(input_size, output_size)
 
     def forward(self, input):
-        assert input.size(-2) == len(self.graph)
-        return self.graph.matmul(self.linear(input))
+        assert input.size(-2) == len(self.adj)
+        return self.adj.matmul(self.linear(input))
 
 
 class DiffusionConvolution(nn.Module):
-    def __init__(self, input_size, output_size, graph, hops=1, uni=False):
+    def __init__(self, input_size, output_size, adj, hops=1, uni=False):
         super().__init__()
-        self.gc_kernels = nn.ModuleList()
-        graph_t = graph.t()
-        graph /= graph.sum(0)
-        graph_t /= graph_t.sum(0)
-        graph_k = graph[:]
+        self.gc = nn.ModuleList()
+        adj_t = adj.t()
+        adj /= adj.sum(0)
+        adj_t /= adj_t.sum(0)
+        adj_k = adj[:]
         for hop in range(hops):
-            graph_k.matmul(graph)
-            self.gc_kernels.append(GraphConvolution(input_size, output_size, graph_k))
+            adj_k = adj_k.matmul(adj)
+            self.gc.append(GraphConvolution(input_size, output_size, adj_k))
         if not uni:
-            graph_k = graph_t[:]
+            adj_k = adj_t[:]
             for hop in range(hops):
-                graph_k.matmul(graph_t)
-                self.gc_kernels.append(GraphConvolution(input_size, output_size, graph_k))
+                adj_k = adj_k.matmul(adj_t)
+                self.gc.append(GraphConvolution(input_size, output_size, adj_k))
 
     def forward(self, input):
-        return torch.sum((gc(input) for gc in self.gc_kernels), -1)
+        return torch.sum((gc(input) for gc in self.gc), -1)
