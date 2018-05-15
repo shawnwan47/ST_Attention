@@ -71,7 +71,7 @@ class Loss(nn.Module):
             metric = self._compute_mape(input, target)
         elif self.metric == 'wape':
             metric = self._compute_wape(input, target)
-        return Metric(metric.data[0])
+        return Metric(metric.item())
 
     @staticmethod
     def _mask_select(input, target):

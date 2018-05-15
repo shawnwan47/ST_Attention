@@ -94,14 +94,3 @@ def load_adj(dataset):
     adj = _get_loader(dataset).load_adj()
     adj = torch.FloatTensor(adj)
     return adj
-
-
-def torch2npsave(filename, data):
-    def _var2np(x):
-        return x.data.numpy()
-
-    if type(data) in [tuple, list]:
-        for i, d in enumerate(data):
-            torch2npsave(filename + '_' + str(i), d)
-    else:
-        np.save(filename, _var2np(data))
