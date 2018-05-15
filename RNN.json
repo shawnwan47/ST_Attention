@@ -1,4 +1,0 @@
-{
-  "hidden_size": 256,
-  "rnn_type": "GRU"
-}

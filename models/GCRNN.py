@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from torch.nn import functional as F
 
 
 class GCRNNCell(nn.Module):
@@ -29,10 +30,8 @@ class GCRNNCell(nn.Module):
         return self.gc_i(input) + self.gc_h(hidden)
 
     def gru(self, input, hidden):
-        gi = self.gc_i(input)
-        gh = self.gc_h(hidden)
-        i_r, i_i, i_n = gi.chunk(3, 1)
-        h_r, h_i, h_n = gh.chunk(3, 1)
+        i_r, i_i, i_n = self.gc_i(input).chunk(chunks=3, dim=-1)
+        h_r, h_i, h_n = self.gc_h(hidden).chunk(chunks=3, dim=-1)
 
         resetgate = F.sigmoid(i_r + h_r)
         inputgate = F.sigmoid(i_i + h_i)
@@ -43,7 +42,7 @@ class GCRNNCell(nn.Module):
     def lstm(self, input, hidden):
         hx, cx = hidden
         gates = self.gc_i(input) + self.gc_h(hx)
-        ingate, forgetgate, cellgate, outgate = gates.chunk(4, 1)
+        ingate, forgetgate, cellgate, outgate = gates.chunk(chunks=4, dim=-1)
 
         ingate = F.sigmoid(ingate)
         forgetgate = F.sigmoid(forgetgate)
@@ -73,6 +72,7 @@ class GCRNN(nn.Module):
             for i in range(num_layers - 1)
         ))
         self.dropout = nn.Dropout(dropout)
+        self.dropout_prob = dropout
 
     def init_hidden(self, batch_size):
         weight = next(self.parameters())
@@ -102,35 +102,3 @@ class GCRNN(nn.Module):
             output.append(output_i)
         output = torch.stack(output, 1)
         return output, hidden
-
-
-class GCRNNDecoder(GCRNN):
-    def __init__(self, rnn_type, node_count,
-                 input_size, output_size, hidden_size, num_layers, dropout,
-                 func, **kwargs):
-        super().__init__(rnn_type, node_count,
-                         input_size, hidden_size, num_layers, dropout,
-                         func, **kwargs)
-        self.linear_out = nn.Linear(hidden_size, output_size)
-
-    def forward(self, input, hidden=None):
-        output, hidden = super().forward(input, hidden)
-        output = self.linear_out(self.dropout(output))
-        return output, hidden
-
-
-class GCRNNAttnDecoder(GCRNN):
-    def __init__(self, rnn_type, attn_type, node_count,
-                 input_size, output_size, hidden_size, num_layers, dropout,
-                 func, **kwargs):
-        super().__init__(rnn_type, node_count,
-                         input_size, hidden_size, num_layers, dropout,
-                         func, **kwargs)
-        self.attn = Attention.GlobalAttention(hidden_size, attn_type)
-        self.linear_out = nn.Linear(hidden_size, output_size)
-
-    def forward(self, input, hidden=None, context=None):
-        output, hidden = super().forward(input, hidden)
-        output, attention = self.attn(output, context)
-        output = self.linear_out(self.dropout(output))
-        return output, hidden, attention

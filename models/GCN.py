@@ -14,16 +14,18 @@ class GraphConvolution(nn.Module):
 
 
 class DiffusionConvolution(nn.Module):
-    def __init__(self, input_size, output_size, adj, hops=1, uni=False):
+    def __init__(self, input_size, output_size, adj, hops, uni=False):
         super().__init__()
         self.gc = nn.ModuleList()
         adj_t = adj.t()
         adj /= adj.sum(0)
         adj_t /= adj_t.sum(0)
+        # directed
         adj_k = adj[:]
         for hop in range(hops):
             adj_k = adj_k.matmul(adj)
             self.gc.append(GraphConvolution(input_size, output_size, adj_k))
+        # reversed
         if not uni:
             adj_k = adj_t[:]
             for hop in range(hops):
@@ -31,4 +33,4 @@ class DiffusionConvolution(nn.Module):
                 self.gc.append(GraphConvolution(input_size, output_size, adj_k))
 
     def forward(self, input):
-        return torch.sum((gc(input) for gc in self.gc), -1)
+        return sum(gc(input) for gc in self.gc)

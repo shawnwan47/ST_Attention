@@ -16,13 +16,7 @@ class Seq2SeqBase(nn.Module):
         self.seq_len_out = seq_len_out
 
 
-class Seq2SeqRNN(Seq2SeqBase):
-    def __init__(self, model, embedding, encoder, decoder,
-                 seq_len_in, seq_len_out):
-        assert 'RNN' in model
-        super().__init__(embedding, encoder, decoder, seq_len_in, seq_len_out)
-        self.model = model
-
+class Seq2SeqHomo(Seq2SeqBase):
     def forward(self, input_num, input_cat, teach=0):
         # embedding
         embedded = self.embedding(input_cat)
@@ -31,33 +25,28 @@ class Seq2SeqRNN(Seq2SeqBase):
                                    embedded[:, :self.seq_len_in]), dim=-1)
         encoder_output, hidden = self.encoder(encoder_input)
         # decoding
-        decoder_output = input_num[:, [self.seq_len_in - 1]]
-        output, attns = [], []
-        for i in range(self.seq_len_out):
+        output_i = self.decoder(encoder_output[:, [-1]])
+        output = [output_i]
+        for idx in range(self.seq_len_out - 1):
+            idx += self.seq_len_in
+            # scheduled sampling
             if random.random() < teach:
-                decoder_input_num = input_num[:, [self.seq_len_in - 1 + i]]
+                input_num_i = input_num[:, [idx]]
             else:
-                decoder_input_num = decoder_output.detach()
-            decoder_input = torch.cat((decoder_input_num, embedded[:, [i]]), -1)
-            if 'Attn' in self.model:
-                decoder_output, hidden, attn = self.decoder(
-                    decoder_input, hidden, enc_output)
-                attns.append(attn)
-            else:
-                decoder_output, hidden = self.decoder(decoder_input, hidden)
-            output.append(decoder_output)
-        if self.model == 'RNN':
-            return torch.cat(output, 1)
-        else:
-            return torch.cat(output, 1), torch.cat(attns, 1)
+                input_num_i = output_i.detach()
+            input_i = torch.cat((input_num_i, embedded[:, [idx]]), -1)
+            output_i, hidden = self.encoder(input_i, hidden)
+            output_i = self.decoder(output_i)
+            output.append(output_i)
+        return torch.cat(output, 1)
 
 
-class Seq2SeqGCRNN(Seq2SeqRNN):
+class Seq2SeqGCRNN(Seq2SeqHomo):
     def forward(self, input_num, input_cat, teach):
         # embedding
         input_num = input_num.unsqueeze(-1)
         output = super().forward(input_num, input_cat, teach)
-        if self.model == 'GCRNN':
+        if self.model == 'DCRNN':
             return output.squeeze(-1)
         else:
             return output[0].squeeze(-1), output[1]

@@ -26,12 +26,16 @@ class STEmbedding(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, daytime):
+        batch, seq, _ = daytime.size()
+        # repeat size
+        node_repeat = [batch, seq, 1, 1]
+        time_repeat = [1, 1, self.node_count, 1]
+        # init node
         daytime = daytime.unsqueeze(-2)
-        node_repeat = list(daytime.size())
-        node_repeat[-1] = 1
-        time_repeat = [1 for _ in node_repeat]
-        time_repeat[-2] = self.node_count
-        node = torch.arange(self.node_count).view(time_repeat)
+        node = torch.arange(self.node_count,
+                            dtype=torch.int64,
+                            device=daytime.device).view(1, 1, self.node_count)
+        # embedding
         embed_day = self.embedding_day(daytime[..., 0]).repeat(time_repeat)
         embed_time = self.embedding_time(daytime[..., 1]).repeat(time_repeat)
         embed_node = self.embedding_node(node).repeat(node_repeat)

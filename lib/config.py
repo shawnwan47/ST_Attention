@@ -53,7 +53,7 @@ def add_model(args):
     args.add_argument('-node_size', type=int, default=16)
     # RNN
     args.add_argument('-rnn_type', default='GRU',
-                      choices=['RNNTanh', 'RNNReLU', 'GRU', 'LSTM'])
+                      choices=['RNN', 'RNNReLU', 'GRU', 'LSTM'])
     # Attention
     args.add_argument('-attn_type', default='general',
                       choices=['dot', 'general', 'mlp'])
