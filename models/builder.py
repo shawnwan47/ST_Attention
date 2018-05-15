@@ -43,7 +43,7 @@ def build_rnn(args):
             input_size=args.hidden_size,
             output_size=args.output_size,
             dropout=args.dropout)
-    return Seq2Seq.Seq2SeqHomo(embedding, encoder, decoder, args.past, args.future)
+    return Seq2Seq.Seq2SeqRNN(embedding, encoder, decoder, args.past, args.future)
 
 
 def build_gcrnn(args, adj):
@@ -79,5 +79,4 @@ def build_gcrnn(args, adj):
     )
 
     decoder = Decoder.Linear(args.hidden_size, args.output_size, args.dropout)
-    return Seq2Seq.Seq2SeqGCRNN(
-        args.model, embedding, encoder, decoder, args.past, args.future)
+    return Seq2Seq.Seq2SeqGCRNN(embedding, encoder, decoder, args.past, args.future)

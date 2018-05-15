@@ -1,5 +1,5 @@
 from torch.nn.utils import clip_grad_norm_
-from lib.Loss import MultiError
+from lib.Loss import MultiMetrics
 
 
 class Trainer:
@@ -17,7 +17,7 @@ class Trainer:
             self.model.train()
         else:
             self.model.eval()
-        errors = MultiError()
+        errors = MultiMetrics()
         infos = []
         for data_num, data_cat, target in dataloader:
             if self._cuda:

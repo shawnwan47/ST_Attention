@@ -20,24 +20,27 @@ class STEmbedding(nn.Module):
                  day_count, day_size, time_count, time_size, dropout=0):
         super().__init__()
         self.node_count = node_count
+        self.node_size = node_size
         self.embedding_day = nn.Embedding(day_count, day_size)
         self.embedding_time = nn.Embedding(time_count, time_size)
         self.embedding_node = nn.Embedding(node_count, node_size)
         self.dropout = nn.Dropout(dropout)
+        time_node_size = node_count * node_size
+        self.linear_day = nn.Linear(day_size, time_node_size)
+        self.linear_time = nn.Linear(time_size, time_node_size)
+        self.layer_norm = nn.LayerNorm(node_size)
 
     def forward(self, daytime):
-        batch, seq, _ = daytime.size()
+        batch, len_seq, _ = daytime.size()
         # repeat size
-        node_repeat = [batch, seq, 1, 1]
-        time_repeat = [1, 1, self.node_count, 1]
+        shape = (batch, len_seq, self.node_count, self.node_size)
         # init node
-        daytime = daytime.unsqueeze(-2)
-        node = torch.arange(self.node_count,
-                            dtype=torch.int64,
-                            device=daytime.device).view(1, 1, self.node_count)
+        node = daytime.new_tensor(torch.arange(self.node_count))
         # embedding
-        embed_day = self.embedding_day(daytime[..., 0]).repeat(time_repeat)
-        embed_time = self.embedding_time(daytime[..., 1]).repeat(time_repeat)
-        embed_node = self.embedding_node(node).repeat(node_repeat)
-        embedded = torch.cat((embed_day, embed_time, embed_node), dim=-1)
+        embedded_day = self.dropout(self.embedding_day(daytime[..., 0]))
+        embedded_time = self.dropout(self.embedding_time(daytime[..., 1]))
+        embedded_day = self.linear_day(embedded_day).view(shape)
+        embedded_time = self.linear_time(embedded_time).view(shape)
+        embedded_node = self.embedding_node(node)
+        embedded = sum((embedded_day, embedded_time, embedded_node))
         return self.dropout(embedded)

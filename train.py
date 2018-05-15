@@ -55,7 +55,7 @@ if args.cuda:
     model.cuda()
 
 # LOSS & OPTIM
-loss = Loss(args.loss, args.futures, mean, std)
+loss = Loss(args.loss, args.metric, args.futures, mean, std)
 
 if args.optim is 'SGD':
     optimizer = optim.SGD(model.parameters(),
@@ -78,7 +78,7 @@ if not args.test:
             break
 
 error, info = trainer.eval(data_test)
-print(f'Test\t{error}')
+print(f'Test {args.path}:\n{error}')
 torch.save(model.state_dict(), args.path + '.pt')
 if info:
     pickle.dump(info, open(args.path + '.pkl', 'wb'))

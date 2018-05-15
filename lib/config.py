@@ -4,6 +4,7 @@ def add_data(args):
     # data attribute
     args.add_argument('-dataset', default='LA',
                       choices=['LA', 'BJ_highway', 'BJ_metro'])
+    args.add_argument('-metric', choices=['mape', 'wape'])
 
     args.add_argument('-freq', type=int, default=5)
     args.add_argument('-start', type=int, default=0)
@@ -32,7 +33,7 @@ def add_train(args):
     # run
     args.add_argument('-test', action='store_true')
     args.add_argument('-retrain', action='store_true')
-    args.add_argument('-batch_size', type=int, default=128)
+    args.add_argument('-batch_size', type=int, default=64)
     args.add_argument('-epoches', type=int, default=100)
     args.add_argument('-iters', type=int, default=1)
 
@@ -48,7 +49,7 @@ def add_model(args):
     args.add_argument('-hidden_size', type=int)
     args.add_argument('-dropout', type=float, default=0.2)
     # Embedding
-    args.add_argument('-day_size', type=int, default=4)
+    args.add_argument('-day_size', type=int, default=8)
     args.add_argument('-time_size', type=int, default=16)
     args.add_argument('-node_size', type=int, default=16)
     # RNN
@@ -83,10 +84,13 @@ def update_data(args):
     args.time_count = 1440 // args.freq
     if args.dataset == 'BJ_metro':
         args.node_count = 536
+        args.metric = 'wape'
     elif args.dataset == 'BJ_highway':
         args.node_count = 264
+        args.metric = 'wape'
     elif args.dataset == 'LA':
         args.node_count = 207
+        args.metric = 'mape'
 
     args.past //= args.freq
     args.future //= args.freq
@@ -100,7 +104,7 @@ def update_model(args):
         args.output_size = args.node_count
         _set_args(args, get_model_config('RNN'))
     elif args.model in ['DCRNN', 'GARNN']:
-        args.input_size = args.day_size + args.time_size + args.node_size + 1
+        args.input_size = args.node_size + 1
         args.output_size = 1
         _set_args(args, get_model_config('GCRNN'))
     else:

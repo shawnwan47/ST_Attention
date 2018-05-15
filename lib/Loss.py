@@ -5,54 +5,41 @@ from torch.nn import functional as F
 from constants import EPS
 
 
-class Error(object):
-    """
-    Accumulator for loss statistics.
-    Calculating mae, rmse, mape, wape.
-    """
-    def __init__(self, mae=0, rmse=0, mape=0, wape=0, count=0):
-        self.mae = mae
-        self.rmse = rmse
-        self.mape = mape
-        self.wape = wape
-        self.count = count
+class Metric(object):
+    def __init__(self, metric):
+        self.metric = metric
+        self.count = 1
 
     def __str__(self):
-        return 'mae:{mae:.4f} rmse:{rmse:.4f} mape:{mape:.4f} wape:{wape:.4f}'.format(
-            mae=self.mae / self.count,
-            rmse=self.rmse / self.count,
-            mape=self.mape / self.count,
-            wape=self.wape / self.count
-        )
+        return str(self.metric / self.count)
 
-    def update(self, error):
-        self.mae += error.mae
-        self.rmse += error.rmse
-        self.mape += error.mape
-        self.wape += error.wape
-        self.count += error.count
+    def update(self, other):
+        self.metric += other.metric
+        self.count += other.count
 
 
-class MultiError(object):
+class MultiMetrics(object):
     def __init__(self):
-        self.errors = None
+        self.metrics = None
 
-    def update(self, errors):
-        if self.errors is None:
-            self.errors = errors
+    def update(self, metrics):
+        if self.metrics is None:
+            self.metrics = metrics
         else:
-            for error1, error2 in zip(self.errors, errors):
+            for error1, error2 in zip(self.metrics, metrics):
                 error1.update(error2)
 
     def __str__(self):
-        return '\t'.join([str(error) for error in self.errors])
+        return '  '.join([str(error) for error in self.metrics])
 
 
 class Loss(nn.Module):
-    def __init__(self, loss, futures, mean, std):
+    def __init__(self, loss, metric, futures, mean, std):
         assert loss in ('mae', 'rmse')
+        assert metric in ('mape', 'wape')
         super().__init__()
         self.loss = loss
+        self.metric = metric
         self.futures = futures
         self.mean, self.std = mean, std
 
@@ -60,13 +47,13 @@ class Loss(nn.Module):
         '''
         input, target: batch x len x num
         loss: masked reduced loss
-        errors: multi-step errors
+        metric: multi-step metric
         '''
         input = self._rescale(input)
         loss = self._compute_loss(input, target)
-        errors = [self._compute_error(input[:, i], target[:, i])
+        metric = [self._compute_metric(input[:, i], target[:, i])
                   for i in self.futures]
-        return loss, errors
+        return loss, metric
 
     def _rescale(self, input):
         return (input * (self.std + EPS)) + self.mean
@@ -78,13 +65,13 @@ class Loss(nn.Module):
         elif self.loss == 'rmse':
             return self._compute_rmse(input, target)
 
-    def _compute_error(self, input, target):
+    def _compute_metric(self, input, target):
         input, target = self._mask_select(input, target)
-        mae = self._compute_mae(input, target)
-        rmse = self._compute_rmse(input, target)
-        mape = self._compute_mape(input, target)
-        wape = self._compute_wape(input, target)
-        return Error(mae, rmse, mape, wape, 1)
+        if self.metric == 'mape':
+            metric = self._compute_mape(input, target)
+        elif self.metric == 'wape':
+            metric = self._compute_wape(input, target)
+        return Metric(metric.data[0])
 
     @staticmethod
     def _mask_select(input, target):

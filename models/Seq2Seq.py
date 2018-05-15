@@ -16,7 +16,7 @@ class Seq2SeqBase(nn.Module):
         self.seq_len_out = seq_len_out
 
 
-class Seq2SeqHomo(Seq2SeqBase):
+class Seq2SeqRNN(Seq2SeqBase):
     def forward(self, input_num, input_cat, teach=0):
         # embedding
         embedded = self.embedding(input_cat)
@@ -41,12 +41,9 @@ class Seq2SeqHomo(Seq2SeqBase):
         return torch.cat(output, 1)
 
 
-class Seq2SeqGCRNN(Seq2SeqHomo):
+class Seq2SeqGCRNN(Seq2SeqRNN):
     def forward(self, input_num, input_cat, teach):
         # embedding
         input_num = input_num.unsqueeze(-1)
         output = super().forward(input_num, input_cat, teach)
-        if self.model == 'DCRNN':
-            return output.squeeze(-1)
-        else:
-            return output[0].squeeze(-1), output[1]
+        return output.squeeze(-1)
