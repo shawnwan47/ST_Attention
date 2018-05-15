@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 
-class LNLinearReg(nn.Module):
+class Linear(nn.Module):
     def __init__(self, input_size, output_size, dropout):
         super().__init__()
         self.dropout = nn.Dropout(dropout)
@@ -10,7 +10,12 @@ class LNLinearReg(nn.Module):
         self.linear = nn.Linear(input_size, output_size)
 
     def forward(self, input):
-        return self.linear(self.layer_norm(self.dropout(input)))
+        return self.linear(self.dropout(self.layer_norm(input)))
+
+
+class Attn(nn.Module):
+    def __init__(self, attn_type, input_size, output_size, dropout):
+        pass
 
 
 class RNNDecoder(nn.Module):

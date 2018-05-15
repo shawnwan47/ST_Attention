@@ -85,7 +85,7 @@ def od_distance(od, od_):
     qdata = (od_.values / od_.values.sum()).tolist()
     qrow = od_.index.get_level_values(0).tolist()
     qcol = od_.index.get_level_values(1).tolist()
-    shape = (args.nodes // 2, args.nodes // 2)
+    shape = (args.node_count // 2, args.node_count // 2)
     pk = coo_matrix((pdata, (prow, pcol)), shape=shape)
     qk = coo_matrix((qdata, (qrow, qcol)), shape=shape)
     return hellinger_distance(pk, qk)

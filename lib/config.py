@@ -52,8 +52,8 @@ def add_model(args):
     args.add_argument('-time_size', type=int, default=16)
     args.add_argument('-node_size', type=int, default=16)
     # RNN
-    args.add_argument('-rnn_type', default='GRU',
-                      choices=['RNN', 'RNNReLU', 'GRU', 'LSTM'])
+    args.add_argument('-rnn_type', default='RNN',
+                      choices=['RNN', 'GRU', 'LSTM'])
     # Attention
     args.add_argument('-attn_type', default='general',
                       choices=['dot', 'general', 'mlp'])
@@ -111,6 +111,8 @@ def update_model(args):
     name += args.freq
     name += '_hid' + str(args.hidden_size)
     name += '_lay' + str(args.num_layers)
+    if args.model == 'RNN':
+        name += 'rnn_' + args.rnn_type
     if args.model == 'Transformer':
         name += '_head' + str(args.head)
     args.path = MODEL_PATH + args.dataset + '/' + name

@@ -39,7 +39,7 @@ def build_rnn(args):
     )
 
     if args.model == 'RNN':
-        decoder = Decoder.LNLinearReg(
+        decoder = Decoder.Linear(
             input_size=args.hidden_size,
             output_size=args.output_size,
             dropout=args.dropout)
@@ -78,6 +78,6 @@ def build_gcrnn(args, adj):
         **gc_kwargs
     )
 
-    decoder = Seq2Seq.RNNDecoder(encoder, args.output_size)
+    decoder = Decoder.Linear(args.hidden_size, args.output_size, args.dropout)
     return Seq2Seq.Seq2SeqGCRNN(
         args.model, embedding, encoder, decoder, args.past, args.future)
