@@ -2,31 +2,28 @@ import torch
 import torch.nn as nn
 
 
-class LinearDecoder(nn.Module):
-    def __init__(self, input_size, output_size, dropout):
+class Linear(nn.Module):
+    def __init__(self, hidden_size, output_size, dropout):
         super().__init__()
         self.dropout = nn.Dropout(dropout)
-        self.layer_norm = nn.LayerNorm(input_size)
-        self.linear = nn.Linear(input_size, output_size)
-
-    def forward(self, input):
-        return self.linear(self.dropout(self.layer_norm(input)))
-
-
-class GraphDecoder(nn.Module):
-    def __init__(self, node_count, hidden_size, output_size, dropout):
-        super().__init__()
-        self.dropout = nn.Dropout(dropout)
-        self.layer_norm = nn.LayerNorm((node_count, hidden_size))
+        self.layer_norm = nn.LayerNorm(hidden_size)
         self.linear = nn.Linear(hidden_size, output_size)
 
-    def forward(self, input):
-        return self.linear(self.dropout(self.layer_norm(input)))
+    def forward(self, hidden):
+        # hidden = self.layer_norm(hidden)
+        return self.linear(self.dropout(hidden))
 
 
-class Attn(nn.Module):
-    def __init__(self, attn_type, input_size, output_size, dropout):
-        pass
+class GraphLinear(nn.Module):
+    def __init__(self, node_count, hidden_size, output_size, dropout):
+        super().__init__()
+        self.layer_norm = nn.LayerNorm((node_count, hidden_size))
+        self.dropout = nn.Dropout(dropout)
+        self.linear = nn.Linear(hidden_size, output_size)
+
+    def forward(self, hidden):
+        # hidden = self.layer_norm(hidden)
+        return self.linear(self.dropout(hidden))
 
 
 class RNNDecoder(nn.Module):

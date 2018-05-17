@@ -40,7 +40,7 @@ def build_rnn(args):
 
     if args.model == 'RNN':
         decoder = Decoder.Linear(
-            input_size=args.hidden_size,
+            hidden_size=args.hidden_size,
             output_size=args.output_size,
             dropout=args.dropout)
     return Seq2Seq.Seq2SeqRNN(embedding, encoder, decoder, args.past, args.future)
@@ -51,6 +51,7 @@ def build_gcrnn(args, adj):
         node_count=args.node_count, node_size=args.node_size,
         day_count=args.day_count, day_size=args.day_size,
         time_count=args.time_count, time_size=args.time_size,
+        node_day_size=args.node_day_size, node_time_size=args.node_time_size,
         dropout=args.dropout)
 
     if args.model == 'DCRNN':
@@ -78,7 +79,7 @@ def build_gcrnn(args, adj):
         **gc_kwargs
     )
 
-    decoder = Decoder.GraphDecoder(
+    decoder = Decoder.GraphLinear(
         node_count=args.node_count,
         hidden_size=args.hidden_size,
         output_size=args.output_size,

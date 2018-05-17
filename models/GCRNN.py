@@ -88,12 +88,12 @@ class GCRNN(nn.Module):
             hidden = self.init_hidden(batch_size)
         output = []
         for idx in range(seq_len):
-            output_i, hidden = self.forward_layers(input[:, idx], hidden)
+            output_i, hidden = self.forward_step(input[:, idx], hidden)
             output.append(output_i)
         output = torch.stack(output, 1)
         return output, hidden
 
-    def forward_layers(self, output, hidden):
+    def forward_step(self, output, hidden):
         for ilay, layer in enumerate(self.layers):
             if self.rnn_type == 'LSTM':
                 hidden[0][:, ilay], hidden[1][:, ilay] = layer(
