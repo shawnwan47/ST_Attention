@@ -2,12 +2,23 @@ import torch
 import torch.nn as nn
 
 
-class Linear(nn.Module):
+class LinearDecoder(nn.Module):
     def __init__(self, input_size, output_size, dropout):
         super().__init__()
         self.dropout = nn.Dropout(dropout)
         self.layer_norm = nn.LayerNorm(input_size)
         self.linear = nn.Linear(input_size, output_size)
+
+    def forward(self, input):
+        return self.linear(self.dropout(self.layer_norm(input)))
+
+
+class GraphDecoder(nn.Module):
+    def __init__(self, node_count, hidden_size, output_size, dropout):
+        super().__init__()
+        self.dropout = nn.Dropout(dropout)
+        self.layer_norm = nn.LayerNorm((node_count, hidden_size))
+        self.linear = nn.Linear(hidden_size, output_size)
 
     def forward(self, input):
         return self.linear(self.dropout(self.layer_norm(input)))

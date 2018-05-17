@@ -78,5 +78,9 @@ def build_gcrnn(args, adj):
         **gc_kwargs
     )
 
-    decoder = Decoder.Linear(args.hidden_size, args.output_size, args.dropout)
+    decoder = Decoder.GraphDecoder(
+        node_count=args.node_count,
+        hidden_size=args.hidden_size,
+        output_size=args.output_size,
+        dropout=args.dropout)
     return Seq2Seq.Seq2SeqGCRNN(embedding, encoder, decoder, args.past, args.future)

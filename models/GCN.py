@@ -36,7 +36,7 @@ class DiffusionConvolution(nn.Module):
 
     def forward(self, input):
         size_hidden = list(input.size())[:-1]
-        size_hidden.extend(self.num_channels, self.output_size)
-        output = self.linear(input).view(size_hidden).transpose(-1, -2)
-        output = self.adj.matmul(output).sum(-2)
+        size_hidden.extend([self.num_channels, self.output_size])
+        output = self.linear(input).view(size_hidden).transpose(-2, -3)
+        output = self.adj.matmul(output).sum(-3)
         return output

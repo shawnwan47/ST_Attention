@@ -76,11 +76,11 @@ class GCRNN(nn.Module):
 
     def init_hidden(self, batch_size):
         weight = next(self.parameters())
-        size = (batch_size, self.num_layers, self.node_count, self.hidden_size)
+        shape = (batch_size, self.num_layers, self.node_count, self.hidden_size)
         if self.rnn_type == 'LSTM':
-            return (weight.new_zeros(size), weight.new_zeros(size))
+            return (weight.new_zeros(shape), weight.new_zeros(shape))
         else:
-            return weight.new_zeros(size)
+            return weight.new_zeros(shape)
 
     def forward(self, input, hidden=None):
         batch_size, seq_len, node_count, input_size = input.size()
@@ -88,17 +88,20 @@ class GCRNN(nn.Module):
             hidden = self.init_hidden(batch_size)
         output = []
         for idx in range(seq_len):
-            output_i = input[:, idx]
-            for ilay, layer in enumerate(self.layers):
-                if self.rnn_type == 'LSTM':
-                    hidden[0][:, ilay], hidden[1][:, ilay] = layer(
-                        output_i, (hidden[0][:, ilay], hidden[1][:, ilay]))
-                    output_i = hidden[0][:, ilay]
-                else:
-                    hidden[:, ilay] = layer(output_i, hidden[:, ilay])
-                    output_i = hidden[:, ilay]
-                if ilay < self.num_layers - 1:
-                    output_i = self.dropout(output_i)
+            output_i, hidden = self.forward_layers(input[:, idx], hidden)
             output.append(output_i)
         output = torch.stack(output, 1)
+        return output, hidden
+
+    def forward_layers(self, output, hidden):
+        for ilay, layer in enumerate(self.layers):
+            if self.rnn_type == 'LSTM':
+                hidden[0][:, ilay], hidden[1][:, ilay] = layer(
+                    output, (hidden[0][:, ilay], hidden[1][:, ilay]))
+                output = hidden[0][:, ilay]
+            else:
+                hidden[:, ilay] = layer(output, hidden[:, ilay])
+                output = hidden[:, ilay]
+            if ilay < self.num_layers - 1:
+                output = self.dropout(output)
         return output, hidden

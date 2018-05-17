@@ -62,7 +62,7 @@ def add_model(args):
     args.add_argument('-head_count', type=int)
     # DCRNN
     args.add_argument('-hops', type=int)
-    args.add_argument('-uni', action='store_false')
+    args.add_argument('-uni', action='store_true')
     # Save path
     args.add_argument('-path')
 
@@ -83,9 +83,8 @@ def get_model_config(model):
         }
     elif model == 'DCRNN':
         config = {
-            'hidden_size': 64,
-            'hops': 3,
-            'uni': False
+            'hidden_size': 16,
+            'hops': 2,
         }
     elif model == 'GARNN':
         config = {
