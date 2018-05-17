@@ -8,8 +8,8 @@ import torch.optim as optim
 
 from lib import config
 from lib import pt_utils
-from lib.Loss import Loss
-from lib.Trainer import Trainer
+from lib import Loss
+from lib import Trainer
 
 from models import builder
 
@@ -54,8 +54,10 @@ if args.test or args.retrain:
 if args.cuda:
     model.cuda()
 
-# LOSS & OPTIM
-loss = Loss(args.loss, args.metric, args.futures, mean, std)
+# rescaler, criterion, metrics
+rescaler = Trainer.Rescaler(mean, std)
+criterion = getattr(torch.nn, args.criterion)()
+loss = Loss.Loss(args.metrics, args.futures)
 
 if args.optim is 'SGD':
     optimizer = optim.SGD(model.parameters(),
@@ -68,14 +70,12 @@ else:
 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epoches)
 
 # TRAINER
-trainer = Trainer(model, loss, optimizer, scheduler, args.cuda)
+trainer = Trainer.Trainer(model, rescaler, criterion, loss,
+                          optimizer, scheduler, args.epoches, args.cuda)
 
 
 if not args.test:
-    for epoch in range(args.epoches):
-        trainer.run_epoch(data_train, data_valid, data_test)
-        if optimizer.param_groups[0]['lr'] < args.min_lr:
-            break
+    trainer.run(data_train, data_valid, data_test)
 
 error, info = trainer.eval(data_test)
 print(f'Test {args.path}:\n{error}')

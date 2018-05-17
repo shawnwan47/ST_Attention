@@ -94,3 +94,8 @@ def load_adj(dataset):
     adj = _get_loader(dataset).load_adj()
     adj = torch.FloatTensor(adj)
     return adj
+
+
+def mask_target(output, target):
+    mask = ~torch.isnan(target)
+    return output.masked_select(mask), target.masked_select(mask)

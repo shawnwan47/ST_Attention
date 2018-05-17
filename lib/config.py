@@ -4,13 +4,14 @@ def add_data(args):
     # data attribute
     args.add_argument('-dataset', default='LA',
                       choices=['LA', 'BJ_highway', 'BJ_metro'])
-    args.add_argument('-metric', choices=['mape', 'wape'])
 
     args.add_argument('-freq', type=int, default=5)
     args.add_argument('-start', type=int, default=0)
     args.add_argument('-end', type=int, default=24)
     args.add_argument('-past', type=int, default=60)
     args.add_argument('-future', type=int, default=60)
+
+    args.add_argument('-metrics', nargs='+', default=['mae'])
     args.add_argument('-futures', nargs='+', default=[15, 30, 60])
 
     args.add_argument('-day_count', type=int, default=7)
@@ -24,7 +25,8 @@ def add_train(args):
     args.add_argument('-gpuid', type=int, default=3)
     args.add_argument('-seed', type=int, default=47)
     # optimization
-    args.add_argument('-loss', default='mae', choices=['mae', 'rmse'])
+    args.add_argument('-criterion', default='L1Loss',
+                      choices=['L1Loss', 'MSELoss', 'SmoothL1Loss'])
     args.add_argument('-optim', default='Adam', choices=['SGD', 'Adam'])
     args.add_argument('-lr', type=float, default=0.001)
     args.add_argument('-min_lr', type=float, default=1e-6)
@@ -56,11 +58,10 @@ def add_model(args):
     args.add_argument('-rnn_type', default='RNN',
                       choices=['RNN', 'GRU', 'LSTM'])
     # Attention
-    args.add_argument('-attn_type', default='general',
-                      choices=['dot', 'general', 'mlp'])
-    args.add_argument('-head_count', type=int, default=1)
+    args.add_argument('-attn_type', choices=['dot', 'general', 'mlp'])
+    args.add_argument('-head_count', type=int)
     # DCRNN
-    args.add_argument('-hops', type=int, default=3)
+    args.add_argument('-hops', type=int)
     args.add_argument('-uni', action='store_false')
     # Save path
     args.add_argument('-path')
@@ -73,24 +74,40 @@ def _set_args(args, kwargs):
 
 
 def get_model_config(model):
-    assert model in ['RNN', 'GCRNN']
     if model == 'RNN':
-        return {'hidden_size': 256}
-    elif model == 'GCRNN':
-        return {'hidden_size': 64}
+        config = {'hidden_size': 256}
+    elif model == 'RNNAttn':
+        config = {
+            'hidden_size': 256,
+            'attn_type': 'general'
+        }
+    elif model == 'DCRNN':
+        config = {
+            'hidden_size': 64,
+            'hops': 3,
+            'uni': False
+        }
+    elif model == 'GARNN':
+        config = {
+            'hidden_size': 64,
+            'head_count': 4
+        }
+    else:
+        raise NameError('Model {model} invalid.'.format(model))
+    return config
 
 
 def update_data(args):
     args.time_count = 1440 // args.freq
     if args.dataset == 'BJ_metro':
         args.node_count = 536
-        args.metric = 'wape'
+        args.metrics.append('wape')
     elif args.dataset == 'BJ_highway':
         args.node_count = 264
-        args.metric = 'wape'
+        args.metrics.append('wape')
     elif args.dataset == 'LA':
         args.node_count = 207
-        args.metric = 'mape'
+        args.metrics.append('mape')
 
     args.past //= args.freq
     args.future //= args.freq
@@ -102,11 +119,11 @@ def update_model(args):
     if args.model in ['RNN', 'RNNAttn']:
         args.input_size = args.node_count + args.day_size + args.time_size
         args.output_size = args.node_count
-        _set_args(args, get_model_config('RNN'))
+        _set_args(args, get_model_config(args.model))
     elif args.model in ['DCRNN', 'GARNN']:
         args.input_size = args.node_size + 1
         args.output_size = 1
-        _set_args(args, get_model_config('GCRNN'))
+        _set_args(args, get_model_config(args.model))
     else:
         raise NameError('model {0} invalid!'.format(args.model))
 

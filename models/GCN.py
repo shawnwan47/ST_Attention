@@ -19,7 +19,7 @@ class DiffusionConvolution(nn.Module):
         self.adj = self._gen_adj_hops(adj, hops)
         if not uni:
             self.adj.extend(self._gen_adj_hops(adj.t(), hops))
-        self.adj = torch.cat(self.adj, dim=1)
+        self.adj = torch.stack(self.adj, dim=0)
         # multi-head graph convolution
         self.num_channels = hops * (1 + (not uni))
         self.output_size = output_size
@@ -36,8 +36,7 @@ class DiffusionConvolution(nn.Module):
 
     def forward(self, input):
         size_hidden = list(input.size())[:-1]
-        size_hidden[-1] *= self.num_channels
-        size_hidden.append(self.output_size)
-        output = self.linear(input).view(size_hidden)
-        output = self.adj.matmul(output)
+        size_hidden.extend(self.num_channels, self.output_size)
+        output = self.linear(input).view(size_hidden).transpose(-1, -2)
+        output = self.adj.matmul(output).sum(-2)
         return output
