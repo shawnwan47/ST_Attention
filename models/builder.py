@@ -51,7 +51,6 @@ def build_gcrnn(args, adj):
         node_count=args.node_count, node_size=args.node_size,
         day_count=args.day_count, day_size=args.day_size,
         time_count=args.time_count, time_size=args.time_size,
-        node_day_size=args.node_day_size, node_time_size=args.node_time_size,
         dropout=args.dropout)
 
     if args.model == 'DCRNN':

@@ -5,7 +5,7 @@
   "uploadOnSave": true,
   "useAtomicWrites": false,
   "deleteLocal": false,
-  "hostname": "162.105.92.152",
+  "hostname": "162.105.92.195",
   "port": "22",
   "target": "/home/wdxu/wansheng/ST_Attention",
   "ignore": [

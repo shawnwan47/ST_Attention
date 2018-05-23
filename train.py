@@ -39,7 +39,7 @@ else:
 
 # DATA
 data_train, data_valid, data_test, mean, std = pt_utils.load_dataset(args)
-print(*[f'{key}:\t{len(data)}'
+print(*[f'{key} samples:\t{len(data)}'
         for key, data in zip(['train', 'valid', 'test'],
                              [data_train, data_valid, data_test])], sep='\n')
 data_train, data_valid, data_test = pt_utils.dataset_to_dataloader(

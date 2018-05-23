@@ -54,8 +54,6 @@ def add_model(args):
     args.add_argument('-day_size', type=int, default=16)
     args.add_argument('-time_size', type=int, default=16)
     args.add_argument('-node_size', type=int, default=16)
-    args.add_argument('-node_day_size', type=int, default=1)
-    args.add_argument('-node_time_size', type=int, default=1)
     # RNN
     args.add_argument('-rnn_type', default='RNN',
                       choices=['RNN', 'GRU', 'LSTM'])
@@ -122,7 +120,7 @@ def update_model(args):
         args.output_size = args.node_count
         _set_args(args, get_model_config(args.model))
     elif args.model in ['DCRNN', 'GARNN']:
-        args.input_size = 1 + args.node_size + args.node_day_size + args.node_time_size
+        args.input_size = 1 + args.node_size + args.day_size + args.time_size
         args.output_size = 1
         _set_args(args, get_model_config(args.model))
     else:
