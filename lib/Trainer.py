@@ -67,7 +67,7 @@ class Trainer:
                   f'valid: {error_valid}',
                   f'test:  {error_test}',
                   f'teach ratio: {self.teach}',
-                  f'learning rate: {self.optimizer.param_groups[0]['lr']}',
+                  f'learning rate: {self.optimizer.param_groups[0]["lr"]}',
                   sep='\n')
             self.scheduler.step()
             self.teach *= self.teach_annealing
