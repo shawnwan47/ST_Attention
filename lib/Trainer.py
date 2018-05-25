@@ -52,7 +52,7 @@ class Trainer:
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
-        del output
+            del output
         # if infos:
         #     infos = [torch.cat(info) for info in zip(*infos)]
         return metrics
@@ -66,6 +66,8 @@ class Trainer:
                   f'train: {error_train}',
                   f'valid: {error_valid}',
                   f'test:  {error_test}',
+                  f'teach ratio: {self.teach}',
+                  f'learning rate: {self.optimizer.param_groups[0]['lr']}',
                   sep='\n')
             self.scheduler.step()
             self.teach *= self.teach_annealing
