@@ -33,7 +33,7 @@ class Seq2SeqRNN(Seq2SeqBase):
             if random.random() < teach:
                 input_num_i = input_num[:, [idx]]
             else:
-                input_num_i = output_i.detach()
+                input_num_i = output_i
             input_i = torch.cat((input_num_i, embedded[:, [idx]]), -1)
             output_i, hidden = self.encoder(input_i, hidden)
             output_i = self.decoder(output_i)

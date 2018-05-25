@@ -21,7 +21,6 @@ config.add_train(args)
 args = args.parse_args()
 config.update_data(args)
 config.update_model(args)
-print(str(args))
 
 # CUDA
 args.cuda = args.cuda and torch.cuda.is_available()
@@ -39,9 +38,6 @@ else:
 
 # DATA
 data_train, data_valid, data_test, mean, std = pt_utils.load_dataset(args)
-print(*[f'{key} samples:\t{len(data)}'
-        for key, data in zip(['train', 'valid', 'test'],
-                             [data_train, data_valid, data_test])], sep='\n')
 data_train, data_valid, data_test = pt_utils.dataset_to_dataloader(
     data_train, data_valid, data_test, args.batch_size
 )
@@ -56,6 +52,8 @@ if args.test or args.retrain:
     model.load_state_dict(torch.load(args.path + '.pt'))
 if args.cuda:
     model.cuda()
+print(model)
+print(f'Parameters: {pt_utils.count_parameters(model)}')
 
 # rescaler, criterion, metrics
 rescaler = Trainer.Rescaler(mean, std)
@@ -80,8 +78,8 @@ trainer = Trainer.Trainer(model, rescaler, criterion, loss,
 if not args.test:
     trainer.run(data_train, data_valid, data_test)
 
-error, info = trainer.eval(data_test)
+error = trainer.eval(data_test)
 print(f'Test {args.path}:\n{error}')
-torch.save(model.state_dict(), args.path + '.pt')
-if info:
-    pickle.dump(info, open(args.path + '.pkl', 'wb'))
+torch.save(trainer.model.state_dict(), args.path + '.pt')
+# if info:
+#     pickle.dump(info, open(args.path + '.pkl', 'wb'))

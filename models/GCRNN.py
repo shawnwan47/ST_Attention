@@ -67,12 +67,11 @@ class GCRNN(nn.Module):
         self.layers.append(
             GCRNNCell(rnn_type, input_size, hidden_size, func, **kwargs)
         )
-        self.layers.extend((
-            GCRNNCell(rnn_type, hidden_size, hidden_size, func, **kwargs)
-            for i in range(num_layers - 1)
-        ))
+        self.layers.extend(
+            [GCRNNCell(rnn_type, hidden_size, hidden_size, func, **kwargs)
+             for i in range(num_layers - 1)]
+        )
         self.dropout = nn.Dropout(dropout)
-        self.dropout_prob = dropout
 
     def init_hidden(self, batch_size):
         weight = next(self.parameters())

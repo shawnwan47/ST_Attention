@@ -139,6 +139,7 @@ class LALoader:
         self._path = Path(DATA_PATH) / LA_PATH
         self.ids, self.id_to_idx, self.adj = pickle.load(
             open(self._path / 'adj_mx.pkl', 'rb'))
+        self.adj[self.adj < 0.1] = 0
         self._node = self._path / 'graph_sensor_locations.csv'
         self._ts = self._path / 'df_highway_2012_4mon_sample.h5'
         self._link = self._path / 'distances_la_2012.csv'

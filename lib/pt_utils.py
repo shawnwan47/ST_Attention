@@ -50,7 +50,7 @@ def _get_loader(dataset):
 
 
 def dataset_to_dataloader(data_train, data_valid, data_test, batch_size):
-    return (DataLoader(dataset, batch_size, shuffle=i==0, pin_memory=True)
+    return (DataLoader(dataset, batch_size, shuffle=i==0)
             for i, dataset in enumerate((data_train, data_valid, data_test)))
 
 
@@ -99,3 +99,7 @@ def load_adj(dataset):
 def mask_target(output, target):
     mask = ~torch.isnan(target)
     return output.masked_select(mask), target.masked_select(mask)
+
+
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters())

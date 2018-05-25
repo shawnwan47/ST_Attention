@@ -51,9 +51,9 @@ def add_model(args):
     args.add_argument('-hidden_size', type=int)
     args.add_argument('-dropout', type=float, default=0.2)
     # Embedding
-    args.add_argument('-day_size', type=int, default=16)
-    args.add_argument('-time_size', type=int, default=16)
-    args.add_argument('-node_size', type=int, default=16)
+    args.add_argument('-day_size', type=int, default=4)
+    args.add_argument('-time_size', type=int, default=4)
+    args.add_argument('-node_size', type=int, default=4)
     # RNN
     args.add_argument('-rnn_type', default='RNN',
                       choices=['RNN', 'GRU', 'LSTM'])
@@ -84,11 +84,11 @@ def get_model_config(model):
     elif model == 'DCRNN':
         config = {
             'hidden_size': 16,
-            'hops': 2,
+            'hops': 3,
         }
     elif model == 'GARNN':
         config = {
-            'hidden_size': 64,
+            'hidden_size': 16,
             'head_count': 4
         }
     else:
@@ -131,7 +131,7 @@ def update_model(args):
     name += args.freq
     name += '_hid' + str(args.hidden_size)
     name += '_lay' + str(args.num_layers)
-    if args.model == 'RNN':
+    if 'RNN' in args.model:
         name += 'rnn_' + args.rnn_type
     if args.model == 'Transformer':
         name += '_head' + str(args.head)
