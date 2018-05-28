@@ -32,7 +32,7 @@ class Trainer:
         else:
             self.model.eval()
         metrics = MetricList()
-        # infos = []
+        infos = []
         for data_num, data_cat, target in dataloader:
             if self.cuda:
                 data_num = data_num.cuda()
@@ -41,7 +41,8 @@ class Trainer:
             teach = self.teach if train else 0
             output = self.model(data_num, data_cat, teach=teach)
             if isinstance(output, tuple):
-                output = output[0]
+                output, info = output[0], output[1:]
+                infos.append(info)
             output = self.rescaler(output)
 
             metrics += self.metrics(output, target)
@@ -53,15 +54,15 @@ class Trainer:
                 loss.backward()
                 self.optimizer.step()
             del output
-        # if infos:
-        #     infos = [torch.cat(info) for info in zip(*infos)]
-        return metrics
+        if infos:
+            infos = [torch.cat(info) for info in zip(*infos)]
+        return metrics, infos
 
     def run(self, data_train, data_valid, data_test):
         for epoch in range(self.epoches):
-            error_train = self.eval(data_train, train=True)
-            error_valid = self.eval(data_valid)
-            error_test = self.eval(data_test)
+            error_train, _ = self.eval(data_train, train=True)
+            error_valid, _ = self.eval(data_valid)
+            error_test, infos = self.eval(data_test)
             print(f'Epoch: {epoch}',
                   f'train: {error_train}',
                   f'valid: {error_valid}',

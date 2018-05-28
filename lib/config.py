@@ -8,15 +8,25 @@ def add_data(args):
     args.add_argument('-freq', type=int, default=5)
     args.add_argument('-start', type=int, default=0)
     args.add_argument('-end', type=int, default=24)
-    args.add_argument('-past', type=int, default=60)
-    args.add_argument('-future', type=int, default=60)
+    args.add_argument('-history', type=int, default=60)
+    args.add_argument('-horizon', type=int, default=60)
 
-    args.add_argument('-metrics', nargs='+', default=['mae'])
-    args.add_argument('-futures', nargs='+', default=[15, 30, 60])
+    args.add_argument('-metrics', nargs='+', default=['mae', 'rmse'])
+    args.add_argument('-milestones', nargs='+', default=[15, 30, 60])
 
     args.add_argument('-day_count', type=int, default=7)
     args.add_argument('-time_count', type=int)
     args.add_argument('-node_count', type=int)
+    args.add_argument('-time_span_count', type=int)
+    args.add_argument('-node_hops_count', type=int)
+
+    args.add_argument('-discretize', action='store_true')
+    args.add_argument('-time', action='store_true')
+    args.add_argument('-weekday', action='store_true')
+    args.add_argument('-node', action='store_true')
+    args.add_argument('-od', action='store_true')
+
+    args.add_argument('-data_source', nargs='+', choices=['time', 'weekday'])
 
 
 def add_train(args):
@@ -37,7 +47,7 @@ def add_train(args):
     args.add_argument('-retrain', action='store_true')
     args.add_argument('-batch_size', type=int, default=64)
     args.add_argument('-epoches', type=int, default=100)
-    args.add_argument('-iters', type=int, default=1)
+    args.add_argument('-iterations', type=int, default=1)
 
 
 def add_model(args):
@@ -51,15 +61,19 @@ def add_model(args):
     args.add_argument('-hidden_size', type=int)
     args.add_argument('-dropout', type=float, default=0.2)
     # Embedding
-    args.add_argument('-day_size', type=int, default=4)
-    args.add_argument('-time_size', type=int, default=4)
-    args.add_argument('-node_size', type=int, default=4)
+    args.add_argument('-day_size', type=int, default=16)
+    args.add_argument('-time_size', type=int, default=16)
+    args.add_argument('-node_size', type=int, default=16)
     # RNN
     args.add_argument('-rnn_type', default='RNN',
                       choices=['RNN', 'GRU', 'LSTM'])
     # Attention
     args.add_argument('-attn_type', choices=['dot', 'general', 'mlp'])
     args.add_argument('-head_count', type=int)
+    args.add_argument('-time_span', action='store_true')
+    args.add_argument('-node_dist', action='store_true')
+    args.add_argument('-time_span_size', type=int, default=16)
+    args.add_argument('-node_dist_size', type=int, default=16)
     # DCRNN
     args.add_argument('-hops', type=int)
     args.add_argument('-uni', action='store_true')
@@ -108,10 +122,12 @@ def update_data(args):
         args.node_count = 207
         args.metrics.append('mape')
 
-    args.past //= args.freq
-    args.future //= args.freq
-    args.futures = [t // args.freq - 1 for t in args.futures]
+    args.history //= args.freq
+    args.horizon //= args.freq
+    args.milestones = [t // args.freq - 1 for t in args.milestones]
     args.freq = str(args.freq) + 'min'
+    args.time_span_count = args.history + args.horizon
+    args.node_hops_count = args.node_count
 
 
 def update_model(args):

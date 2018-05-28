@@ -5,7 +5,7 @@ import torch.nn as nn
 
 from models import Seq2Seq
 from models import Decoder
-from models import Embedding
+from models import Adapter
 from models import RNN
 from models import GCRNN
 from models import GCN

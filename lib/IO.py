@@ -10,7 +10,7 @@ from lib.utils import aeq
 def get_days(index):
     date_s, date_e = index[0], index[-1]
     days = (date_e - date_s).days + 1
-    assert (len(index) % days) == 0, f'{date_s}, {date_e}, {len(index)}, {days}'
+    assert len(index) % days) == 0
     return days
 
 
@@ -38,55 +38,43 @@ def split_data(data, train_ratio=0.7, test_ratio=0.2):
 
 
 class TimeSeries:
-    def __init__(self, df, start=0, end=24, seq_len_in=12, seq_len_out=12):
-        self.seq_len_in = seq_len_in
-        self.seq_len_out = seq_len_out
-        df = df[(df.index.hour >= start) & (df.index.hour < end)]
+    def __init__(self, df, history=12, horizon=12, data_source=None):
+        self.history = history
+        self.horizon = horizon
+        self.data_source = data_source
         df_train, df_valid, df_test = split_data(df)
         self.mean, self.std = df_train.mean().values, df_train.std().values
         self.data_train = self._gen_seq2seq_io(df_train)
         self.data_valid = self._gen_seq2seq_io(df_valid)
         self.data_test = self._gen_seq2seq_io(df_test)
 
-
     def _gen_seq2seq_io(self, df):
 
-        def _gen_daytime(index):
-            day = index.weekday
+        def _gen_time(index):
             _, time = np.unique(index.time, return_inverse=True)
-            daytime = np.stack((day, time), -1)
-            return daytime
+            return time
 
         def _gen_seq(arr, seq_len):
-            samples = arr.shape[1] - seq_len + 1
-            seq = np.stack([arr[:, i:i + seq_len] for i in range(samples)], axis=1)
-            seq = seq.reshape(-1, seq_len, seq.shape[-1])
+            samples = arr.shape[0] - seq_len + 1
+            seq = np.stack([arr[i:i + seq_len] for i in range(samples)], axis=0)
             return seq
 
-        # init data
-        data_num = np.nan_to_num(self._scale(df.values))
-        data_cat = _gen_daytime(df.index)
-        targets = df.values
-        # reshape to days x times x dim
-        days = get_days(df.index)
-        times = len(df.index) // days
-        data_num, data_cat, targets = (dat.reshape(days, times, -1)
-                                       for dat in (data_num, data_cat, targets))
-        # gen seq
-        data_len = self.seq_len_in + self.seq_len_out - 1
-        data_cat = _gen_seq(data_cat[:, :-1], data_len)
-        data_num = _gen_seq(data_num[:, :-1], data_len)
-        targets = _gen_seq(targets[:, self.seq_len_in:], self.seq_len_out)
-        return data_num, data_cat, targets
+        data_len = self.history + self.horizon - 1
+        data = _gen_seq(np.nan_to_num(self._scale(df.values))[:-1], data_len)
+        time = _gen_seq(_gen_time(df.index)[:-1], data_len)
+        weekday = _gen_seq(df.index.weekday[:-1], data_len)
+        targets = _gen_seq(df.values[self.history:], self.horizon)
+        aeq(len(data), len(time), len(weekday), len(targets))
+        return data, targets, time, weekday
 
     def _scale(self, df):
         return (df - self.mean) / (self.std + EPS)
 
 
 class SparseTimeSeries:
-    def __init__(self, ts, start=0, end=24, seq_len_in=12, seq_len_out=12):
-        self.seq_len_in = seq_len_in
-        self.seq_len_out = seq_len_out
+    def __init__(self, ts, history=12, horizon=12):
+        self.history = history
+        self.horizon = horizon
         ss_train, ss_valid, ss_test = split_data(ts)
         self.data_train = self._gen_seq_coo(ss_train)
         self.data_valid = self._gen_seq_coo(ss_valid)
@@ -96,11 +84,11 @@ class SparseTimeSeries:
         coos = self.ss_to_coo(ts)
         days = get_days(ts.index.levels[0])
         times = len(coos) // days
-        samples = times - self.seq_len_out - self.seq_len_in + 1
+        samples = times - self.horizon - self.history + 1
         ret = []
         for day in range(days):
             anchor = day * times
-            ret.extend([coos[anchor + i:anchor + i + self.seq_len_in]
+            ret.extend([coos[anchor + i:anchor + i + self.history]
                         for i in range(samples)])
         return ret
 
