@@ -33,13 +33,13 @@ class Trainer:
             self.model.eval()
         metrics = MetricList()
         infos = []
-        for data_num, data_cat, target in dataloader:
+        for data, time, weekday, target in dataloader:
             if self.cuda:
                 data_num = data_num.cuda()
                 data_cat = data_cat.cuda()
                 target = target.cuda()
             teach = self.teach if train else 0
-            output = self.model(data_num, data_cat, teach=teach)
+            output = self.model(data, time, weekday, teach=teach)
             if isinstance(output, tuple):
                 output, info = output[0], output[1:]
                 infos.append(info)

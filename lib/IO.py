@@ -65,7 +65,7 @@ class TimeSeries:
         weekday = _gen_seq(df.index.weekday[:-1], data_len)
         targets = _gen_seq(df.values[self.history:], self.horizon)
         aeq(len(data), len(time), len(weekday), len(targets))
-        return data, targets, time, weekday
+        return data, time, weekday, targets
 
     def _scale(self, df):
         return (df - self.mean) / (self.std + EPS)

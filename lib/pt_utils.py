@@ -8,37 +8,14 @@ from lib import IO
 from lib.utils import aeq
 
 
-class SparseDataset(Dataset):
-    def __init__(self, coo_seqs, size):
-        self.data = [self.parse_coo_seq(coo_seq, size) for coo_seq in coo_seqs]
 
-    @staticmethod
-    def parse_coo_seq(coo_seq, size):
-        return [torch.sparse.FloatTensor(torch.LongTensor(i),
-                                         torch.FloatTensor(v),
-                                         torch.Size(size))
-                for i, v in coo_seq]
-
-    def __len__(self):
-        return len(self.data)
+class NamedTensorDataset(TensorDataset):
+    def __init__(self, names, *tensors):
+        super().__init__(*tensors)
+        self.names = names
 
     def __getitem__(self, index):
-        return self.data[index]
-
-
-class MyDataset(Dataset):
-    def __init__(self, data, targets):
-        assert isinstance(data, dict)
-        self.data = {name: numpy_to_torch(arr) for name, arr in data.items()}
-        self.targets = numpy_to_torch(targets)
-
-    def __len__(self):
-        return len(self.targets)
-
-    def __getitem__(self, index):
-        data = {name: tensor[index] for name, tensor in self.data.items()}
-        target = self.targets[index]
-        return data, targets
+        super().__getitem__(index)
 
 
 class HybridDataset(Dataset):
@@ -123,3 +100,21 @@ def numpy_to_torch(arr):
     if nparray.dtype == np.dtype(int):
         return torch.LongTensor(arr)
     return torch.FloatTensor(arr)
+
+
+class SparseDataset(Dataset):
+    def __init__(self, coo_seqs, size):
+        self.data = [self.parse_coo_seq(coo_seq, size) for coo_seq in coo_seqs]
+
+    @staticmethod
+    def parse_coo_seq(coo_seq, size):
+        return [torch.sparse.FloatTensor(torch.LongTensor(i),
+                                         torch.FloatTensor(v),
+                                         torch.Size(size))
+                for i, v in coo_seq]
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, index):
+        return self.data[index]

@@ -3,7 +3,20 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class GraphAdapter(nn.Module):
+class EmbeddingLinear(nn.Module):
+    def __init__(self, num_embeddings, embedding_dim, output_size, dropout):
+        super().__init__()
+        self.sequential = nn.Sequential(
+            nn.Embedding(num_embeddings, embedding_dim),
+            nn.Dropout(dropout),
+            nn.Linear(embedding_dim, output_size)
+        )
+
+    def forward(self, input):
+        return self.sequential(input)
+
+
+class GraphEmbedding(nn.Module):
     def __init__(self, data_source,
                  num_node, node_dim,
                  num_time, time_dim,
@@ -37,7 +50,7 @@ class GraphAdapter(nn.Module):
         return self.dropout(torch.cat(output, -1))
 
 
-class VectorAdapter(nn.Module):
+class VectorEmbedding(nn.Module):
     def __init__(self, data_source,
                  num_time, time_dim,
                  num_weekday, weekday_dim,
