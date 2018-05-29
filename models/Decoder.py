@@ -15,9 +15,9 @@ class Linear(nn.Module):
 
 
 class GraphLinear(nn.Module):
-    def __init__(self, node_count, hidden_size, output_size, dropout):
+    def __init__(self, num_node, hidden_size, output_size, dropout):
         super().__init__()
-        self.layer_norm = nn.LayerNorm((node_count, hidden_size))
+        self.layer_norm = nn.LayerNorm((num_node, hidden_size))
         self.dropout = nn.Dropout(dropout)
         self.linear = nn.Linear(hidden_size, output_size)
 

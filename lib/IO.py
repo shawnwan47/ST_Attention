@@ -10,7 +10,7 @@ from lib.utils import aeq
 def get_days(index):
     date_s, date_e = index[0], index[-1]
     days = (date_e - date_s).days + 1
-    assert len(index) % days) == 0
+    assert (len(index) % days) == 0
     return days
 
 
@@ -51,7 +51,7 @@ class TimeSeries:
     def _gen_seq2seq_io(self, df):
 
         def _gen_time(index):
-            _, time = np.unique(index.time, return_inverse=True)
+
             return time
 
         def _gen_seq(arr, seq_len):
@@ -59,10 +59,12 @@ class TimeSeries:
             seq = np.stack([arr[i:i + seq_len] for i in range(samples)], axis=0)
             return seq
 
+        data = np.nan_to_num(self._scale(df.values))
+        _, time = np.unique(df.index.time, return_inverse=True)
+        weekday = df.index.weekday
         data_len = self.history + self.horizon - 1
-        data = _gen_seq(np.nan_to_num(self._scale(df.values))[:-1], data_len)
-        time = _gen_seq(_gen_time(df.index)[:-1], data_len)
-        weekday = _gen_seq(df.index.weekday[:-1], data_len)
+        data, time, weekday = (_gen_seq(dat[:-1], data_len)
+                               for dat in (data, time, weekday))
         targets = _gen_seq(df.values[self.history:], self.horizon)
         aeq(len(data), len(time), len(weekday), len(targets))
         return data, time, weekday, targets

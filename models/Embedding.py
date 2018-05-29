@@ -3,56 +3,58 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class EmbeddingLinear(nn.Module):
-    def __init__(self, num_embeddings, embedding_dim, output_size, dropout):
+class TempEmbedding(nn.Module):
+    def __init__(self, use_time, use_weekday,
+                 num_time, time_dim,
+                 num_weekday, weekday_dim,
+                 dropout):
         super().__init__()
-        self.sequential = nn.Sequential(
-            nn.Embedding(num_embeddings, embedding_dim),
-            nn.Dropout(dropout),
-            nn.Linear(embedding_dim, output_size)
-        )
+        self.use_time = use_time
+        self.use_weekday = use_weekday
+        self.dropout = nn.Dropout(dropout)
+        if use_time:
+            self.embedding_time = nn.Embedding(num_time, time_dim)
+        if use_weekday:
+            self.embedding_weekday = nn.Embedding(num_weekday, weekday_dim)
 
-    def forward(self, input):
-        return self.sequential(input)
+    def forward(self, time, weekday):
+        output = []
+        if self.use_time:
+            output.append(self.dropout(self.embedding_time(time)))
+        if self.use_weekday:
+            output.append(self.dropout(self.embedding_weekday(weekday)))
+        return torch.cat(output, -1)
 
 
-class GraphEmbedding(nn.Module):
-    def __init__(self, data_source,
+class STEmbedding(nn.Module):
+    def __init__(self, use_node, use_time, use_weekday,
                  num_node, node_dim,
                  num_time, time_dim,
                  num_weekday, weekday_dim,
                  dropout):
         super().__init__()
-        self.data_source = data_source
+        self.use_node = use_node
+        self.use_time = use_time
+        self.use_weekday = use_weekday
         self.num_node = num_node
         self.dropout = nn.Dropout(dropout)
-        if 'time' in data_source:
-            self.embedding_time = nn.Embedding(num_time, time_dim)
-        if 'weekday' in data_source:
-            self.embedding_weekday = nn.Embedding(7, weekday_dim)
-        if 'node' in data_source:
+        if use_node:
             self.embedding_node = nn.Embedding(num_node, node_dim),
+        if use_time:
+            self.embedding_time = nn.Embedding(num_time, time_dim)
+        if use_weekday:
+            self.embedding_weekday = nn.Embedding(num_weekday, weekday_dim)
 
     def forward(self, time, weekday):
-        if not self.data_source:
-            return
-
-        batch, seq, _ = time.size()
+        batch, seq = time.size()
         shape = (batch, seq, self.num_node, -1)
         output = []
-        if 'node' in self.data_source:
+
+        if self.use_node:
             node = time.new_tensor(torch.arange(self.node_count))
             output.append(self.embedding_node(node).expand(shape))
-        if 'time' in self.data_source:
+        if self.use_time:
             output.append(self.embedding_time(time).unsqueeze(-2).expand(shape))
-        if 'weekday' in self.data_source:
+        if self.use_weekday:
             output.append(self.embedding_day(weekday).unsqueeze(-2).expand(shape))
         return self.dropout(torch.cat(output, -1))
-
-
-class VectorEmbedding(nn.Module):
-    def __init__(self, data_source,
-                 num_time, time_dim,
-                 num_weekday, weekday_dim,
-                 dropout):
-        pass

@@ -35,8 +35,9 @@ class Trainer:
         infos = []
         for data, time, weekday, target in dataloader:
             if self.cuda:
-                data_num = data_num.cuda()
-                data_cat = data_cat.cuda()
+                data = data.cuda()
+                time = time.cuda()
+                weekday = weekday.cuda()
                 target = target.cuda()
             teach = self.teach if train else 0
             output = self.model(data, time, weekday, teach=teach)

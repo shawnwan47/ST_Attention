@@ -8,16 +8,17 @@ class DiffusionConvolution(nn.Module):
     def __init__(self, input_size, output_size, adj, hops, uni=False):
         super().__init__()
         # calculate adjs
-        self.filters = [adj.new_tensor(torch.eye(len(adj)))]
-        self.filters.extend(self._gen_adj_hops(adj, hops))
+        self.output_size = output_size
+        self.linear = nn.Linear(input_size, output_size)
+        self.filters = self._gen_adj_hops(adj, hops)
         if not uni:
             self.filters.extend(self._gen_adj_hops(adj.t(), hops))
         self.num_filters = len(self.filters)
-        self.filters = torch.stack(self.filters, dim=0)
         # multi-head graph convolution
-        self.output_size = output_size
-        self.linear = nn.Linear(input_size, output_size * self.num_filters, bias=False)
-        self.bias = nn.Parameter(torch.zeros(output_size))
+        self.linears = nn.ModuleList([
+            nn.Linear(input_size, output_size, bias=False)
+            for _ in range(self.num_filters)
+        ])
 
     @staticmethod
     def _gen_adj_hops(adj, hops):
@@ -28,8 +29,7 @@ class DiffusionConvolution(nn.Module):
         return adjs
 
     def forward(self, input):
-        size_hidden = list(input.size())[:-1]
-        size_hidden.extend([self.num_filters, self.output_size])
-        output = self.linear(input).view(size_hidden).transpose(-2, -3)
-        output = self.filters.matmul(output).sum(-3) + self.bias
+        output = self.linear(input)
+        for linear, filter in zip(self.linears, self.filters):
+            output += filter.matmul(linear(input))
         return output

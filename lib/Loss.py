@@ -70,14 +70,14 @@ class MetricList:
 
 
 class Loss:
-    def __init__(self, metrics, futures):
+    def __init__(self, metrics, horizons):
         self.metrics = metrics
-        self.futures = futures
+        self.horizons = horizons
 
     def __call__(self, output, target):
         return MetricList([
-            self._eval(output[:, future], target[:, future])
-            for future in self.futures])
+            self._eval(output[:, horizon], target[:, horizon])
+            for horizon in self.horizons])
 
     def _eval(self, output, target):
         output, target = mask_target(output, target)

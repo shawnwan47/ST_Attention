@@ -37,29 +37,32 @@ else:
     print('Using CPU')
 
 # DATA
-data_train, data_valid, data_test, mean, std = pt_utils.load_dataset(args)
-data_train, data_valid, data_test = pt_utils.dataset_to_dataloader(
-    data_train, data_valid, data_test, args.batch_size
+data_train, data_valid, data_test, mean, std = pt_utils.load_dataset(
+    dataset=args.dataset,
+    freq=args.freq,
+    history=args.history,
+    horizon=args.horizon,
+    batch_size=args.batch_size
 )
-adj = pt_utils.load_adj(args.dataset)
 
 if args.cuda:
-    mean, std, adj = mean.cuda(), std.cuda(), adj.cuda()
+    mean, std = mean.cuda(), std.cuda()
 
 # MODEL
-model = builder.build_model(args, adj)
+model = builder.build_model(args)
 if args.test or args.retrain:
     model.load_state_dict(torch.load(args.path + '.pt'))
 if args.cuda:
     model.cuda()
 print(model)
-print(f'Parameters: {pt_utils.count_parameters(model)}')
+print(f'{args.path} parameters: {pt_utils.count_parameters(model)}')
 
-# rescaler, criterion, metrics
+# rescaler, criterion, loss
 rescaler = Trainer.Rescaler(mean, std)
 criterion = getattr(torch.nn, args.criterion)()
-loss = Loss.Loss(args.metrics, args.futures)
+loss = Loss.Loss(metrics=args.metrics, horizons=args.horizons)
 
+# optimizer, scheduler
 if args.optim is 'SGD':
     optimizer = optim.SGD(model.parameters(),
                           momentum=0.9,

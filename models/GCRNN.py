@@ -55,12 +55,12 @@ class GCRNNCell(nn.Module):
 
 
 class GCRNN(nn.Module):
-    def __init__(self, rnn_type, node_count,
+    def __init__(self, rnn_type, num_node,
                  input_size, hidden_size, num_layers, dropout,
                  func, **kwargs):
         super().__init__()
         self.rnn_type = rnn_type
-        self.node_count = node_count
+        self.num_node = num_node
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.layers = nn.ModuleList()
@@ -75,14 +75,14 @@ class GCRNN(nn.Module):
 
     def init_hidden(self, batch_size):
         weight = next(self.parameters())
-        shape = (batch_size, self.num_layers, self.node_count, self.hidden_size)
+        shape = (batch_size, self.num_layers, self.num_node, self.hidden_size)
         if self.rnn_type == 'LSTM':
             return (weight.new_zeros(shape), weight.new_zeros(shape))
         else:
             return weight.new_zeros(shape)
 
     def forward(self, input, hidden=None):
-        batch_size, seq_len, node_count, input_size = input.size()
+        batch_size, seq_len, num_node, input_size = input.size()
         if hidden is None:
             hidden = self.init_hidden(batch_size)
         output = []

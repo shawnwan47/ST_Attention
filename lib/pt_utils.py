@@ -41,20 +41,20 @@ def _get_loader(dataset):
     return loader
 
 
-def dataset_to_dataloader(batch_size, *datasets):
-    return (DataLoader(dataset, batch_size, shuffle=i==0)
-            for i, dataset in enumerate(datasets))
-
-
-def load_dataset(dataset, freq, history, horizon, data_source):
+def load_dataset(dataset, freq, history, horizon, batch_size):
     df = _get_loader(dataset).load_ts(freq)
-    io = IO.TimeSeries(df, history, horizon, data_source)
+    io = IO.TimeSeries(df, history, horizon)
     mean = numpy_to_torch(io.mean)
     std = numpy_to_torch(io.std)
 
-    data_train, data_valid, data_test = (
+    datasets = (
         TensorDataset(*[numpy_to_torch(data) for data in data_tuple])
         for data_tuple in (io.data_train, io.data_valid, io.data_test)
+    )
+
+    data_train, data_valid, data_test = (
+        DataLoader(dataset=dataset, batch_size=batch_size, shuffle=i==0)
+        for i, dataset in enumerate(datasets)
     )
 
     return data_train, data_valid, data_test, mean, std
@@ -97,7 +97,7 @@ def count_parameters(model):
 
 def numpy_to_torch(arr):
     assert isinstance(arr, np.ndarray)
-    if nparray.dtype == np.dtype(int):
+    if arr.dtype == np.dtype(int):
         return torch.LongTensor(arr)
     return torch.FloatTensor(arr)
 

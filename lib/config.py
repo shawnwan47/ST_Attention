@@ -1,3 +1,4 @@
+import math
 from constants import MODEL_PATH
 
 def add_data(args):
@@ -12,21 +13,21 @@ def add_data(args):
     args.add_argument('-horizon', type=int, default=60)
 
     args.add_argument('-metrics', nargs='+', default=['mae', 'rmse'])
-    args.add_argument('-milestones', nargs='+', default=[15, 30, 60])
+    args.add_argument('-horizons', nargs='+', default=[15, 30, 60])
 
-    args.add_argument('-day_count', type=int, default=7)
-    args.add_argument('-time_count', type=int)
-    args.add_argument('-node_count', type=int)
-    args.add_argument('-time_span_count', type=int)
-    args.add_argument('-node_hops_count', type=int)
+    args.add_argument('-num_weekday', type=int, default=7)
+    args.add_argument('-num_time', type=int)
+    args.add_argument('-num_node', type=int)
+    args.add_argument('-num_time_dist', type=int)
+    args.add_argument('-num_node_dist', type=int)
 
     args.add_argument('-discretize', action='store_true')
-    args.add_argument('-time', action='store_true')
-    args.add_argument('-weekday', action='store_true')
-    args.add_argument('-node', action='store_true')
+    args.add_argument('-use_time', action='store_true')
+    args.add_argument('-use_weekday', action='store_true')
+    args.add_argument('-use_node', action='store_true')
+    args.add_argument('-use_time_dist', action='store_true')
+    args.add_argument('-use_node_dist', action='store_true')
     args.add_argument('-od', action='store_true')
-
-    args.add_argument('-data_source', nargs='+', choices=['time', 'weekday'])
 
 
 def add_train(args):
@@ -47,7 +48,6 @@ def add_train(args):
     args.add_argument('-retrain', action='store_true')
     args.add_argument('-batch_size', type=int, default=64)
     args.add_argument('-epoches', type=int, default=100)
-    args.add_argument('-iterations', type=int, default=1)
 
 
 def add_model(args):
@@ -61,19 +61,17 @@ def add_model(args):
     args.add_argument('-hidden_size', type=int)
     args.add_argument('-dropout', type=float, default=0.2)
     # Embedding
-    args.add_argument('-day_size', type=int, default=16)
-    args.add_argument('-time_size', type=int, default=16)
-    args.add_argument('-node_size', type=int, default=16)
+    args.add_argument('-weekday_dim', type=int, default=16)
+    args.add_argument('-time_dim', type=int, default=16)
+    args.add_argument('-node_dim', type=int, default=16)
+    args.add_argument('-time_dist_dim', type=int)
+    args.add_argument('-node_dist_dim', type=int)
     # RNN
     args.add_argument('-rnn_type', default='RNN',
                       choices=['RNN', 'GRU', 'LSTM'])
     # Attention
     args.add_argument('-attn_type', choices=['dot', 'general', 'mlp'])
-    args.add_argument('-head_count', type=int)
-    args.add_argument('-time_span', action='store_true')
-    args.add_argument('-node_dist', action='store_true')
-    args.add_argument('-time_span_size', type=int, default=16)
-    args.add_argument('-node_dist_size', type=int, default=16)
+    args.add_argument('-num_head', type=int)
     # DCRNN
     args.add_argument('-hops', type=int)
     args.add_argument('-uni', action='store_true')
@@ -97,13 +95,13 @@ def get_model_config(model):
         }
     elif model == 'DCRNN':
         config = {
-            'hidden_size': 16,
+            'hidden_size': 64,
             'hops': 3,
         }
     elif model == 'GARNN':
         config = {
-            'hidden_size': 16,
-            'head_count': 4
+            'hidden_size': 64,
+            'num_head': 4
         }
     else:
         raise NameError('Model {model} invalid.'.format(model))
@@ -111,33 +109,43 @@ def get_model_config(model):
 
 
 def update_data(args):
-    args.time_count = 1440 // args.freq
+    args.num_time = 1440 // args.freq
     if args.dataset == 'BJ_metro':
-        args.node_count = 536
+        args.num_node = 536
         args.metrics.append('wape')
     elif args.dataset == 'BJ_highway':
-        args.node_count = 264
+        args.num_node = 264
         args.metrics.append('wape')
     elif args.dataset == 'LA':
-        args.node_count = 207
+        args.num_node = 207
         args.metrics.append('mape')
 
     args.history //= args.freq
     args.horizon //= args.freq
-    args.milestones = [t // args.freq - 1 for t in args.milestones]
+    args.horizons = [t // args.freq - 1 for t in args.horizons]
     args.freq = str(args.freq) + 'min'
-    args.time_span_count = args.history + args.horizon
-    args.node_hops_count = args.node_count
+    args.num_time_dist = args.history + args.horizon
+    args.num_node_dist = args.num_node
 
 
 def update_model(args):
     if args.model in ['RNN', 'RNNAttn']:
-        args.input_size = args.node_count + args.day_size + args.time_size
-        args.output_size = args.node_count
+        args.input_size = args.num_node
+        args.output_size = args.num_node
+        if args.use_time:
+            args.input_size += args.time_dim
+        if args.use_weekday:
+            args.input_size += args.weekday_dim
         _set_args(args, get_model_config(args.model))
     elif args.model in ['DCRNN', 'GARNN']:
-        args.input_size = 1 + args.node_size + args.day_size + args.time_size
+        args.input_size = 1
         args.output_size = 1
+        if args.use_node:
+            args.input_size += args.node_dim
+        if args.use_time:
+            args.input_size += args.time_dim
+        if args.use_weekday:
+            args.input_size += args.weekday_dim
         _set_args(args, get_model_config(args.model))
     else:
         raise NameError('model {0} invalid!'.format(args.model))
