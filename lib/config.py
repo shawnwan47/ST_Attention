@@ -153,10 +153,16 @@ def update_model(args):
     # path
     name = args.model
     name += args.freq
-    name += '_hid' + str(args.hidden_size)
-    name += '_lay' + str(args.num_layers)
+    if args.use_node:
+        name += 'Node'
+    if args.use_time:
+        name += 'Time'
+    if args.use_weekday:
+        name += 'Weekday'
+    name += 'Hid' + str(args.hidden_size)
+    name += 'Lay' + str(args.num_layers)
     if 'RNN' in args.model:
-        name += 'rnn_' + args.rnn_type
+        name += 'RNN' + args.rnn_type
     if args.model == 'Transformer':
-        name += '_head' + str(args.head)
+        name += 'Head' + str(args.head)
     args.path = MODEL_PATH + args.dataset + '/' + name

@@ -39,7 +39,7 @@ class STEmbedding(nn.Module):
         self.num_node = num_node
         self.dropout = nn.Dropout(dropout)
         if use_node:
-            self.embedding_node = nn.Embedding(num_node, node_dim),
+            self.embedding_node = nn.Embedding(num_node, node_dim)
         if use_time:
             self.embedding_time = nn.Embedding(num_time, time_dim)
         if use_weekday:
@@ -51,10 +51,10 @@ class STEmbedding(nn.Module):
         output = []
 
         if self.use_node:
-            node = time.new_tensor(torch.arange(self.node_count))
+            node = time.new_tensor(torch.arange(self.num_node))
             output.append(self.embedding_node(node).expand(shape))
         if self.use_time:
             output.append(self.embedding_time(time).unsqueeze(-2).expand(shape))
         if self.use_weekday:
-            output.append(self.embedding_day(weekday).unsqueeze(-2).expand(shape))
+            output.append(self.embedding_weekday(weekday).unsqueeze(-2).expand(shape))
         return self.dropout(torch.cat(output, -1))
