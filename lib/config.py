@@ -64,8 +64,8 @@ def add_model(args):
     args.add_argument('-weekday_dim', type=int, default=16)
     args.add_argument('-time_dim', type=int, default=16)
     args.add_argument('-node_dim', type=int, default=16)
-    args.add_argument('-time_dist_dim', type=int)
-    args.add_argument('-node_dist_dim', type=int)
+    args.add_argument('-time_dist_dim', type=int, default=16)
+    args.add_argument('-node_dist_dim', type=int, default=16)
     # RNN
     args.add_argument('-rnn_type', default='RNN',
                       choices=['RNN', 'GRU', 'LSTM'])

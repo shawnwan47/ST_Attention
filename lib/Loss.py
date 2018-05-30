@@ -7,66 +7,47 @@ from lib.pt_utils import mask_target
 
 
 class Metric:
-    def __init__(self, value, num):
+    def __init__(self, key, value, num):
+        self.key = key
         self.value = value
         self.num = num
 
-    def __str__(self):
-        if isinstance(self.value, float):
-            return '0.'
-        else:
-            return f'{self.value:.3f}'
+    def __repr__(self):
+        return f'{self.key}:{self.value:.2f}'
 
     def __add__(self, other):
         num = self.num + other.num
         value = (self.value * self.num + other.value * other.num) / num
-        return Metric(value, num)
+        return Metric(self.key, value, num)
 
 
-class Metrics:
-    def __init__(self, keys, values, num):
-        assert len(keys) == len(values)
-        self.keys = keys
-        self.values = values
-        self.num = num
-
-    def __repr__(self):
-        return ' '.join([f'{metric}:{value:.2f}'
-                         for metric, value in zip(self.keys, self.values)])
-
+class MetricList(list):
     def __add__(self, other):
-        assert self.keys == other.keys
-        n1, n2 = self.num, other.num
-        values = [(v1 * n1 + v2 * n2) / (n1 + n2)
-                  for v1, v2 in zip(self.values, other.values)]
-        return Metrics(self.keys, values, n1 + n2)
-
-
-class MetricList:
-    def __init__(self, metrics=None):
-        self.metrics = metrics
-
-    def __len__(self):
-        if self.metrics is None:
-            return None
-        else:
-            return len(self.metrics)
-
-    def __add__(self, other):
-        if self.metrics is None:
+        if not self:
             return other
-        elif other.metrics is None:
+        elif not other:
             return self
         else:
             assert(len(self) == len(other))
             return MetricList([m1 + m2
-                               for m1, m2 in zip(self.metrics, other.metrics)])
+                               for m1, m2 in zip(self, other)])
+
+    def __iadd__(self, other):
+        if not self:
+            return other
+        elif not other:
+            return self
+        else:
+            assert(len(self) == len(other))
+            for idx, metric in enumerate(other):
+                self[idx] += metric
+        return self
 
     def __str__(self):
-        if self.metrics is None:
+        if not self:
             return None
         else:
-            return '\t'.join([str(metric) for metric in self.metrics])
+            return ' '.join([metric for metric in self])
 
 
 class Loss:
@@ -75,21 +56,24 @@ class Loss:
         self.horizons = horizons
 
     def __call__(self, output, target):
-        return MetricList([
+        ret = MetricList([
             self._eval(output[:, horizon], target[:, horizon])
             for horizon in self.horizons])
+        ret.append(self._eval(output, target))
+        return ret
 
     def _eval(self, output, target):
         output, target = mask_target(output, target)
-        if not target.numel():
-            return Metrics(self.metrics, [0] * len(self.metrics), 0)
+        num = target.numel()
+        if not num:
+            return MetricList()
         else:
-            values = [self._compute_loss(output, target, metric)
-                      for metric in self.metrics]
-            return Metrics(self.metrics, values, target.numel())
+            metrics = [Metric(metric, self._loss(output, target, metric), num)
+                       for metric in self.metrics]
+            return MetricList(metrics)
 
     @staticmethod
-    def _compute_loss(output, target, loss):
+    def _loss(output, target, loss):
         if loss == 'mae':
             loss = F.l1_loss(output, target)
         elif loss == 'rmse':
