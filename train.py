@@ -54,7 +54,6 @@ if args.test or args.retrain:
     model.load_state_dict(torch.load(args.path + '.pt'))
 if args.cuda:
     model.cuda()
-print(model)
 print(f'{args.path} parameters: {pt_utils.count_parameters(model)}')
 
 # rescaler, criterion, loss

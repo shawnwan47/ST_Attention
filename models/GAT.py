@@ -12,15 +12,16 @@ class GAT(nn.Module):
         self.attn = Attention.MultiHeadedAttention(
             input_size, output_size, head_count, dropout
         )
-        self.linear_context = nn.Linear(output_size, output_size)
-        self.dropout = nn.Dropout(dropout)
+        self.linear_query = nn.Linear(input_size, output_size)
+        self.linear_context = nn.Linear(output_size, output_size, bias=False)
 
     def forward(self, input):
         '''
         input: batch_size x ... x node_count x input_size
         '''
-        context = self.attn(input, input, input)
-        output = input + self.dropout(self.linear_context(context))
+        input_norm = self.layer_norm(input)
+        context = self.attn(input_norm, input_norm, input_norm)
+        output = self.linear_query(input_norm) + self.linear_context(context)
         return output
 
 

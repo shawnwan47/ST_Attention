@@ -95,13 +95,13 @@ def get_model_config(model):
         }
     elif model == 'DCRNN':
         config = {
-            'hidden_size': 64,
+            'hidden_size': 16,
             'hops': 3,
         }
     elif model == 'GARNN':
         config = {
-            'hidden_size': 64,
-            'head_count': 4
+            'hidden_size': 16,
+            'head_count': 1
         }
     else:
         raise NameError('Model {model} invalid.'.format(model))

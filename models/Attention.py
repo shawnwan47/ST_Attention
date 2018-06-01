@@ -54,15 +54,17 @@ class GlobalAttention(nn.Module):
 
 
 class MultiHeadedAttention(nn.Module):
-    def __init__(self, size, head_count, dropout, return_head=False):
-        assert size % head_count == 0
+    def __init__(self, input_size, output_size, head_count, dropout,
+                 return_head=False):
+        assert output_size % head_count == 0
         super().__init__()
-        self.size = size
+        self.input_size = input_size
+        self.output_size = output_size
         self.head_count = head_count
-        self.head_size = size // head_count
-        self.linear_key = nn.Linear(size, size)
-        self.linear_value = nn.Linear(size, size)
-        self.linear_query = nn.Linear(size, size)
+        self.head_size = output_size // head_count
+        self.linear_key = nn.Linear(input_size, output_size)
+        self.linear_value = nn.Linear(input_size, output_size)
+        self.linear_query = nn.Linear(input_size, output_size)
         self.softmax = nn.Softmax(-1)
         self.dropout = nn.Dropout(dropout)
         self.return_head = return_head
@@ -73,7 +75,7 @@ class MultiHeadedAttention(nn.Module):
         batch_value, len_value, value_size = value.size()
         aeq(batch, batch_query, batch_value)
         aeq(len_key, len_value)
-        aeq(self.size, key_size, value_size, query_size)
+        aeq(self.input_size, key_size, value_size, query_size)
 
         def shape(x):
             y = x.view(batch, -1, self.head_count, self.head_size)
@@ -83,7 +85,7 @@ class MultiHeadedAttention(nn.Module):
             y = x.transpose(-2, -3).contiguous()
             if self.return_head:
                 return y
-            return y.view(batch, -1, self.size)
+            return y.view(batch, -1, self.output_size)
 
         # 1) Project key, value, and query.
         key = shape(self.linear_key(key))
@@ -98,6 +100,6 @@ class MultiHeadedAttention(nn.Module):
 
         # 3) Apply attention dropout and compute context vectors.
         attention = self.softmax(scores)
-        output = unshape(torch.matmul(attention, value))
+        output = unshape(torch.matmul(self.dropout(attention), value))
         attention = attention.view(batch, self.head_count, len_query, len_key)
         return output

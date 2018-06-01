@@ -18,7 +18,7 @@ def build_model(args):
     if args.model in ['RNN', 'RNNAttn']:
         model = build_seq2seq_rnn(args)
     elif args.model in ['DCRNN', 'GARNN', 'GaARNN']:
-        model = build_gcrnn(args)
+        model = build_seq2seq_gcrnn(args)
     elif args.model in ['Transformer']:
         model = build_transformer(args)
     else:
@@ -27,9 +27,6 @@ def build_model(args):
 
 
 def build_temp_embedding(args):
-    use_embedding = args.use_time | args.use_weekday
-    if not use_embedding:
-        return
     return Embedding.TempEmbedding(
         use_time=args.use_time, use_weekday=args.use_weekday,
         num_time=args.num_time, time_dim=args.time_dim,
@@ -38,15 +35,13 @@ def build_temp_embedding(args):
 
 
 def build_st_embedding(args):
-    use_embedding = args.use_node | args.use_time | args.use_weekday
-    if not use_embedding:
-        return
     return Embedding.STEmbedding(
         use_node=args.use_node, use_time=args.use_time,
         use_weekday=args.use_weekday,
         num_node=args.num_node, node_dim=args.node_dim,
         num_time=args.num_time, time_dim=args.time_dim,
         num_weekday=args.num_weekday, weekday_dim=args.weekday_dim,
+        input_size=args.input_size, hidden_size=args.hidden_size,
         dropout=args.dropout)
 
 
@@ -90,7 +85,7 @@ def build_seq2seq_rnn(args):
     return seq2seq
 
 
-def build_gcrnn(args):
+def build_seq2seq_gcrnn(args):
     adj = pt_utils.load_adj(args.dataset)
     if args.cuda:
         adj = adj.cuda()
@@ -112,8 +107,7 @@ def build_gcrnn(args):
     encoder = GCRNN.GCRNN(
         rnn_type=args.rnn_type,
         num_node=args.num_node,
-        input_size=args.input_size,
-        hidden_size=args.hidden_size,
+        size=args.hidden_size,
         num_layers=args.num_layers,
         dropout=args.dropout,
         func=func,

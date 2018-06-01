@@ -4,18 +4,19 @@ from torch.nn import functional as F
 
 
 class GCRNNCell(nn.Module):
-    def __init__(self, rnn_type, input_size, output_size,
-                 func, gc_kwargs):
+    def __init__(self, rnn_type, size, func, gc_kwargs):
         assert rnn_type in ['RNN', 'RNNReLU', 'GRU']
         super().__init__()
         self.rnn_type = rnn_type
-        gate_size = output_size
+        self.layer_norm = nn.LayerNorm(size)
+        gate_size = size
         if self.rnn_type == 'GRU': gate_size *= 3
         elif self.rnn_type == 'LSTM': gate_size *= 4
-        self.gc_i = func(input_size, gate_size, **gc_kwargs)
-        self.gc_h = func(output_size, gate_size, **gc_kwargs)
+        self.gc_i = func(size, gate_size, **gc_kwargs)
+        self.gc_h = func(size, gate_size, **gc_kwargs)
 
     def forward(self, input, hidden):
+        input = self.layer_norm(input)
         if self.rnn_type == 'RNN':
             output = F.tanh(self.rnn(input, hidden))
         elif self.rnn_type == 'RNNReLU':
@@ -53,34 +54,30 @@ class GCRNNCell(nn.Module):
 
 
 class GCRNN(nn.Module):
-    def __init__(self, rnn_type, num_node,
-                 input_size, hidden_size, num_layers, dropout,
+    def __init__(self, rnn_type, num_node, size, num_layers, dropout,
                  func, gc_kwargs):
         super().__init__()
         self.rnn_type = rnn_type
         self.num_node = num_node
-        self.hidden_size = hidden_size
+        self.size = size
         self.num_layers = num_layers
         self.layers = nn.ModuleList()
-        self.layers.append(
-            GCRNNCell(rnn_type, input_size, hidden_size, func, gc_kwargs)
-        )
         self.layers.extend(
-            [GCRNNCell(rnn_type, hidden_size, hidden_size, func, gc_kwargs)
-             for i in range(num_layers - 1)]
+            [GCRNNCell(rnn_type, size, func, gc_kwargs)
+             for i in range(num_layers)]
         )
         self.dropout = nn.Dropout(dropout)
 
     def init_hidden(self, batch_size):
         weight = next(self.parameters())
-        shape = (batch_size, self.num_layers, self.num_node, self.hidden_size)
+        shape = (batch_size, self.num_layers, self.num_node, self.size)
         if self.rnn_type == 'LSTM':
             return (weight.new_zeros(shape), weight.new_zeros(shape))
         else:
             return weight.new_zeros(shape)
 
     def forward(self, input, hidden=None):
-        batch_size, seq_len, num_node, input_size = input.size()
+        batch_size, seq_len = input.size(0), input.size(1)
         if hidden is None:
             hidden = self.init_hidden(batch_size)
         output = []

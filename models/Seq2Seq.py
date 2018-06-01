@@ -16,27 +16,25 @@ class Seq2SeqBase(nn.Module):
         self.horizon = horizon
 
     def _decode(self, input):
-        output = self.decoder(input)
-        return output[0] if isinstance(output, tuple) else output
-
-    def _embed(self, data, time, weekday):
-        if self.embedding is None:
-            return data
-        return torch.cat((data, self.embedding(time, weekday)), -1)
+        raise NotImplementedError
 
 
 class Seq2SeqRNN(Seq2SeqBase):
+    def _decode(self, input):
+        output = self.decoder(input)
+        return output[0] if isinstance(output, tuple) else output
+
     def forward(self, data, time, weekday, teach=0):
         his = self.history
         # encoding
-        input = self._embed(data[:, :his], time[:, :his], weekday[:, :his])
+        input = self.embedding(data[:, :his], time[:, :his], weekday[:, :his])
         encoder_output, hidden = self.encoder(input)
         # decoding
         output = [self._decode(encoder_output[:, [-1]])]
         for idx in range(self.horizon - 1):
             idx += his
             input = data[:, [idx]] if random.random() < teach else output[-1]
-            input = self._embed(input, time[:, [idx]], weekday[:, [idx]])
+            input = self.embedding(input, time[:, [idx]], weekday[:, [idx]])
             encoder_output, hidden = self.encoder(input, hidden)
             output.append(self._decode(encoder_output))
         return torch.cat(output, 1)
