@@ -71,7 +71,7 @@ def add_model(args):
                       choices=['RNN', 'GRU', 'LSTM'])
     # Attention
     args.add_argument('-attn_type', choices=['dot', 'general', 'mlp'])
-    args.add_argument('-num_head', type=int)
+    args.add_argument('-head_count', type=int)
     # DCRNN
     args.add_argument('-hops', type=int)
     args.add_argument('-uni', action='store_true')
@@ -101,7 +101,7 @@ def get_model_config(model):
     elif model == 'GARNN':
         config = {
             'hidden_size': 64,
-            'num_head': 4
+            'head_count': 4
         }
     else:
         raise NameError('Model {model} invalid.'.format(model))

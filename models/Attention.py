@@ -8,20 +8,20 @@ from lib.utils import aeq
 
 
 class GlobalAttention(nn.Module):
-    def __init__(self, dim, att_type, dropout=0.1):
+    def __init__(self, size, att_type, dropout=0.1):
         super().__init__()
         assert att_type in ['dot', 'general', 'mlp']
         self.att_type = att_type
         if att_type == 'mlp':
-            self.linear_query = nn.Linear(dim, dim, bias=False)
-            self.linear_context = nn.Linear(dim, dim)
-            self.linear_score = nn.Linear(dim, 1)
+            self.linear_query = nn.Linear(size, size, bias=False)
+            self.linear_context = nn.Linear(size, size)
+            self.linear_score = nn.Linear(size, 1)
         elif att_type == 'general':
-            self.linear_context = nn.Linear(dim, dim, bias=False)
+            self.linear_context = nn.Linear(size, size, bias=False)
         self.softmax = nn.Softmax(-1)
         self.tanh = nn.Tanh()
-        self.linear_out_query = nn.Linear(dim, dim, False)
-        self.linear_out_context = nn.Linear(dim, dim, bias=att_type=='mlp')
+        self.linear_out_query = nn.Linear(size, size, False)
+        self.linear_out_context = nn.Linear(size, size, bias=att_type=='mlp')
 
     def forward(self, query, bank, mask=None):
         '''
@@ -37,16 +37,16 @@ class GlobalAttention(nn.Module):
         return output, attn
 
     def score(self, query, context):
-        batch, len_q, dim = query.size()
-        batch_, len_c, dim_ = context.size()
+        batch, len_q, size = query.size()
+        batch_, len_c, size_ = context.size()
         aeq(batch, batch_)
-        aeq(dim, dim_)
+        aeq(size, size_)
         if self.att_type in ['dot', 'general']:
             if self.att_type == 'general':
                 context = self.linear_context(context)
-            score = torch.bmm(query, context.transpose(1, 2)) / math.sqrt(dim)
+            score = torch.bmm(query, context.transpose(1, 2)) / math.sqrt(size)
         else:
-            score_size = (batch, len_q, len_c, dim)
+            score_size = (batch, len_q, len_c, size)
             sc1 = self.linear_query(query).unsqueeze(2).expand(score_size)
             sc2 = self.linear_context(context).unsqueeze(1).expand(score_size)
             score = self.linear_score(F.tanh(sc1 + sc2))
@@ -54,39 +54,36 @@ class GlobalAttention(nn.Module):
 
 
 class MultiHeadedAttention(nn.Module):
-    def __init__(self, input_size, output_size, head_count, dropout=0,
-                 return_head=False):
-        assert output_size % head_count == 0
+    def __init__(self, size, head_count, dropout, return_head=False):
+        assert size % head_count == 0
         super().__init__()
-        self.input_size = input_size
-        self.output_size = output_size
+        self.size = size
         self.head_count = head_count
-        self.head_size = output_size // head_count
-        self.linear_key = nn.Linear(input_size, output_size)
-        self.linear_value = nn.Linear(input_size, output_size)
-        self.linear_query = nn.Linear(input_size, output_size)
-        self.softmax = nn.Softmax(dim=-1)
+        self.head_size = size // head_count
+        self.linear_key = nn.Linear(size, size)
+        self.linear_value = nn.Linear(size, size)
+        self.linear_query = nn.Linear(size, size)
+        self.softmax = nn.Softmax(-1)
         self.dropout = nn.Dropout(dropout)
         self.return_head = return_head
 
     def forward(self, key, value, query, mask=None):
         batch, len_key, key_size = key.size()
         batch_query, len_query, query_size = query.size()
-        batch_value, len_value, value_size = values.size()
+        batch_value, len_value, value_size = value.size()
         aeq(batch, batch_query, batch_value)
         aeq(len_key, len_value)
-        aeq(self.input_size, key_size, value_size, query_size)
+        aeq(self.size, key_size, value_size, query_size)
 
         def shape(x):
             y = x.view(batch, -1, self.head_count, self.head_size)
-            return y.transpose(-1, -2).contiguous()
+            return y.transpose(-2, -3).contiguous()
 
         def unshape(x):
-            y = x.transpose(-1, -2).contiguous()
+            y = x.transpose(-2, -3).contiguous()
             if self.return_head:
-                return y.view(batch, -1, self.output_size)
-            else:
                 return y
+            return y.view(batch, -1, self.size)
 
         # 1) Project key, value, and query.
         key = shape(self.linear_key(key))
@@ -101,6 +98,6 @@ class MultiHeadedAttention(nn.Module):
 
         # 3) Apply attention dropout and compute context vectors.
         attention = self.softmax(scores)
-        output = unshape(torch.matmul(self.dropout(attention), value))
+        output = unshape(torch.matmul(attention, value))
         attention = attention.view(batch, self.head_count, len_query, len_key)
-        return output, attention
+        return output

@@ -43,12 +43,6 @@ class MetricList(list):
                 self[idx] += metric
         return self
 
-    def __str__(self):
-        if not self:
-            return None
-        else:
-            return ' '.join([metric for metric in self])
-
 
 class Loss:
     def __init__(self, metrics, horizons):

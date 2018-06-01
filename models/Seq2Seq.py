@@ -16,7 +16,8 @@ class Seq2SeqBase(nn.Module):
         self.horizon = horizon
 
     def _decode(self, input):
-        return self.decoder(input)
+        output = self.decoder(input)
+        return output[0] if isinstance(output, tuple) else output
 
     def _embed(self, data, time, weekday):
         if self.embedding is None:

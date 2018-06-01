@@ -16,7 +16,7 @@ from models import GAT
 
 def build_model(args):
     if args.model in ['RNN', 'RNNAttn']:
-        model = build_rnn(args)
+        model = build_seq2seq_rnn(args)
     elif args.model in ['DCRNN', 'GARNN', 'GaARNN']:
         model = build_gcrnn(args)
     elif args.model in ['Transformer']:
@@ -26,7 +26,7 @@ def build_model(args):
     return model
 
 
-def build_tempembedding(args):
+def build_temp_embedding(args):
     use_embedding = args.use_time | args.use_weekday
     if not use_embedding:
         return
@@ -37,7 +37,7 @@ def build_tempembedding(args):
         dropout=args.dropout)
 
 
-def build_stembedding(args):
+def build_st_embedding(args):
     use_embedding = args.use_node | args.use_time | args.use_weekday
     if not use_embedding:
         return
@@ -50,8 +50,24 @@ def build_stembedding(args):
         dropout=args.dropout)
 
 
-def build_rnn(args):
-    embedding = build_tempembedding(args)
+def build_linear(args):
+    return Decoder.Linear(
+        hidden_size=args.hidden_size,
+        output_size=args.output_size,
+        dropout=args.dropout)
+
+
+def build_attn_linear(args):
+    return Decoder.AttnLinear(
+        attn_type=args.attn_type,
+        hidden_size=args.hidden_size,
+        output_size=args.output_size,
+        dropout=args.dropout
+    )
+
+
+def build_seq2seq_rnn(args):
+    embedding = build_temp_embedding(args)
     encoder = RNN.RNN(
         rnn_type=args.rnn_type,
         input_size=args.input_size,
@@ -61,10 +77,10 @@ def build_rnn(args):
     )
 
     if args.model == 'RNN':
-        decoder = Decoder.Linear(
-            hidden_size=args.hidden_size,
-            output_size=args.output_size,
-            dropout=args.dropout)
+        decoder = build_linear(args)
+    elif args.model == 'RNNAttn':
+        decoder = build_attn_linear(args)
+
     seq2seq = Seq2Seq.Seq2SeqRNN(
         embedding=embedding,
         encoder=encoder,
@@ -78,7 +94,7 @@ def build_gcrnn(args):
     adj = pt_utils.load_adj(args.dataset)
     if args.cuda:
         adj = adj.cuda()
-    embedding = build_stembedding(args)
+    embedding = build_st_embedding(args)
     if args.model == 'DCRNN':
         func = GCN.DiffusionConvolution
         gc_kwargs = {
@@ -92,12 +108,6 @@ def build_gcrnn(args):
             'head_count': args.head_count,
             'dropout': args.dropout
         }
-    elif args.model == 'GatGARNN':
-        func = GAT.GaAN
-        gc_kwargs = {
-            'head_count': args.head_count,
-            'dropout': args.dropout
-        }
 
     encoder = GCRNN.GCRNN(
         rnn_type=args.rnn_type,
@@ -107,7 +117,7 @@ def build_gcrnn(args):
         num_layers=args.num_layers,
         dropout=args.dropout,
         func=func,
-        **gc_kwargs
+        gc_kwargs=gc_kwargs
     )
 
     decoder = Decoder.GraphLinear(
