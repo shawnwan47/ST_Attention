@@ -51,9 +51,12 @@ class STEmbedding(nn.Module):
         output = [data]
         if self.use_node:
             node = time.new_tensor(torch.arange(num_node))
-            output.append(self.embedding_node(node).expand(shape))
+            embedded_node = self.embedding_node(node)
+            output.append(self.dropout(embedded_node.expand(shape)))
         if self.use_time:
-            output.append(self.embedding_time(time).unsqueeze(-2).expand(shape))
+            embedded_time = self.embedding_time(time).unsqueeze(-2)
+            output.append(self.dropout(embedded_time.expand(shape)))
         if self.use_weekday:
-            output.append(self.embedding_weekday(weekday).unsqueeze(-2).expand(shape))
-        return self.linear(self.dropout(torch.cat(output, -1)))
+            embedded_weekday = self.embedding_weekday(weekday).unsqueeze(-2)
+            output.append(self.dropout(embedded_weekday.expand(shape)))
+        return self.dropout(F.relu(self.linear(torch.cat(output, -1))))
