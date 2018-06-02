@@ -46,7 +46,7 @@ def add_train(args):
     # run
     args.add_argument('-test', action='store_true')
     args.add_argument('-retrain', action='store_true')
-    args.add_argument('-batch_size', type=int, default=64)
+    args.add_argument('-batch_size', type=int, default=16)
     args.add_argument('-epoches', type=int, default=100)
 
 
