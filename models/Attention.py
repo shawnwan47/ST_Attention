@@ -53,9 +53,8 @@ class GlobalAttention(nn.Module):
         return score.view(batch, len_q, len_c)
 
 
-class MultiHeadedAttention(nn.Module):
-    def __init__(self, input_size, output_size, head_count, dropout,
-                 return_head=False):
+class MultiAttention(nn.Module):
+    def __init__(self, input_size, output_size, head_count, dropout):
         assert output_size % head_count == 0
         super().__init__()
         self.input_size = input_size
@@ -67,45 +66,90 @@ class MultiHeadedAttention(nn.Module):
         self.linear_query = nn.Linear(input_size, output_size)
         self.softmax = nn.Softmax(-1)
         self.dropout = nn.Dropout(dropout)
-        self.return_head = return_head
 
-    def _shape(self, x, batch_size):
-        y = x.view(batch_size, -1, self.head_count, self.head_size)
-        return y.transpose(-2, -3).contiguous()
-
-    def _unshape(self, x, batch_size):
-        y = x.transpose(-2, -3).contiguous()
-        if self.return_head:
-            return y
-        return y.view(batch_size, -1, self.output_size)
-
-    def _check_args(self, key, value, query):
+    def _check_args(self, key, value, query, dist=None, mask=None):
         batch, len_key, key_size = key.size()
         batch_query, len_query, query_size = query.size()
         batch_value, len_value, value_size = value.size()
         aeq(batch, batch_query, batch_value)
         aeq(len_key, len_value)
         aeq(self.input_size, key_size, value_size, query_size)
+        if dist is not None:
+            aeq(len_query, dist.size(0))
+            aeq(len_key, dist.size(1))
+        if mask is not None:
+            aeq(len_query, mask.size(0))
+            aeq(len_key, mask.size(1))
+
+    def _shape(self, x):
+        y = x.view(x.size(0), -1, self.head_count, self.head_size)
+        return y.transpose(-2, -3).contiguous()
+
+    def _unshape(self, x):
+        y = x.transpose(-2, -3).contiguous()
+        return y.view(y.size(0), -1, self.output_size)
 
     def _score(self, key, query):
-        scores = torch.matmul(query, key.transpose(-1, -2))
-        scores /= math.sqrt(self.head_size)
+        scale = math.sqrt(self.head_size)
+        scores = torch.matmul(query, key.transpose(-1, -2)) / scale
         return scores
 
+    def _pool(self, attn, value):
+        # drop_attn = self.dropout(attn)
+        output = torch.matmul(attn, value)
+        output = self._unshape(output)
+        return output
+
     def forward(self, key, value, query, mask=None):
-        self._check_args(key, value, query)
-        batch_size = key.size(0)
+        self._check_args(key, value, query, mask=mask)
 
-        key = self._shape(self.linear_key(key), batch_size)
-        value = self._shape(self.linear_value(value), batch_size)
-        query = self._shape(self.linear_query(query), batch_size)
+        key = self._shape(self.linear_key(key))
+        value = self._shape(self.linear_value(value))
+        query = self._shape(self.linear_query(query))
 
-        score = self._score(key, query)
+        scores = self._score(key, query)
         if mask is not None:
             scores.masked_fill_(mask, -1e8)
-        attention = self.softmax(scores)
+        attn = self.softmax(scores)
+        output = self._pool(attn, value)
+        return output
 
-        output = torch.matmul(self.dropout(attention), value)
-        output = self._unshape(output)
-        attention = attention.view(batch, self.head_count, len_query, len_key)
-        return output, attention
+
+class MultiAttentionGated(MultiAttention):
+    def __init__(self, input_size, output_size, head_count, dropout):
+        pass
+
+
+class MultiDistAttention(MultiAttention):
+    def __init__(self, input_size, output_size, head_count, dropout,
+                 num_dists, dist):
+        super().init(input_size, output_size, head_count, dropout)
+        self.num_dists = num_dists
+        self.embedding_dist_key = nn.Embedding(num_dists, self.head_size)
+        self.embedding_dist_value = nn.Embedding(num_dists, self.head_size)
+        self.register_buffer('dist', dist)
+
+    def _dist_arange(self):
+        return self.dist.new_tensor(torch.arange(self.num_dists))
+
+    def _select_dist(self, n_row, n_col):
+        return self.dist[-n_row:, -n_col:]
+
+    def _score(self, key, query):
+        len_query, len_key = query.size(-2), key.size(-2)
+        dist = self._select_dist(len_query, len_key)
+        score = query.matmul(key.transpose(-1, -2))
+        dist_key = self.embedding_dist_key(self._dist_arange())
+        score_dist = query.matmul(dist_key.transpose(0, 1))
+        score_dist = score_dist.view(*score_dist.size()[:-2], -1)
+        dist += self._dist_arange().unsqueeze(-1) * self.num_dists
+        score += score_dist[..., dist]
+        score /= math.sqrt(self.head_size)
+        return score
+
+    def _pool(self, attn, value):
+        output = attn.matmul(value)
+        dist = self._select_dist(attn.size(-2), attn.size(-1))
+        dist_value = self.embedding_dist_value(self._dist_arange())
+        output += attn.matmul(dist_value[dist])
+        return self._unshape(output)
