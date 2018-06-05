@@ -1,19 +1,22 @@
 import pickle
 import numpy as np
 import scipy.sparse as sp
-
 from scipy.sparse import linalg
+import networkx as nx
 
-def floyd(adj):
-    idx = adj.index
-    for k in idx:
-        for i in idx:
-            for j in idx:
-                tmp = adj.loc[i, k] + adj.loc[k, j]
-                if adj.loc[i, j] > tmp:
-                    adj.loc[i, j] = tmp
-    return adj
 
+def link_to_dist(link):
+    G = nx.DiGraph()
+    G.add_weighted_edges_from(link)
+    length = nx.shortest_path_length(G, weight='weight')
+    return pd.DataFrame(length)
+
+
+def link_to_hop(link):
+    G = nx.DiGraph()
+    G.add_edges_from(link)
+    length = nx.shortest_path_length(G)
+    return pd.DataFrame(length)
 
 def calculate_dist_adj(dist):
     adj = np.exp(-np.square(dist / dist.std()))

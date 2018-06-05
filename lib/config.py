@@ -163,6 +163,6 @@ def update_model(args):
     name += 'Lay' + str(args.num_layers)
     if 'RNN' in args.model:
         name += 'RNN' + args.rnn_type
-    if args.model == 'Transformer':
+    if args.model in ['GARNN', 'Transformer']:
         name += 'Head' + str(args.head)
     args.path = MODEL_PATH + args.dataset + '/' + name
