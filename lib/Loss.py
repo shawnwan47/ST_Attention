@@ -64,7 +64,7 @@ class Loss:
         else:
             metrics = MetricList({metric: self._loss(output, target, metric)
                                   for metric in self.metrics]
-            return MetricList(metrics)
+            return metrics
 
     @staticmethod
     def _loss(output, target, loss):
