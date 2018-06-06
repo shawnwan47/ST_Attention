@@ -1,22 +1,32 @@
 import pickle
 import numpy as np
+import pandas as pd
 import scipy.sparse as sp
 from scipy.sparse import linalg
 import networkx as nx
 
 
-def link_to_dist(link):
+def build_graph(link, node=None):
     G = nx.DiGraph()
-    G.add_weighted_edges_from(link)
+    G.add_weighted_edges_from([(tup[1], tup[2], tup[3])
+                               for tup in link.itertuples()])
+    if node is not None:
+        G.add_nodes_from([(id, dict(pos=(tup.latitude, tup.longitude)))
+                          for id, tup in node.iterrows()])
+    return G
+
+
+def graph_dist(G):
     length = nx.shortest_path_length(G, weight='weight')
-    return pd.DataFrame(length)
+    dist = {src: tgt for src, tgt in length}
+    return pd.DataFrame(dist)
 
 
-def link_to_hop(link):
-    G = nx.DiGraph()
-    G.add_edges_from(link)
+def graph_hop(G):
     length = nx.shortest_path_length(G)
-    return pd.DataFrame(length)
+    dist = {src: tgt for src, tgt in length}
+    return pd.DataFrame(dist)
+
 
 def calculate_dist_adj(dist):
     adj = np.exp(-np.square(dist / dist.std()))

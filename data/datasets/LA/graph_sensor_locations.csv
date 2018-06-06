@@ -1,4 +1,4 @@
-index,sensor_id,latitude,longitude
+index,id,latitude,longitude
 0,773869,34.15497,-118.31829
 1,767541,34.11621,-118.23799
 2,767542,34.11641,-118.23819

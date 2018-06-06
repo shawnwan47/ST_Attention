@@ -3,6 +3,7 @@ import pickle
 
 import pandas as pd
 import numpy as np
+import networkx as nx
 from geopy.distance import geodesic
 
 from constants import DATA_PATH, BJ_HIGHWAY_PATH, BJ_METRO_PATH, LA_PATH
@@ -10,31 +11,55 @@ from lib import graph
 
 
 class LoaderBase:
+    def __init__(self):
+        raise NotImplementedError
+
     def load_ts(self, freq):
         raise NotImplementedError
 
-    def load_node(self):
+    def load_adj(self):
         raise NotImplementedError
+
+    def load_node(self):
+        return pd.read_csv(self._node, index_col=0)
 
     def load_link(self):
-        raise NotImplementedError
+        return pd.read_csv(self._link)
 
     def load_dist(self):
-        raise NotImplementedError
+        if self._dist.exists():
+            dist = pd.read_csv(self._dist, index_col=0)
+            dist.columns = [int(col) for col in dist.columns]
+        else:
+            G = graph.build_graph(self.load_link())
+            dist = graph.graph_dist(G)
+            dist = dist.loc[self.ids, self.ids]
+            dist.to_csv(self._dist, index=True)
+        return dist
 
     def load_hop(self):
-        raise NotImplementedError
+        if self._hop.exists():
+            hop = pd.read_csv(self._hop, index_col=0)
+            hop.columns = [int(col) for col in hop.columns]
+        else:
+            G = graph.build_graph(self.load_link())
+            hop = graph.graph_hop(G)
+            hop = hop.loc[self.ids, self.ids]
+            hop.to_csv(self._hop, index=True)
+        return hop
 
 
-class BJLoader:
+class BJLoader(LoaderBase):
     def __init__(self, dataset='highway'):
         self._path = Path(DATA_PATH)
         self._path /= BJ_HIGHWAY_PATH if dataset == 'highway' else BJ_METRO_PATH
         self._node = self._path / 'STATION.txt'
-        self._link_raw = self._path / 'LINK_RAW.txt'
+        self._link_raw = self._path / 'link_raw.csv'
         self._link = self._path / 'link.csv'
-        self._dist = self._path / 'dist.csv'
+        if not self._link.exists():
+            self.calc_link()
         self._hop = self._path / 'hop.csv'
+        self._dist = self._path / 'dist.csv'
         self._ts_o = self._path / 'O.csv'
         self._ts_d = self._path / 'D.csv'
         self._ts_od = self._path / 'OD.csv'
@@ -49,8 +74,8 @@ class BJLoader:
         link_ids = list(np.unique(self.load_link_raw()))
         ts_ids = [*self._load_ts('O').columns, *self._load_ts('D').columns]
         node_ids = node_ids.intersection(*[link_ids, ts_ids])
-        idx = node.loc[node_ids].sort_values(['ROUTE', 'STATION']).index
-        return idx
+        ids = node.loc[node_ids].sort_values(['ROUTE', 'STATION']).index
+        return ids
 
     def _load_ts(self, od='D'):
         filepath = self._ts_o if od is 'O' else self._ts_d
@@ -58,25 +83,19 @@ class BJLoader:
         ts.columns = [int(col) for col in ts.columns]
         return ts
 
-    def load_node(self, raw=False):
-        return pd.read_csv(self._node, index_col=0)
-
-    def load_link_raw(self, raw=False):
+    def load_link_raw(self):
         return pd.read_csv(self._link_raw, dtype=int)
 
-    def load_link(self):
+    def calc_link(self):
         link = self.load_link_raw()
         node = self.load_node()
+        pos = node.apply(lambda x: (x['latitude'], x['longitude']), axis=1)
         def dist(i, j):
             if i in node.index and j in node.index:
-                return geodesic((node.LAT[i], node.LON[i]),
-                                (node.LAT[j], node.LON[j])).km
-            return np.nan
-
-        link['cost'] = link.apply(lambda x: dist(x[0], x[1]))
-        link.to_csv(self._link)
-        return link
-
+                return geodesic(pos[i], pos[j]).km
+            return 0.
+        link['cost'] = link.apply(lambda x: dist(x['from'], x['to']), axis=1)
+        link.to_csv(self._link, index=False)
 
     def load_ts(self, freq='5min'):
         o = self._load_ts('O').reindex(columns=self.ids)
@@ -102,39 +121,6 @@ class BJLoader:
         ret.index.set_levels(exit, level=2, inplace=True)
         return ret
 
-    def load_hop(self):
-        if self._hop.exists():
-            hop = pd.read_csv(self._hop, index_col=0)
-            hop.columns = [int(col) for col in hop.columns]
-        else:
-            link = self.load_link(raw=False)
-            hop = graph.link_to_hop(link)
-            hop.to_csv(self._hop, index=True)
-        return hop.loc[self.ids, self.ids].as_matrix()
-
-    def load_dist(self):
-        if self._dist.exists():
-            dist = pd.read_csv(self._dist, index_col=0)
-            dist.columns = [int(col) for col in dist.columns]
-        else:
-            node = self.load_node()
-            link = self.load_link()
-            idx = np.unique(link)
-            dist = pd.DataFrame(float('inf'), index=idx, columns=idx)
-            for i in range(link.shape[0]):
-                i0, i1 = link[i, 0], link[i, 1]
-                try:
-                    loc0 = (node.LAT[i0], node.LON[i0])
-                    loc1 = (node.LAT[i1], node.LON[i1])
-                    dist.loc[i0, i1] = geodesic(loc0, loc1).kilometers
-                except KeyError:
-                    continue
-            for i in idx:
-                dist.loc[i, i] = 0
-            dist = graph.floyd(dist)
-            dist.to_csv(self._dist, index=True)
-        return dist.loc[self.ids, self.ids].as_matrix()
-
     def load_od(self):
         if self._od_sum.exists():
             ret = pd.read_csv(self._od_sum, index_col=0)
@@ -156,45 +142,29 @@ class BJLoader:
         return adj
 
 
-class LALoader:
+class LALoader(LoaderBase):
     def __init__(self):
         self._path = Path(DATA_PATH) / LA_PATH
         self.ids, self.id_to_idx, self.adj = pickle.load(
             open(self._path / 'adj_mx.pkl', 'rb'))
-        self.ids = self._sort_ids()
-        self.ids_int = [int(x) for x in self.ids]
         self.adj[self.adj < 0.1] = 0
+        self._prep_ids()
         self._node = self._path / 'graph_sensor_locations.csv'
         self._ts = self._path / 'df_highway_2012_4mon_sample.h5'
         self._link = self._path / 'distances_la_2012.csv'
         self._dist = self._path / 'dist.csv'
+        self._hop = self._path / 'hop.csv'
 
-    def _sort_ids(self):
-        return sorted(self.ids, key=lambda x: self.id_to_idx[x])
+    def _prep_ids(self):
+        self.ids = sorted(self.ids, key=lambda x: self.id_to_idx[x])
+        self.ids = [int(x) for x in self.ids]
 
     def load_ts(self, freq='5min'):
-        ts = pd.read_hdf(self._ts).loc[:, self.ids]
+        ts = pd.read_hdf(self._ts)
+        ts.columns = [int(col) for col in ts.columns]
+        ts = ts.loc[:, self.ids]
         ts[ts==0.] = np.nan
         return ts.resample(freq).mean()
 
     def load_adj(self):
         return self.adj
-
-    def load_node(self):
-        return pd.read_csv(self._node, index_col=0)
-
-    def load_link(self):
-        return pd.read_csv(self._link, index_col=[0, 1], squeeze=True)
-
-    def load_dist(self):
-        if self._dist.exists():
-            dist = pd.read_csv(self._dist, index_col=0)
-            dist.columns = [int(col) for col in dist.columns]
-        else:
-            dist = graph.link_to_dist(self.load_link())
-            dist.to_csv(self._dist, index=True)
-        dist = dist.loc[self.ids_int, self.ids_int]
-        return dist
-
-    def load_hops(self):
-        pass
