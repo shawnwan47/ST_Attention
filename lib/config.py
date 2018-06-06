@@ -164,5 +164,5 @@ def update_model(args):
     if 'RNN' in args.model:
         name += 'RNN' + args.rnn_type
     if args.model in ['GARNN', 'Transformer']:
-        name += 'Head' + str(args.head)
+        name += 'Head' + str(args.head_count)
     args.path = MODEL_PATH + args.dataset + '/' + name

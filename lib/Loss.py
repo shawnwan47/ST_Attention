@@ -7,21 +7,20 @@ from lib.pt_utils import mask_target
 
 
 class Metric:
-    def __init__(self, key, value, num):
-        self.key = key
+    def __init__(self, value, norm):
         self.value = value
-        self.num = num
+        self.norm = norm
 
     def __repr__(self):
         return f'{self.key}:{self.value:.2f}'
 
     def __add__(self, other):
-        num = self.num + other.num
-        value = (self.value * self.num + other.value * other.num) / num
-        return Metric(self.key, value, num)
+        norm = self.norm + other.norm
+        value = (self.value * self.norm + other.value * other.norm) / norm
+        return Metric(value, norm)
 
 
-class MetricList(list):
+class MetricList(dict):
     def __add__(self, other):
         if not self:
             return other
@@ -29,8 +28,8 @@ class MetricList(list):
             return self
         else:
             assert(len(self) == len(other))
-            return MetricList([m1 + m2
-                               for m1, m2 in zip(self, other)])
+            return MetricList({key: self[key] + other[key]
+                               for key in self.keys()})
 
     def __iadd__(self, other):
         if not self:
@@ -39,9 +38,12 @@ class MetricList(list):
             return self
         else:
             assert(len(self) == len(other))
-            for idx, metric in enumerate(other):
-                self[idx] += metric
+            for key in self.keys():
+                self[key] += other[key]
         return self
+
+    def __repr__(self):
+        return ' '.join([f'{key}:{val}' for key, val in self.items()])
 
 
 class Loss:
@@ -50,20 +52,18 @@ class Loss:
         self.horizons = horizons
 
     def __call__(self, output, target):
-        ret = MetricList([
-            self._eval(output[:, horizon], target[:, horizon])
-            for horizon in self.horizons])
-        ret.append(self._eval(output, target))
+        ret = MetricList({horizon: self._eval(output[:, horizon], target[:, horizon])
+                          for horizon in self.horizons})
+        ret['average'] = self._eval(output, target)
         return ret
 
     def _eval(self, output, target):
         output, target = mask_target(output, target)
-        num = target.numel()
-        if not num:
+        if not target.numel():
             return MetricList()
         else:
-            metrics = [Metric(metric, self._loss(output, target, metric), num)
-                       for metric in self.metrics]
+            metrics = MetricList({metric: self._loss(output, target, metric)
+                                  for metric in self.metrics]
             return MetricList(metrics)
 
     @staticmethod
@@ -76,4 +76,9 @@ class Loss:
             loss = ((output - target).abs() / (target + EPS)).mean() * 100
         elif loss == 'wape':
             loss = F.l1_loss(output, target) / (target.mean() + EPS) * 100
-        return loss.item()
+
+        if loss == 'wape':
+            loss = Metric(loss.item(), target.mean() + EPS)
+        else:
+            loss = Metric(loss.item(), target.numel())
+        return loss
