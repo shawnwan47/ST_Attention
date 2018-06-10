@@ -50,16 +50,14 @@ class TimeSeries:
 
     def _gen_seq2seq_io(self, df):
 
-        def _gen_time(index):
-
-            return time
-
         def _gen_seq(arr, seq_len):
             samples = arr.shape[0] - seq_len + 1
             seq = np.stack([arr[i:i + seq_len] for i in range(samples)], axis=0)
             return seq
 
-        data = np.nan_to_num(self._scale(df.values))
+        data = df.fillna(method='ffill').fillna(method='bfill')
+        assert df.isna().sum().sum() == 0
+        data = self._scale(df.values)
         _, time = np.unique(df.index.time, return_inverse=True)
         weekday = df.index.weekday
         data_len = self.history + self.horizon - 1
