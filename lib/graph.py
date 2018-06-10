@@ -6,14 +6,40 @@ from scipy.sparse import linalg
 import networkx as nx
 
 
-def build_graph(link, node=None):
-    G = nx.DiGraph()
-    G.add_weighted_edges_from([(tup[1], tup[2], tup[3])
-                               for tup in link.itertuples()])
-    if node is not None:
-        G.add_nodes_from([(id, dict(pos=(tup.latitude, tup.longitude)))
-                          for id, tup in node.iterrows()])
+def build_link_graph(node, link):
+    G = build_node_graph(node)
+    edges = [(i, j, c) for _, i, j, c in link.itertuples()
+             if edge[0] in G.nodes() and edge[1] in G.nodes()]
+    G.add_weighted_edges_from(edges)
     return G
+
+
+def build_node_graph(node):
+    G = nx.DiGraph()
+    G.add_nodes_from(node['id'])
+    G.pos = {tup.id: (tup.latitude, tup.longitude)
+             for _, tup in node.iterrows()}
+    return G
+
+
+def build_multi_attention_graph(attention, node):
+    assert attention.ndim() == 3
+    head, len_q, len_c = attention.shape
+    Gs = (build_attention_graph(attention[i], node) for i in range(head))
+    return Gs
+
+
+def build_attention_graph(attention, node):
+    assert attention.ndim() == 2
+    aeq(attention.shape[0], attention.shape[1], node.shape[0])
+    G = build_node_graph(node)
+    nnode = node.shape[0]
+    G.add_weighted_edges_from([(node.id[i], node.id[j], attention[i, j])
+                               for i in range(nnode) for j in range(nnode)])
+    return G
+
+
+
 
 
 def graph_dist(G):

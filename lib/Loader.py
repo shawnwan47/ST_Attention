@@ -39,7 +39,7 @@ class LoaderBase:
 
     def load_hop(self):
         if self._hop.exists():
-            hop = pd.read_csv(self._hop, index_col=0)
+            hop = pd.read_csv(self._hop, index_col=0, dtype=int)
             hop.columns = [int(col) for col in hop.columns]
         else:
             G = graph.build_graph(self.load_link())
