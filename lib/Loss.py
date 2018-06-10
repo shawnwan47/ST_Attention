@@ -20,7 +20,7 @@ class Metric:
         return Metric(value, norm)
 
 
-class MetricList(dict):
+class MetricDict(dict):
     def __add__(self, other):
         if not self:
             return other
@@ -28,7 +28,7 @@ class MetricList(dict):
             return self
         else:
             assert(len(self) == len(other))
-            return MetricList({key: self[key] + other[key]
+            return MetricDict({key: self[key] + other[key]
                                for key in self.keys()})
 
     def __iadd__(self, other):
@@ -52,7 +52,7 @@ class Loss:
         self.horizons = horizons
 
     def __call__(self, output, target):
-        ret = MetricList({horizon: self._eval(output[:, horizon], target[:, horizon])
+        ret = MetricDict({horizon: self._eval(output[:, horizon], target[:, horizon])
                           for horizon in self.horizons})
         ret['average'] = self._eval(output, target)
         return ret
@@ -60,9 +60,9 @@ class Loss:
     def _eval(self, output, target):
         output, target = mask_target(output, target)
         if not target.numel():
-            return MetricList()
+            return MetricDict()
         else:
-            metrics = MetricList({metric: self._loss(output, target, metric)
+            metrics = MetricDict({metric: self._loss(output, target, metric)
                                   for metric in self.metrics]
             return metrics
 

@@ -1,5 +1,5 @@
 from constants import EPS
-from lib.Loss import MetricList
+from lib.Loss import MetricDict
 from lib.pt_utils import mask_target
 
 
@@ -31,7 +31,7 @@ class Trainer:
             self.model.train()
         else:
             self.model.eval()
-        metrics = MetricList()
+        metrics = MetricDict()
         infos = []
         for data, time, weekday, target in dataloader:
             if self.cuda:
