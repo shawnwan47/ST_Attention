@@ -37,16 +37,25 @@ def split_data(data, train_ratio=0.7, test_ratio=0.2):
     return df_train, df_valid, df_test
 
 
+def sample_data(df):
+    df_week = df[df.index.weekofyear == (df.index.weekofyear[0] + 1)]
+    df_days = [df[df.index.weekday == day] for day in range(7)]
+    return df_days
+
+
+
 class TimeSeries:
-    def __init__(self, df, history=12, horizon=12, data_source=None):
+    def __init__(self, df, history=12, horizon=12):
         self.history = history
         self.horizon = horizon
-        self.data_source = data_source
         df_train, df_valid, df_test = split_data(df)
         self.mean, self.std = df_train.mean().values, df_train.std().values
-        self.data_train = self._gen_seq2seq_io(df_train)
-        self.data_valid = self._gen_seq2seq_io(df_valid)
-        self.data_test = self._gen_seq2seq_io(df_test)
+        data_train = self._gen_seq2seq_io(df_train)
+        data_valid = self._gen_seq2seq_io(df_valid)
+        data_test = self._gen_seq2seq_io(df_test)
+        io_samples = [self._gen_seq2seq_io(df) for df in sample_data(df)]
+        data_sample = (np.concatenate(data) for data in zip(io_samples))
+        self.data = (data_train, data_valid, data_test, data_sample)
 
     def _gen_seq2seq_io(self, df):
 

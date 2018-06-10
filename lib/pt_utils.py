@@ -49,15 +49,15 @@ def load_dataset(dataset, freq, history, horizon, batch_size):
 
     datasets = (
         TensorDataset(*[numpy_to_torch(data) for data in data_tuple])
-        for data_tuple in (io.data_train, io.data_valid, io.data_test)
+        for data_tuple in io.data
     )
 
-    data_train, data_valid, data_test = (
+    data_loaders = (
         DataLoader(dataset=dataset, batch_size=batch_size, shuffle=i==0)
         for i, dataset in enumerate(datasets)
     )
 
-    return data_train, data_valid, data_test, mean, std
+    return data_loaders, mean, std
 
 
 def load_dataset_od(dataset, freq, history, horizon):
