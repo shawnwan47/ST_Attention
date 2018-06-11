@@ -80,6 +80,17 @@ class TimeSeries:
         return (df - self.mean) / (self.std + EPS)
 
 
+def bucketize_dist(dist, num):
+    shape = dist.shape
+    dist = dist.reshape(-1)
+    dist_max = 2 ** num - 1
+    dist = dist / dist.max() * dist_max + 1
+    dist = np.ceil(np.log2(dist)).astype(int)
+    assert max(dist) == num - 1
+    return dist.reshape(shape)
+
+
+
 class SparseTimeSeries:
     def __init__(self, ts, history=12, horizon=12):
         self.history = history
