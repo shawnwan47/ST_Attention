@@ -20,9 +20,9 @@ class GAT(nn.Module):
         input: batch_size x ... x node_count x input_size
         '''
         input_norm = self.layer_norm(input)
-        context = self.attn(input_norm, input_norm, input_norm)
+        context, attention = self.attn(input_norm, input_norm, input_norm)
         output = self.linear_query(input_norm) + self.linear_context(context)
-        return output
+        return output, attention
 
 
 class GatedGAT(GAT):

@@ -26,7 +26,7 @@ class Trainer:
         self.teach = 1
         self.teach_annealing = 0.01 ** (1 / epoches)
 
-    def eval(self, dataloader, train=False):
+    def eval(self, dataloader, train=False, verbose=False):
         if train:
             self.model.train()
         else:
@@ -40,10 +40,11 @@ class Trainer:
                 weekday = weekday.cuda()
                 target = target.cuda()
             teach = self.teach if train else 0
-            output = self.model(data, time, weekday, teach=teach)
+            output = self.model(data, time, weekday, teach)
             if isinstance(output, tuple):
                 output, info = output[0], output[1:]
-                infos.append(info)
+                if verbose:
+                    infos.append(info)
             output = self.rescaler(output)
 
             metrics += self.metrics(output, target)
@@ -63,7 +64,7 @@ class Trainer:
         for epoch in range(self.epoches):
             error_train, _ = self.eval(data_train, train=True)
             error_valid, _ = self.eval(data_valid)
-            error_test, infos = self.eval(data_test)
+            error_test, _ = self.eval(data_test)
             print(f'Epoch: {epoch}',
                   f'train: {error_train}',
                   f'valid: {error_valid}',

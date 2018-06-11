@@ -40,9 +40,30 @@ class Seq2SeqRNN(Seq2SeqBase):
         return torch.cat(output, 1)
 
 
-class Seq2SeqGCRNN(Seq2SeqRNN):
+class Seq2SeqDCRNN(Seq2SeqRNN):
     def forward(self, data, time, weekday, teach):
         # embedding
         data = data.unsqueeze(-1)
         output = super().forward(data, time, weekday, teach)
         return output.squeeze(-1)
+
+
+class Seq2SeqGARNN(Seq2SeqBase):
+    def forward(self, data, time, weekday, teach=0):
+        his = self.history
+        # encoding
+        input = self.embedding(data[:, :his], time[:, :his], weekday[:, :his])
+        encoder_output, hidden, _ = self.encoder(input)
+        # decoding
+        output = [self._decode(encoder_output[:, [-1]])]
+        attentions = [enc]
+        for idx in range(self.horizon - 1):
+            idx += his
+            input = data[:, [idx]] if random.random() < teach else output[-1]
+            input = self.embedding(input, time[:, [idx]], weekday[:, [idx]])
+            encoder_output, hidden, attention = self.encoder(input, hidden)
+            output.append(self._decode(encoder_output))
+            attentions.append(attention)
+        output = torch.cat(output)
+        attentions = torch.cat(attentions)
+        return output, attentions

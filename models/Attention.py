@@ -115,21 +115,22 @@ class MultiAttention(nn.Module):
         return output
 
 
-class MultiAttentionGated(MultiAttention):
-    def __init__(self, input_size, output_size, head_count, dropout):
-        pass
-
-
 class MultiDistAttention(MultiAttention):
     def __init__(self, input_size, output_size, head_count, dropout,
-                 num_dists, dist):
+                 embedding_dist, dist):
         super().init(input_size, output_size, head_count, dropout)
         self.num_dists = num_dists
-        self.embedding_dist_key = nn.Embedding(num_dists, self.head_size)
-        self.embedding_dist_value = nn.Embedding(num_dists, self.head_size)
+        self.embedding_dist = embedding_dist
+        dist_dim = embedding_dist.embedding_dim
+        self.linear_dist_key = nn.Sequential(
+            embedding_dist,
+            nn.Linear(dist_dim, self.head_size))
+        self.linear_dist_value = nn.Sequential(
+            embedding_dist,
+            nn.Linear(dist_dim, self.head_size))
         self.register_buffer('dist', dist)
 
-    def _dist_arange(self):
+    def _dist_range(self):
         return self.dist.new_tensor(torch.arange(self.num_dists))
 
     def _select_dist(self, n_row, n_col):
@@ -137,12 +138,15 @@ class MultiDistAttention(MultiAttention):
 
     def _score(self, key, query):
         len_query, len_key = query.size(-2), key.size(-2)
-        dist = self._select_dist(len_query, len_key)
         score = query.matmul(key.transpose(-1, -2))
-        dist_key = self.embedding_dist_key(self._dist_arange())
+        # compute dist score
+        dist_key = self.linear_dist_key(self._dist_range())
         score_dist = query.matmul(dist_key.transpose(0, 1))
         score_dist = score_dist.view(*score_dist.size()[:-2], -1)
-        dist += self._dist_arange().unsqueeze(-1) * self.num_dists
+        # index dist key
+        dist = self._select_dist(len_query, len_key)
+        dist += self._dist_range().unsqueeze(-1) * self.num_dists
+        # add and div
         score += score_dist[..., dist]
         score /= math.sqrt(self.head_size)
         return score
@@ -150,6 +154,6 @@ class MultiDistAttention(MultiAttention):
     def _pool(self, attn, value):
         output = attn.matmul(value)
         dist = self._select_dist(attn.size(-2), attn.size(-1))
-        dist_value = self.embedding_dist_value(self._dist_arange())
+        dist_value = self.linear_dist_value(self._dist_range())
         output += attn.matmul(dist_value[dist])
         return self._unshape(output)
