@@ -44,7 +44,6 @@ class Trainer:
             if isinstance(output, tuple):
                 output, info = output[0], output[1:]
                 infos.append(info)
-            print(output.size())
             output = self.rescaler(output)
 
             metrics += self.metrics(output, target)
