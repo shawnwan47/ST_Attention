@@ -112,7 +112,7 @@ class MultiAttention(nn.Module):
             scores.masked_fill_(mask, -1e8)
         attn = self.softmax(scores)
         output = self._pool(attn, value)
-        return output
+        return output, attn
 
 
 class MultiRelativeAttention(MultiAttention):

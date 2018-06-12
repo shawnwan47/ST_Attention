@@ -26,7 +26,7 @@ class Trainer:
         self.teach = 1
         self.teach_annealing = 0.01 ** (1 / epoches)
 
-    def eval(self, dataloader, train=False, verbose=False):
+    def eval(self, dataloader, train=False):
         if train:
             self.model.train()
         else:
@@ -43,8 +43,8 @@ class Trainer:
             output = self.model(data, time, weekday, teach)
             if isinstance(output, tuple):
                 output, info = output[0], output[1:]
-                if verbose:
-                    infos.append(info)
+                infos.append(info)
+            print(output.size())
             output = self.rescaler(output)
 
             metrics += self.metrics(output, target)

@@ -8,7 +8,6 @@ from models import Attention
 class GraphAttention(nn.Module):
     def __init__(self, input_size, output_size, head_count, dropout):
         super().__init__()
-        self.layer_norm = nn.LayerNorm(input_size)
         self.attention = Attention.MultiAttention(
             input_size, input_size, head_count, dropout
         )
@@ -19,17 +18,15 @@ class GraphAttention(nn.Module):
         '''
         input: batch_size x ... x node_count x input_size
         '''
-        input_norm = self.layer_norm(input)
-        context, attention = self.attention(input_norm, input_norm, input_norm)
-        output = self.linear_query(input_norm) + self.linear_context(context)
-        return output, attention
+        context, attn = self.attention(input, input, input)
+        output = self.linear_query(input) + self.linear_context(context)
+        return output, attn
 
 
-class GraphRelativeAttention(nn.Module):
+class GraphRelativeAttention(GraphAttention):
     def __init__(self, input_size, output_size, head_count, dropout,
                  num_dists, dist):
-        super().__init__()
-        self.layer_norm = nn.LayerNorm(input_size)
+        super().__init__(input_size, output_size, head_count, dropout)
         self.attention = Attention.MultiRelativeAttention(
             input_size=input_size,
             output_size=input_size,
@@ -38,27 +35,11 @@ class GraphRelativeAttention(nn.Module):
             num_dists=num_dists,
             dist=dist,
         )
-        self.linear_query = nn.Linear(input_size, output_size)
-        self.linear_context = nn.Linear(input_size, output_size, bias=False)
 
 
-class GatedGAT(GAT):
+class GatedGraphAttention(GraphAttention):
     def __init__(self, input_size, output_size, head_count, dropout):
-        super().__init__()
+        super().__init__(input_size, output_size, head_count, dropout)
         self.attention = Attention.MultiGatedAttention(
             input_size, output_size, head_count, dropout
         )
-        self.layer_norm = nn.LayerNorm(output_size)
-        self.linear_query = nn.Linear(input_size, output_size)
-        self.linear_context = nn.Linear(output_size, output_size, bias=False)
-        self.relu = nn.ReLU()
-
-    def forward(self, input):
-        '''
-        input: batch_size x ... x node_count x input_size
-        '''
-        input = self.layer_norm(input)
-        context, attention = self.attention(input, input, input)
-        output = self.linear_query(input) + self.linear_context(context)
-        output = self.relu(output)
-        return output

@@ -14,18 +14,6 @@ class Linear(nn.Module):
         return self.linear(self.dropout(hidden))
 
 
-class GraphLinear(nn.Module):
-    def __init__(self, num_node, hidden_size, output_size, dropout):
-        super().__init__()
-        self.layer_norm = nn.LayerNorm((num_node, hidden_size))
-        self.dropout = nn.Dropout(dropout)
-        self.linear = nn.Linear(hidden_size, output_size)
-
-    def forward(self, hidden):
-        # hidden = self.layer_norm(hidden)
-        return self.linear(self.dropout(hidden))
-
-
 class RNNDecoder(nn.Module):
     def __init__(self, rnn, output_size):
         super().__init__()

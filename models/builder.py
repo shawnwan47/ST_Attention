@@ -31,8 +31,8 @@ def build_model(args):
 def build_temp_embedding(args):
     return Embedding.TempEmbedding(
         use_time=args.use_time, use_weekday=args.use_weekday,
-        num_time=args.num_time, time_dim=args.time_dim,
-        num_weekday=args.num_weekday, weekday_dim=args.weekday_dim,
+        num_times=args.num_times, time_dim=args.time_dim,
+        num_weekdays=args.num_weekdays, weekday_dim=args.weekday_dim,
         dropout=args.dropout)
 
 
@@ -40,9 +40,9 @@ def build_st_embedding(args):
     return Embedding.STEmbedding(
         use_node=args.use_node, use_time=args.use_time,
         use_weekday=args.use_weekday,
-        num_node=args.num_node, node_dim=args.node_dim,
-        num_time=args.num_time, time_dim=args.time_dim,
-        num_weekday=args.num_weekday, weekday_dim=args.weekday_dim,
+        num_nodes=args.num_nodes, node_dim=args.node_dim,
+        num_times=args.num_times, time_dim=args.time_dim,
+        num_weekdays=args.num_weekdays, weekday_dim=args.weekday_dim,
         input_size=args.input_size, hidden_size=args.hidden_size,
         dropout=args.dropout)
 
@@ -73,10 +73,7 @@ def build_RNN(args):
         dropout=args.dropout
     )
 
-    if args.model == 'RNN':
-        decoder = build_linear(args)
-    elif args.model == 'RNNAttn':
-        decoder = build_attn_linear(args)
+    decoder = build_linear(args)
 
     seq2seq = Seq2Seq.Seq2SeqRNN(
         embedding=embedding,
@@ -90,7 +87,7 @@ def build_RNN(args):
 def build_GCRNN(args):
     embedding = build_st_embedding(args)
     adj = pt_utils.load_adj(args.dataset)
-    func = GCN.DiffusionConvolution
+    gc_func = GCN.DiffusionConvolution
     gc_kwargs = {
         'adj': adj.cuda() if args.cuda else adj,
         'hops': args.hops,
@@ -99,21 +96,17 @@ def build_GCRNN(args):
 
     encoder = GCRNN.GCRNN(
         rnn_type=args.rnn_type,
-        num_node=args.num_node,
+        num_nodes=args.num_nodes,
         size=args.hidden_size,
         num_layers=args.num_layers,
         dropout=args.dropout,
-        func=func,
+        gc_func=gc_func,
         gc_kwargs=gc_kwargs
     )
 
-    decoder = Decoder.GraphLinear(
-        num_node=args.num_node,
-        hidden_size=args.hidden_size,
-        output_size=args.output_size,
-        dropout=args.dropout)
+    decoder = build_linear(args)
 
-    seq2seq = Seq2Seq.Seq2SeqGCRNN(
+    seq2seq = Seq2Seq.Seq2SeqDCRNN(
         embedding=embedding,
         encoder=encoder,
         decoder=decoder,
@@ -125,36 +118,32 @@ def build_GCRNN(args):
 def build_GARNN(args):
     embedding = build_st_embedding(args)
     if args.model == 'GARNN':
-        func = GAT.GraphAttention
+        gc_func = GAT.GraphAttention
         gc_kwargs = {
             'head_count': args.head_count,
             'dropout': args.dropout
         }
     elif args.model == 'GRARNN':
-        func = GAT.GraphRelativeAttention
+        gc_func = GAT.GraphRelativeAttention
         dist = pt_utils.load_dist(args.dataset)
         gc_kwargs = {
-            'num_dists': args.num_dists,
-            'dist': dist.cuda() if args.cuda else dist,
             'head_count': args.head_count,
             'dropout': args.dropout,
+            'num_dists': args.num_node_dists,
+            'dist': dist.cuda() if args.cuda else dist
         }
 
-    encoder = GCRNN.GCRNN(
+    encoder = GCRNN.GARNN(
         rnn_type=args.rnn_type,
-        num_node=args.num_node,
+        num_nodes=args.num_nodes,
         size=args.hidden_size,
         num_layers=args.num_layers,
         dropout=args.dropout,
-        func=func,
+        gc_func=gc_func,
         gc_kwargs=gc_kwargs
     )
 
-    decoder = Decoder.GraphLinear(
-        num_node=args.num_node,
-        hidden_size=args.hidden_size,
-        output_size=args.output_size,
-        dropout=args.dropout)
+    decoder = build_linear(args)
 
     seq2seq = Seq2Seq.Seq2SeqGARNN(
         embedding=embedding,

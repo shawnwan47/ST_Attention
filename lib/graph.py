@@ -9,7 +9,7 @@ import networkx as nx
 def build_link_graph(node, link):
     G = build_node_graph(node)
     edges = [(i, j, c) for _, i, j, c in link.itertuples()
-             if edge[0] in G.nodes() and edge[1] in G.nodes()]
+             if i in G.nodes() and j in G.nodes()]
     G.add_weighted_edges_from(edges)
     return G
 

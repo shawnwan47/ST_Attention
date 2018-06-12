@@ -44,7 +44,7 @@ data_loaders, mean, std = pt_utils.load_dataset(
     horizon=args.horizon,
     batch_size=args.batch_size
 )
-data_train, data_valid, data_test, data_sample = data_loaders
+data_train, data_valid, data_test, data_case = data_loaders
 
 if args.cuda:
     mean, std = mean.cuda(), std.cuda()
@@ -55,6 +55,7 @@ if args.test or args.retrain:
     model.load_state_dict(torch.load(args.path + '.pt'))
 if args.cuda:
     model.cuda()
+print(model)
 print(f'{args.path} parameters: {pt_utils.count_parameters(model)}')
 
 # rescaler, criterion, loss
@@ -80,9 +81,11 @@ trainer = Trainer.Trainer(model, rescaler, criterion, loss,
 
 if not args.test:
     trainer.run(data_train, data_valid, data_test)
+    torch.save(trainer.model.state_dict(), args.path + '.pt')
 
 error = trainer.eval(data_test)
-print(f'Test {args.path}:\n{error}')
-torch.save(trainer.model.state_dict(), args.path + '.pt')
-# if info:
-#     pickle.dump(info, open(args.path + '.pkl', 'wb'))
+print(f'{args.path}:\n{error}')
+if args.model in ['GARNN', 'GRARNN']:
+    error_case, infos = trainer.eval(data_case, verbose=True)
+    print(f'Case error: error_case')
+    pickle.dump(infos, open(args.path + '.pkl', 'wb'))

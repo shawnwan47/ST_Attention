@@ -63,22 +63,22 @@ class Loss:
             return MetricDict()
         else:
             metrics = MetricDict({metric: self._loss(output, target, metric)
-                                  for metric in self.metrics]
+                                  for metric in self.metrics})
             return metrics
 
     @staticmethod
     def _loss(output, target, loss):
         if loss == 'mae':
-            loss = F.l1_loss(output, target)
+            ret = F.l1_loss(output, target)
         elif loss == 'rmse':
-            loss = F.mse_loss(output, target).sqrt()
+            ret = F.mse_loss(output, target).sqrt()
         elif loss == 'mape':
-            loss = ((output - target).abs() / (target + EPS)).mean() * 100
+            ret = ((output - target).abs() / (target + EPS)).mean() * 100
         elif loss == 'wape':
-            loss = F.l1_loss(output, target) / (target.mean() + EPS) * 100
+            ret = F.l1_loss(output, target) / (target.mean() + EPS) * 100
 
         if loss == 'wape':
-            loss = Metric(loss.item(), target.mean() + EPS)
+            ret = Metric(ret.item(), target.mean() + EPS)
         else:
-            loss = Metric(loss.item(), target.numel())
-        return loss
+            ret = Metric(ret.item(), target.numel())
+        return ret

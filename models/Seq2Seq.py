@@ -5,7 +5,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-
 class Seq2SeqBase(nn.Module):
     def __init__(self, embedding, encoder, decoder, history, horizon):
         super().__init__()
@@ -15,28 +14,21 @@ class Seq2SeqBase(nn.Module):
         self.history = history
         self.horizon = horizon
 
-    def _decode(self, input):
-        raise NotImplementedError
-
 
 class Seq2SeqRNN(Seq2SeqBase):
-    def _decode(self, input):
-        output = self.decoder(input)
-        return output[0] if isinstance(output, tuple) else output
-
     def forward(self, data, time, weekday, teach=0):
         his = self.history
         # encoding
         input = self.embedding(data[:, :his], time[:, :his], weekday[:, :his])
         encoder_output, hidden = self.encoder(input)
         # decoding
-        output = [self._decode(encoder_output[:, [-1]])]
+        output = [self.decoder(encoder_output[:, [-1]])]
         for idx in range(self.horizon - 1):
             idx += his
-            input = data[:, [idx]] if random.random() < teach else output[-1]
+            input = data[:, [idx]] if random.random() < teach else output[-1].detach()
             input = self.embedding(input, time[:, [idx]], weekday[:, [idx]])
             encoder_output, hidden = self.encoder(input, hidden)
-            output.append(self._decode(encoder_output))
+            output.append(self.decoder(encoder_output))
         return torch.cat(output, 1)
 
 
@@ -50,20 +42,23 @@ class Seq2SeqDCRNN(Seq2SeqRNN):
 
 class Seq2SeqGARNN(Seq2SeqBase):
     def forward(self, data, time, weekday, teach=0):
+        data = data.unsqueeze(-1)
         his = self.history
         # encoding
         input = self.embedding(data[:, :his], time[:, :his], weekday[:, :his])
-        encoder_output, hidden, _ = self.encoder(input)
+        encoder_output, hidden, attn_i, attn_h = self.encoder(input)
         # decoding
-        output = [self._decode(encoder_output[:, [-1]])]
-        attentions = []
+        output = [self.decoder(encoder_output[:, [-1]])]
+        attn_input, attn_hidden = [], []
         for idx in range(self.horizon - 1):
             idx += his
-            input = data[:, [idx]] if random.random() < teach else output[-1]
+            input = data[:, [idx]] if random.random() < teach else output[-1].detach()
             input = self.embedding(input, time[:, [idx]], weekday[:, [idx]])
-            encoder_output, hidden, attention = self.encoder(input, hidden)
-            output.append(self._decode(encoder_output))
-            attentions.append(attention)
-        output = torch.cat(output)
-        attentions = torch.cat(attentions)
-        return output, attentions
+            encoder_output, hidden, attn_i, attn_h = self.encoder(input, hidden)
+            output.append(self.decoder(encoder_output))
+            attn_input.append(attn_i)
+            attn_hidden.append(attn_h)
+        output = torch.cat(output, 1).squeeze(-1)
+        attn_input = torch.stack(attn_input, 1)
+        attn_hidden = torch.stack(attn_hidden, 1)
+        return output, attn_input, attn_hidden

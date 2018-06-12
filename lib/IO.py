@@ -56,15 +56,14 @@ class TimeSeries:
         data_train = self._gen_seq2seq_io(df_train)
         data_valid = self._gen_seq2seq_io(df_valid)
         data_test = self._gen_seq2seq_io(df_test)
-        data_sample = self._gen_data_sample(df)
-        self.data = (data_train, data_valid, data_test, data_sample)
+        data_case = self._gen_data_sample(df)
+        self.data = (data_train, data_valid, data_test, data_case)
 
     def _gen_data_sample(self, df):
         df_week = df[df.index.weekofyear == (df.index.weekofyear[0] + 1)]
-        df_days = [df[df.index.weekday == day] for day in range(7)]
-        io_samples = [self._gen_seq2seq_io(df) for df in df_days]
-        data_sample = (np.concatenate(data) for data in zip(io_samples))
-        return data_sample
+        df_days = [df_week[df_week.index.weekday == day] for day in range(7)]
+        io_cases = [self._gen_seq2seq_io(df_day) for df_day in df_days]
+        return (np.concatenate(dat) for dat in zip(*io_cases))
 
     def _gen_seq2seq_io(self, df):
 
@@ -73,14 +72,17 @@ class TimeSeries:
             seq = np.stack([arr[i:i + seq_len] for i in range(samples)], axis=0)
             return seq
 
+        # data
         data = df.fillna(method='ffill').fillna(method='bfill')
-        assert df.isna().sum().sum() == 0
-        data = self._scale(df.values)
+        data = np.nan_to_num(self._scale(data.values))
+        # time, weekday
         _, time = np.unique(df.index.time, return_inverse=True)
         weekday = df.index.weekday
+        # input sequences
         data_len = self.history + self.horizon - 1
         data, time, weekday = (_gen_seq(dat[:-1], data_len)
                                for dat in (data, time, weekday))
+        # output sequences
         targets = _gen_seq(df.values[self.history:], self.horizon)
         aeq(len(data), len(time), len(weekday), len(targets))
         return data, time, weekday, targets

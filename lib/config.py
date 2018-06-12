@@ -15,11 +15,11 @@ def add_data(args):
     args.add_argument('-metrics', nargs='+', default=['mae', 'rmse'])
     args.add_argument('-horizons', nargs='+', default=[15, 30, 60])
 
-    args.add_argument('-num_weekday', type=int, default=7)
-    args.add_argument('-num_time', type=int)
-    args.add_argument('-num_node', type=int)
-    args.add_argument('-num_time_dist', type=int)
-    args.add_argument('-num_node_dist', type=int)
+    args.add_argument('-num_weekdays', type=int, default=7)
+    args.add_argument('-num_times', type=int)
+    args.add_argument('-num_nodes', type=int)
+    args.add_argument('-num_time_dists', type=int)
+    args.add_argument('-num_node_dists', type=int)
 
     args.add_argument('-discretize', action='store_true')
     args.add_argument('-use_time', action='store_true')
@@ -95,13 +95,13 @@ def get_model_config(model):
         }
     elif model == 'DCRNN':
         config = {
-            'hidden_size': 16,
+            'hidden_size': 64,
             'hops': 3,
         }
     elif model == 'GARNN':
         config = {
-            'hidden_size': 16,
-            'head_count': 1
+            'hidden_size': 64,
+            'head_count': 4
         }
     else:
         raise NameError('Model {model} invalid.'.format(model))
@@ -109,29 +109,29 @@ def get_model_config(model):
 
 
 def update_data(args):
-    args.num_time = 1440 // args.freq
+    args.num_times = 1440 // args.freq
     if args.dataset == 'BJ_metro':
-        args.num_node = 536
+        args.num_nodes = 536
         args.metrics.append('wape')
     elif args.dataset == 'BJ_highway':
-        args.num_node = 264
+        args.num_nodes = 264
         args.metrics.append('wape')
     elif args.dataset == 'LA':
-        args.num_node = 207
+        args.num_nodes = 207
         args.metrics.append('mape')
 
     args.history //= args.freq
     args.horizon //= args.freq
     args.horizons = [t // args.freq - 1 for t in args.horizons]
     args.freq = str(args.freq) + 'min'
-    args.num_time_dist = args.history + args.horizon
-    args.num_node_dist = args.num_node
+    args.num_time_dists = args.history + args.horizon
+    args.num_node_dists = args.num_nodes
 
 
 def update_model(args):
     if args.model in ['RNN', 'RNNAttn']:
-        args.input_size = args.num_node
-        args.output_size = args.num_node
+        args.input_size = args.num_nodes
+        args.output_size = args.num_nodes
         if args.use_time:
             args.input_size += args.time_dim
         if args.use_weekday:
@@ -165,4 +165,6 @@ def update_model(args):
         name += 'RNN' + args.rnn_type
     if args.model in ['GARNN', 'Transformer']:
         name += 'Head' + str(args.head_count)
+    if args.model == 'DCRNN':
+        name += 'Hop' + str(args.hops)
     args.path = MODEL_PATH + args.dataset + '/' + name
