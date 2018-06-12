@@ -12,7 +12,7 @@ class Metric:
         self.norm = norm
 
     def __repr__(self):
-        return f'{self.key}:{self.value:.2f}'
+        return f'{self.value:.2f}'
 
     def __add__(self, other):
         norm = self.norm + other.norm

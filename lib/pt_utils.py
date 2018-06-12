@@ -63,9 +63,9 @@ def load_adj(dataset):
     return adj
 
 
-def load_dist(dataset):
-    dist = _get_loader(dataset).load_dist()
-    return torch.LongTensor(IO.bucketize_dist(dist))
+def load_dist(dataset, num_dists):
+    dist = _get_loader(dataset).load_dist().values
+    return torch.LongTensor(IO.bucketize_dist(dist, num_dists))
 
 
 def mask_target(output, target):
@@ -82,6 +82,10 @@ def numpy_to_torch(arr):
     if arr.dtype == np.dtype(int):
         return torch.LongTensor(arr)
     return torch.FloatTensor(arr)
+
+
+def torch_to_numpy(tensor):
+    return tensor.detach().cpu().numpy()
 
 
 class SparseDataset(Dataset):

@@ -118,9 +118,8 @@ class MultiAttention(nn.Module):
 class MultiRelativeAttention(MultiAttention):
     def __init__(self, input_size, output_size, head_count, dropout,
                  num_dists, dist):
-        super().init(input_size, output_size, head_count, dropout)
+        super().__init__(input_size, output_size, head_count, dropout)
         self.num_dists = num_dists
-        dist_dim = embedding_dist.embedding_dim
         self.embedding_dist_key = nn.Embedding(num_dists, self.head_size)
         self.embedding_dist_value = nn.Embedding(num_dists, self.head_size)
         self.register_buffer('dist', dist)
@@ -141,7 +140,6 @@ class MultiRelativeAttention(MultiAttention):
         # index dist key
         dist = self._select_dist(len_query, len_key)
         dist += self._dist_range().unsqueeze(-1) * self.num_dists
-        # add and div
         score += score_dist[..., dist]
         score /= math.sqrt(self.head_size)
         return score
@@ -150,5 +148,7 @@ class MultiRelativeAttention(MultiAttention):
         output = attn.matmul(value)
         dist = self._select_dist(attn.size(-2), attn.size(-1))
         dist_value = self.embedding_dist_value(self._dist_range())
-        output += attn.matmul(dist_value[dist])
+        output_dist = dist_value[dist]
+        print(output.size(), output_dist.size(), attn.size())
+        output += attn.matmul(output_dist)
         return self._unshape(output)

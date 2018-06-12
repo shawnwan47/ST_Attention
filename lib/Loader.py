@@ -31,7 +31,7 @@ class LoaderBase:
             dist = pd.read_csv(self._dist, index_col=0)
             dist.columns = [int(col) for col in dist.columns]
         else:
-            G = graph.build_graph(self.load_link())
+            G = graph.build_link_graph(self.load_node(), self.load_link())
             dist = graph.graph_dist(G)
             dist = dist.loc[self.ids, self.ids]
             dist.to_csv(self._dist, index=True)
@@ -42,7 +42,7 @@ class LoaderBase:
             hop = pd.read_csv(self._hop, index_col=0, dtype=int)
             hop.columns = [int(col) for col in hop.columns]
         else:
-            G = graph.build_graph(self.load_link())
+            G = graph.build_link_graph(self.load_node(), self.load_link())
             hop = graph.graph_hop(G)
             hop = hop.loc[self.ids, self.ids]
             hop.to_csv(self._hop, index=True)

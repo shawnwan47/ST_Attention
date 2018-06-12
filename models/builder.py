@@ -125,7 +125,7 @@ def build_GARNN(args):
         }
     elif args.model == 'GRARNN':
         gc_func = GAT.GraphRelativeAttention
-        dist = pt_utils.load_dist(args.dataset)
+        dist = pt_utils.load_dist(args.dataset, args.num_node_dists)
         gc_kwargs = {
             'head_count': args.head_count,
             'dropout': args.dropout,

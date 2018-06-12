@@ -98,7 +98,7 @@ def get_model_config(model):
             'hidden_size': 64,
             'hops': 3,
         }
-    elif model == 'GARNN':
+    elif model in ['GARNN', 'GRARNN']:
         config = {
             'hidden_size': 64,
             'head_count': 4
@@ -137,7 +137,7 @@ def update_model(args):
         if args.use_weekday:
             args.input_size += args.weekday_dim
         _set_args(args, get_model_config(args.model))
-    elif args.model in ['DCRNN', 'GARNN']:
+    elif args.model in ['DCRNN', 'GARNN', 'GRARNN']:
         args.input_size = 1
         args.output_size = 1
         if args.use_node:

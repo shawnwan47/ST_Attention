@@ -1,6 +1,7 @@
+import numpy as np
 from constants import EPS
 from lib.Loss import MetricDict
-from lib.pt_utils import mask_target
+from lib import pt_utils
 
 
 class Rescaler:
@@ -26,7 +27,7 @@ class Trainer:
         self.teach = 1
         self.teach_annealing = 0.01 ** (1 / epoches)
 
-    def eval(self, dataloader, train=False):
+    def eval(self, dataloader, train=False, verbose=False):
         if train:
             self.model.train()
         else:
@@ -43,20 +44,21 @@ class Trainer:
             output = self.model(data, time, weekday, teach)
             if isinstance(output, tuple):
                 output, info = output[0], output[1:]
-                infos.append(info)
+                if verbose:
+                    infos.append([pt_utils.torch_to_numpy(i) for i in info])
             output = self.rescaler(output)
 
             metrics += self.metrics(output, target)
             # train
             if train:
-                output, target = mask_target(output, target)
+                output, target = pt_utils.mask_target(output, target)
                 loss = self.criterion(output, target)
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
             del output
         if infos:
-            infos = [torch.cat(info) for info in zip(*infos)]
+            infos = [np.concatenate(info) for info in zip(*infos)]
         return metrics, infos
 
     def run(self, data_train, data_valid, data_test):

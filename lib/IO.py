@@ -40,9 +40,9 @@ def split_data(data, train_ratio=0.7, test_ratio=0.2):
 def bucketize_dist(dist, num):
     shape = dist.shape
     dist = dist.reshape(-1)
-    dist_max = 2 ** num - 1
-    dist = dist / dist.max() * dist_max + 1
-    dist = np.ceil(np.log2(dist)).astype(int)
+    dist_median = np.median(dist)
+    dist[dist > dist_median] = dist_median
+    dist = np.ceil(dist / dist_median * (num - 1))
     assert max(dist) == num - 1
     return dist.reshape(shape)
 
