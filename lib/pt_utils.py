@@ -8,29 +8,6 @@ from lib import IO
 from lib.utils import aeq
 
 
-
-class NamedTensorDataset(TensorDataset):
-    def __init__(self, names, *tensors):
-        super().__init__(*tensors)
-        self.names = names
-
-    def __getitem__(self, index):
-        super().__getitem__(index)
-
-
-class HybridDataset(Dataset):
-    def __init__(self, tensor_dataset, list_dataset):
-        assert len(tensor_dataset) == len(list_dataset)
-        self.tensor_dataset = tensor_dataset
-        self.list_dataset = list_dataset
-
-    def __len__(self):
-        return len(self.tensor_dataset)
-
-    def __getitem__(self, index):
-        return (*self.tensor_dataset[index], *self.list_dataset[index])
-
-
 def _get_loader(dataset):
     if dataset == 'BJ_highway':
         loader = Loader.BJLoader('highway')
@@ -86,6 +63,11 @@ def load_adj(dataset):
     return adj
 
 
+def load_dist(dataset):
+    dist = _get_loader(dataset).load_dist()
+    return torch.LongTensor(IO.bucketize_dist(dist))
+
+
 def mask_target(output, target):
     mask = ~torch.isnan(target)
     return output.masked_select(mask), target.masked_select(mask)
@@ -118,3 +100,16 @@ class SparseDataset(Dataset):
 
     def __getitem__(self, index):
         return self.data[index]
+
+
+class HybridDataset(Dataset):
+    def __init__(self, tensor_dataset, list_dataset):
+        assert len(tensor_dataset) == len(list_dataset)
+        self.tensor_dataset = tensor_dataset
+        self.list_dataset = list_dataset
+
+    def __len__(self):
+        return len(self.tensor_dataset)
+
+    def __getitem__(self, index):
+        return (*self.tensor_dataset[index], *self.list_dataset[index])

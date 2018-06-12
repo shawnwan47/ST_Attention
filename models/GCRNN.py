@@ -94,3 +94,28 @@ class GCRNN(nn.Module):
             if ilay < self.num_layers - 1:
                 output = self.dropout(output)
         return output, hidden
+
+
+class GARNN(GCRNN):
+    def forward(self, input, hidden=None):
+        batch_size, seq_len = input.size(0), input.size(1)
+        if hidden is None:
+            hidden = self.init_hidden(batch_size)
+        output, attn = [], []
+        for idx in range(seq_len):
+            output_i, hidden, attn_i = self.forward_step(input[:, idx], hidden)
+            output.append(output_i)
+            attn.append(attn_i)
+        output = torch.stack(output, 1)
+        attn = torch.stack(attn, 1)
+        return output, hidden, attn
+
+    def forward_step(self, output, hidden):
+        attn = []
+        for ilay, layer in enumerate(self.layers):
+            hidden[:, ilay], attn_i = layer(output, hidden[:, ilay])
+            attn.append(attn_i)
+            output = hidden[:, ilay]
+            if ilay < self.num_layers - 1:
+                output = self.dropout(output)
+        return output, hidden, torch.stack(attn, 1)

@@ -56,7 +56,7 @@ class Seq2SeqGARNN(Seq2SeqBase):
         encoder_output, hidden, _ = self.encoder(input)
         # decoding
         output = [self._decode(encoder_output[:, [-1]])]
-        attentions = [enc]
+        attentions = []
         for idx in range(self.horizon - 1):
             idx += his
             input = data[:, [idx]] if random.random() < teach else output[-1]

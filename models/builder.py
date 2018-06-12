@@ -16,11 +16,13 @@ from models import GAT
 
 def build_model(args):
     if args.model in ['RNN', 'RNNAttn']:
-        model = build_seq2seq_rnn(args)
-    elif args.model in ['DCRNN', 'GARNN', 'GaARNN']:
-        model = build_seq2seq_gcrnn(args)
-    elif args.model in ['Transformer']:
-        model = build_transformer(args)
+        model = build_RNN(args)
+    elif args.model in ['DCRNN']:
+        model = build_GCRNN(args)
+    elif args.model in ['GARNN', 'GRARNN']:
+        model = build_GARNN(args)
+    elif args.model in ['ST_Transformer']:
+        model = build_ST_Transformer(args)
     else:
         raise NameError('model {0} unfound!'.format(model))
     return model
@@ -61,7 +63,7 @@ def build_attn_linear(args):
     )
 
 
-def build_seq2seq_rnn(args):
+def build_RNN(args):
     embedding = build_temp_embedding(args)
     encoder = RNN.RNN(
         rnn_type=args.rnn_type,
@@ -85,24 +87,15 @@ def build_seq2seq_rnn(args):
     return seq2seq
 
 
-def build_seq2seq_gcrnn(args):
-    adj = pt_utils.load_adj(args.dataset)
-    if args.cuda:
-        adj = adj.cuda()
+def build_GCRNN(args):
     embedding = build_st_embedding(args)
-    if args.model == 'DCRNN':
-        func = GCN.DiffusionConvolution
-        gc_kwargs = {
-            'adj': adj,
-            'hops': args.hops,
-            'uni': args.uni
-        }
-    elif args.model == 'GARNN':
-        func = GAT.GAT
-        gc_kwargs = {
-            'head_count': args.head_count,
-            'dropout': args.dropout
-        }
+    adj = pt_utils.load_adj(args.dataset)
+    func = GCN.DiffusionConvolution
+    gc_kwargs = {
+        'adj': adj.cuda() if args.cuda else adj,
+        'hops': args.hops,
+        'uni': args.uni
+    }
 
     encoder = GCRNN.GCRNN(
         rnn_type=args.rnn_type,
@@ -128,5 +121,45 @@ def build_seq2seq_gcrnn(args):
         horizon=args.horizon)
     return seq2seq
 
-def build_transformer(args, adj, hops):
-    pass
+
+def build_GARNN(args):
+    embedding = build_st_embedding(args)
+    if args.model == 'GARNN':
+        func = GAT.GraphAttention
+        gc_kwargs = {
+            'head_count': args.head_count,
+            'dropout': args.dropout
+        }
+    elif args.model == 'GRARNN':
+        func = GAT.GraphRelativeAttention
+        dist = pt_utils.load_dist(args.dataset)
+        gc_kwargs = {
+            'num_dists': args.num_dists,
+            'dist': dist.cuda() if args.cuda else dist,
+            'head_count': args.head_count,
+            'dropout': args.dropout,
+        }
+
+    encoder = GCRNN.GCRNN(
+        rnn_type=args.rnn_type,
+        num_node=args.num_node,
+        size=args.hidden_size,
+        num_layers=args.num_layers,
+        dropout=args.dropout,
+        func=func,
+        gc_kwargs=gc_kwargs
+    )
+
+    decoder = Decoder.GraphLinear(
+        num_node=args.num_node,
+        hidden_size=args.hidden_size,
+        output_size=args.output_size,
+        dropout=args.dropout)
+
+    seq2seq = Seq2Seq.Seq2SeqGARNN(
+        embedding=embedding,
+        encoder=encoder,
+        decoder=decoder,
+        history=args.history,
+        horizon=args.horizon)
+    return seq2seq

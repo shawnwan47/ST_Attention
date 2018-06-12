@@ -115,19 +115,14 @@ class MultiAttention(nn.Module):
         return output
 
 
-class MultiDistAttention(MultiAttention):
+class MultiRelativeAttention(MultiAttention):
     def __init__(self, input_size, output_size, head_count, dropout,
-                 embedding_dist, dist):
+                 num_dists, dist):
         super().init(input_size, output_size, head_count, dropout)
         self.num_dists = num_dists
-        self.embedding_dist = embedding_dist
         dist_dim = embedding_dist.embedding_dim
-        self.linear_dist_key = nn.Sequential(
-            embedding_dist,
-            nn.Linear(dist_dim, self.head_size))
-        self.linear_dist_value = nn.Sequential(
-            embedding_dist,
-            nn.Linear(dist_dim, self.head_size))
+        self.embedding_dist_key = nn.Embedding(num_dists, self.head_size)
+        self.embedding_dist_value = nn.Embedding(num_dists, self.head_size)
         self.register_buffer('dist', dist)
 
     def _dist_range(self):
@@ -140,7 +135,7 @@ class MultiDistAttention(MultiAttention):
         len_query, len_key = query.size(-2), key.size(-2)
         score = query.matmul(key.transpose(-1, -2))
         # compute dist score
-        dist_key = self.linear_dist_key(self._dist_range())
+        dist_key = self.embedding_dist_key(self._dist_range())
         score_dist = query.matmul(dist_key.transpose(0, 1))
         score_dist = score_dist.view(*score_dist.size()[:-2], -1)
         # index dist key
@@ -154,6 +149,6 @@ class MultiDistAttention(MultiAttention):
     def _pool(self, attn, value):
         output = attn.matmul(value)
         dist = self._select_dist(attn.size(-2), attn.size(-1))
-        dist_value = self.linear_dist_value(self._dist_range())
+        dist_value = self.embedding_dist_value(self._dist_range())
         output += attn.matmul(dist_value[dist])
         return self._unshape(output)

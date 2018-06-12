@@ -37,11 +37,14 @@ def split_data(data, train_ratio=0.7, test_ratio=0.2):
     return df_train, df_valid, df_test
 
 
-def sample_data(df):
-    df_week = df[df.index.weekofyear == (df.index.weekofyear[0] + 1)]
-    df_days = [df[df.index.weekday == day] for day in range(7)]
-    return df_days
-
+def bucketize_dist(dist, num):
+    shape = dist.shape
+    dist = dist.reshape(-1)
+    dist_max = 2 ** num - 1
+    dist = dist / dist.max() * dist_max + 1
+    dist = np.ceil(np.log2(dist)).astype(int)
+    assert max(dist) == num - 1
+    return dist.reshape(shape)
 
 
 class TimeSeries:
@@ -53,9 +56,15 @@ class TimeSeries:
         data_train = self._gen_seq2seq_io(df_train)
         data_valid = self._gen_seq2seq_io(df_valid)
         data_test = self._gen_seq2seq_io(df_test)
-        io_samples = [self._gen_seq2seq_io(df) for df in sample_data(df)]
-        data_sample = (np.concatenate(data) for data in zip(io_samples))
+        data_sample = self._gen_data_sample(df)
         self.data = (data_train, data_valid, data_test, data_sample)
+
+    def _gen_data_sample(self, df):
+        df_week = df[df.index.weekofyear == (df.index.weekofyear[0] + 1)]
+        df_days = [df[df.index.weekday == day] for day in range(7)]
+        io_samples = [self._gen_seq2seq_io(df) for df in df_days]
+        data_sample = (np.concatenate(data) for data in zip(io_samples))
+        return data_sample
 
     def _gen_seq2seq_io(self, df):
 
@@ -78,17 +87,6 @@ class TimeSeries:
 
     def _scale(self, df):
         return (df - self.mean) / (self.std + EPS)
-
-
-def bucketize_dist(dist, num):
-    shape = dist.shape
-    dist = dist.reshape(-1)
-    dist_max = 2 ** num - 1
-    dist = dist / dist.max() * dist_max + 1
-    dist = np.ceil(np.log2(dist)).astype(int)
-    assert max(dist) == num - 1
-    return dist.reshape(shape)
-
 
 
 class SparseTimeSeries:
