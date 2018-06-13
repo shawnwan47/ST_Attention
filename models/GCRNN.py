@@ -4,24 +4,22 @@ from torch.nn import functional as F
 
 
 class GCRNNCell(nn.Module):
-    def __init__(self, rnn_type, size, gc_func, gc_kwargs):
+    def __init__(self, rnn_type, num_nodes, size, gc_func, gc_kwargs):
         assert rnn_type in ['RNN', 'GRU']
         super().__init__()
         self.rnn_type = rnn_type
-        self.layer_norm_i = nn.LayerNorm(size)
-        self.layer_norm_h = nn.LayerNorm(size)
+        self.layer_norm = nn.LayerNorm([num_nodes, size])
         gate_size = size
         if self.rnn_type == 'GRU': gate_size *= 3
         self.gc_i = gc_func(input_size=size, output_size=gate_size, **gc_kwargs)
         self.gc_h = gc_func(input_size=size, output_size=gate_size, **gc_kwargs)
 
     def forward(self, input, hidden):
-        input_norm = self.layer_norm_i(input)
-        hidden_norm = self.layer_norm_h(hidden)
         if self.rnn_type == 'RNN':
-            output = F.tanh(self.gc_i(input_norm) + self.gc_h(hidden_norm))
+            output = F.tanh(self.gc_i(input) + self.gc_h(hidden))
         elif self.rnn_type == 'GRU':
-            output = self._gru(input_norm, hidden_norm)
+            output = self._gru(input, hidden)
+        output = self.layer_norm(output)
         return output
 
     def _gru(self, input, hidden):
@@ -43,7 +41,7 @@ class GCRNN(nn.Module):
         self.size = size
         self.num_layers = num_layers
         self.layers = nn.ModuleList([
-            GCRNNCell(rnn_type, size, gc_func, gc_kwargs)
+            GCRNNCell(rnn_type, num_nodes, size, gc_func, gc_kwargs)
             for i in range(num_layers)])
         self.dropout = nn.Dropout(dropout)
 
@@ -77,14 +75,13 @@ class GCRNN(nn.Module):
 
 class GARNNCell(GCRNNCell):
     def forward(self, input, hidden):
-        input_norm = self.layer_norm_i(input)
-        hidden_norm = self.layer_norm_h(hidden)
         if self.rnn_type == 'RNN':
-            output_i, attn_i = self.gc_i(input_norm)
-            output_h, attn_h = self.gc_h(hidden_norm)
+            output_i, attn_i = self.gc_i(input)
+            output_h, attn_h = self.gc_h(hidden)
             output = F.tanh(output_i + output_h)
         elif self.rnn_type == 'GRU':
-            output, attn_i, attn_h = self._gru(input_norm, hidden_norm)
+            output, attn_i, attn_h = self._gru(input, hidden)
+        output = self.layer_norm(output)
         return output, attn_i, attn_h
 
     def _gru(self, input, hidden):
@@ -105,7 +102,7 @@ class GARNN(GCRNN):
         super().__init__(rnn_type, num_nodes, size, num_layers, dropout,
                          gc_func, gc_kwargs)
         self.layers = nn.ModuleList([
-            GARNNCell(rnn_type, size, gc_func, gc_kwargs)
+            GARNNCell(rnn_type, num_nodes, size, gc_func, gc_kwargs)
             for i in range(num_layers)
         ])
 

@@ -56,7 +56,7 @@ class Trainer:
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
-            del output
+            del output, info
         if infos:
             infos = [np.concatenate(info) for info in zip(*infos)]
         return metrics, infos

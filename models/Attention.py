@@ -119,36 +119,26 @@ class MultiRelativeAttention(MultiAttention):
     def __init__(self, input_size, output_size, head_count, dropout,
                  num_dists, dist):
         super().__init__(input_size, output_size, head_count, dropout)
-        self.num_dists = num_dists
-        self.embedding_dist_key = nn.Embedding(num_dists, self.head_size)
-        self.embedding_dist_value = nn.Embedding(num_dists, self.head_size)
+        key_dist = torch.Tensor(head_count, self.head_size, num_dists)
+        dist_index = dist.new_tensor(torch.arange(dist.size(0)))
+        dist_index = dist_index.unsqueeze(-1) * num_dists
+        self.register_parameter('key_dist', nn.Parameter(key_dist))
         self.register_buffer('dist', dist)
+        self.register_buffer('dist_index', dist_index)
+        self._reset_key_dist()
 
-    def _dist_range(self):
-        return self.dist.new_tensor(torch.arange(self.num_dists))
-
-    def _select_dist(self, n_row, n_col):
-        return self.dist[-n_row:, -n_col:]
+    def _reset_key_dist(self):
+        stdv = 1. / math.sqrt(self.key_dist.size(1))
+        self.key_dist.data.uniform_(-stdv, stdv)
 
     def _score(self, key, query):
         len_query, len_key = query.size(-2), key.size(-2)
         score = query.matmul(key.transpose(-1, -2))
-        # compute dist score
-        dist_key = self.embedding_dist_key(self._dist_range())
-        score_dist = query.matmul(dist_key.transpose(0, 1))
+        # compute and flatten dist score
+        score_dist = query.matmul(self.key_dist)
         score_dist = score_dist.view(*score_dist.size()[:-2], -1)
-        # index dist key
-        dist = self._select_dist(len_query, len_key)
-        dist += self._dist_range().unsqueeze(-1) * self.num_dists
+        # index dist
+        dist = self.dist[-len_query:, -len_key:] + self.dist_index[:len_query]
         score += score_dist[..., dist]
         score /= math.sqrt(self.head_size)
         return score
-
-    def _pool(self, attn, value):
-        output = attn.matmul(value)
-        dist = self._select_dist(attn.size(-2), attn.size(-1))
-        dist_value = self.embedding_dist_value(self._dist_range())
-        output_dist = dist_value[dist]
-        print(output.size(), output_dist.size(), attn.size())
-        output += attn.matmul(output_dist)
-        return self._unshape(output)

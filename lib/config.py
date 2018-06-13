@@ -19,14 +19,12 @@ def add_data(args):
     args.add_argument('-num_times', type=int)
     args.add_argument('-num_nodes', type=int)
     args.add_argument('-num_time_dists', type=int)
-    args.add_argument('-num_node_dists', type=int)
+    args.add_argument('-num_node_dists', type=int, default=64)
 
     args.add_argument('-discretize', action='store_true')
     args.add_argument('-use_time', action='store_true')
     args.add_argument('-use_weekday', action='store_true')
     args.add_argument('-use_node', action='store_true')
-    args.add_argument('-use_time_dist', action='store_true')
-    args.add_argument('-use_node_dist', action='store_true')
     args.add_argument('-od', action='store_true')
 
 
@@ -125,7 +123,6 @@ def update_data(args):
     args.horizons = [t // args.freq - 1 for t in args.horizons]
     args.freq = str(args.freq) + 'min'
     args.num_time_dists = args.history + args.horizon
-    args.num_node_dists = args.num_nodes
 
 
 def update_model(args):

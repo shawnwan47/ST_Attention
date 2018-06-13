@@ -37,16 +37,6 @@ def split_data(data, train_ratio=0.7, test_ratio=0.2):
     return df_train, df_valid, df_test
 
 
-def bucketize_dist(dist, num):
-    shape = dist.shape
-    dist = dist.reshape(-1)
-    dist_median = np.median(dist)
-    dist[dist > dist_median] = dist_median
-    dist = np.ceil(dist / dist_median * (num - 1))
-    assert max(dist) == num - 1
-    return dist.reshape(shape)
-
-
 class TimeSeries:
     def __init__(self, df, history=12, horizon=12):
         self.history = history

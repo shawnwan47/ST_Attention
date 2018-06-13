@@ -65,7 +65,13 @@ def load_adj(dataset):
 
 def load_dist(dataset, num_dists):
     dist = _get_loader(dataset).load_dist().values
-    return torch.LongTensor(IO.bucketize_dist(dist, num_dists))
+    shape = dist.shape
+    dist = dist.reshape(-1)
+    dist_median = np.median(dist)
+    dist[dist > dist_median] = dist_median
+    dist = np.ceil(dist / dist_median * (num_dists - 1))
+    assert max(dist) == num_dists - 1
+    return torch.LongTensor(dist.reshape(shape))
 
 
 def mask_target(output, target):

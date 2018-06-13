@@ -33,11 +33,13 @@ class STEmbedding(nn.Module):
                  num_weekdays, weekday_dim,
                  input_size, hidden_size, dropout):
         super().__init__()
+        self.num_nodes = num_nodes
         self.use_node = use_node
         self.use_time = use_time
         self.use_weekday = use_weekday
         self.dropout = nn.Dropout(dropout)
         self.linear = nn.Linear(input_size, hidden_size)
+        self.layer_norm = nn.LayerNorm([num_nodes, hidden_size])
         if use_node:
             self.embedding_node = nn.Embedding(num_nodes, node_dim)
         if use_time:
@@ -47,6 +49,7 @@ class STEmbedding(nn.Module):
 
     def forward(self, data, time, weekday):
         batch, seq, num_nodes, _ = data.size()
+        assert num_nodes == self.num_nodes
         shape = (batch, seq, num_nodes, -1)
         output = [data]
         if self.use_node:
@@ -59,4 +62,5 @@ class STEmbedding(nn.Module):
         if self.use_weekday:
             embedded_weekday = self.embedding_weekday(weekday).unsqueeze(-2)
             output.append(self.dropout(embedded_weekday.expand(shape)))
-        return self.dropout(F.relu(self.linear(torch.cat(output, -1))))
+        output = F.relu(self.linear(torch.cat(output, -1)))
+        return self.layer_norm(self.dropout(output))
