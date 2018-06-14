@@ -30,21 +30,19 @@ def build_model(args):
 
 def build_temp_embedding(args):
     return Embedding.TempEmbedding(
-        use_time=args.use_time, use_weekday=args.use_weekday,
+        use_time=args.use_time, use_day=args.use_day,
         num_times=args.num_times, time_dim=args.time_dim,
-        num_weekdays=args.num_weekdays, weekday_dim=args.weekday_dim,
-        dropout=args.dropout)
+        num_days=args.num_days, day_dim=args.day_dim,
+        num_nodes=args.num_nodes, size=args.hidden_size, dropout=args.dropout)
 
 
 def build_st_embedding(args):
     return Embedding.STEmbedding(
-        use_node=args.use_node, use_time=args.use_time,
-        use_weekday=args.use_weekday,
+        use_node=args.use_node, use_time=args.use_time, use_day=args.use_day,
         num_nodes=args.num_nodes, node_dim=args.node_dim,
         num_times=args.num_times, time_dim=args.time_dim,
-        num_weekdays=args.num_weekdays, weekday_dim=args.weekday_dim,
-        input_size=args.input_size, hidden_size=args.hidden_size,
-        dropout=args.dropout)
+        num_days=args.num_days, day_dim=args.day_dim,
+        size=args.hidden_size, dropout=args.dropout)
 
 
 def build_linear(args):

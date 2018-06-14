@@ -39,7 +39,7 @@ class TempEmbedding(nn.Module):
             self.emb_time = EmbeddingIn(num_times, time_dim, size, dropout)
         if use_weekday:
             self.emb_day = EmbeddingIn(num_days, day_dim, size, dropout)
-        self.layer_out = EmbeddingOut(size, dropout)
+        self.emb_out = EmbeddingOut(size, dropout)
 
     def forward(self, data, time, weekday):
         output = self.linear_data(data)
@@ -62,7 +62,7 @@ class STEmbedding(nn.Module):
         self.use_time = use_time
         self.use_weekday = use_weekday
         self.linear_data = nn.Linear(1, size)
-        self.layer_out = EmbeddingOut(size, dropout)
+        self.emb_out = EmbeddingOut(size, dropout)
         if use_node:
             self.emb_node = EmbeddingIn(num_nodes, node_dim, size, dropout)
         if use_time:
@@ -82,5 +82,5 @@ class STEmbedding(nn.Module):
             output += self.emb_time(time).unsqueeze(-2)
         if self.use_weekday:
             output += self.emb_day(weekday).unsqueeze(-2)
-        output = self.layer_out(output)
+        output = self.emb_out(output)
         return output

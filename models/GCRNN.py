@@ -4,22 +4,25 @@ from torch.nn import functional as F
 
 
 class GCRNNCell(nn.Module):
-    def __init__(self, rnn_type, num_nodes, size, gc_func, gc_kwargs):
+    def __init__(self, rnn_type, size, dropout, gc_func, gc_kwargs):
         assert rnn_type in ['RNN', 'GRU']
         super().__init__()
         self.rnn_type = rnn_type
-        self.layer_norm = nn.LayerNorm([num_nodes, size])
         gate_size = size
-        if self.rnn_type == 'GRU': gate_size *= 3
+        if self.rnn_type == 'RNN': self.activation = nn.ReLU(inplace=True)
+        elif self.rnn_type == 'RNNReLU': self.activation = nn.Tanh()
+        elif self.rnn_type == 'GRU': gate_size *= 3
         self.gc_i = gc_func(input_size=size, output_size=gate_size, **gc_kwargs)
         self.gc_h = gc_func(input_size=size, output_size=gate_size, **gc_kwargs)
+        self.layer_norm = nn.LayerNorm(size)
+        self.dropout = nn.Dropout(dropout, inplace=True)
 
     def forward(self, input, hidden):
-        if self.rnn_type == 'RNN':
-            output = F.tanh(self.gc_i(input) + self.gc_h(hidden))
+        if self.rnn_type in ['RNN', 'RNNReLU']:
+            output = self.activation(self.gc_i(input) + self.gc_h(hidden))
         elif self.rnn_type == 'GRU':
             output = self._gru(input, hidden)
-        output = self.layer_norm(output)
+        output = self.dropout(self.layer_norm(output))
         return output
 
     def _gru(self, input, hidden):
@@ -33,17 +36,15 @@ class GCRNNCell(nn.Module):
 
 
 class GCRNN(nn.Module):
-    def __init__(self, rnn_type, num_nodes, size, num_layers, dropout,
-                 gc_func, gc_kwargs):
+    def __init__(self, rnn_type, size, num_layers, dropout, gc_func, gc_kwargs):
         super().__init__()
         self.rnn_type = rnn_type
         self.num_nodes = num_nodes
         self.size = size
         self.num_layers = num_layers
         self.layers = nn.ModuleList([
-            GCRNNCell(rnn_type, num_nodes, size, gc_func, gc_kwargs)
+            GCRNNCell(rnn_type, num_nodes, size, dropout, gc_func, gc_kwargs)
             for i in range(num_layers)])
-        self.dropout = nn.Dropout(dropout)
 
     def init_hidden(self, batch_size):
         weight = next(self.parameters())
@@ -68,8 +69,6 @@ class GCRNN(nn.Module):
         for ilay, layer in enumerate(self.layers):
             hidden[:, ilay] = layer(output, hidden[:, ilay])
             output = hidden[:, ilay]
-            if ilay < self.num_layers - 1:
-                output = self.dropout(output)
         return output, hidden
 
 

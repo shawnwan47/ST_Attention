@@ -54,16 +54,15 @@ class GlobalAttention(nn.Module):
 
 
 class MultiAttention(nn.Module):
-    def __init__(self, input_size, output_size, head_count, dropout):
-        assert output_size % head_count == 0
+    def __init__(self, size, head_count, dropout):
+        assert size % head_count == 0
         super().__init__()
-        self.input_size = input_size
-        self.output_size = output_size
+        self.size = size
         self.head_count = head_count
-        self.head_size = output_size // head_count
-        self.linear_key = nn.Linear(input_size, output_size)
-        self.linear_value = nn.Linear(input_size, output_size)
-        self.linear_query = nn.Linear(input_size, output_size)
+        self.head_size = size // head_count
+        self.linear_key = nn.Linear(size, size)
+        self.linear_value = nn.Linear(size, size)
+        self.linear_query = nn.Linear(size, size)
         self.softmax = nn.Softmax(-1)
         self.dropout = nn.Dropout(dropout)
 
@@ -73,7 +72,7 @@ class MultiAttention(nn.Module):
         batch_value, len_value, value_size = value.size()
         aeq(batch, batch_query, batch_value)
         aeq(len_key, len_value)
-        aeq(self.input_size, key_size, value_size, query_size)
+        aeq(self.size, key_size, value_size, query_size)
         if dist is not None:
             aeq(len_query, dist.size(0))
             aeq(len_key, dist.size(1))
@@ -87,7 +86,7 @@ class MultiAttention(nn.Module):
 
     def _unshape(self, x):
         y = x.transpose(-2, -3).contiguous()
-        return y.view(*y.size()[:-2], self.output_size)
+        return y.view(*y.size()[:-2], self.size)
 
     def _score(self, key, query):
         scale = math.sqrt(self.head_size)
@@ -116,9 +115,8 @@ class MultiAttention(nn.Module):
 
 
 class MultiRelativeAttention(MultiAttention):
-    def __init__(self, input_size, output_size, head_count, dropout,
-                 num_dists, dist):
-        super().__init__(input_size, output_size, head_count, dropout)
+    def __init__(self, size, head_count, dropout, num_dists, dist):
+        super().__init__(size, head_count, dropout)
         key_dist = torch.Tensor(head_count, self.head_size, num_dists)
         dist_index = dist.new_tensor(torch.arange(dist.size(0)))
         dist_index = dist_index.unsqueeze(-1) * num_dists

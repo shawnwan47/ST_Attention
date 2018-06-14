@@ -9,7 +9,9 @@ class GraphAttention(nn.Module):
     def __init__(self, input_size, output_size, head_count, dropout):
         super().__init__()
         self.attention = Attention.MultiAttention(
-            input_size, input_size, head_count, dropout
+            size=input_size,
+            head_count=head_count,
+            dropout=dropout
         )
         self.linear_query = nn.Linear(input_size, output_size)
         self.linear_context = nn.Linear(input_size, output_size, bias=False)
@@ -28,8 +30,7 @@ class GraphRelativeAttention(GraphAttention):
                  num_dists, dist):
         super().__init__(input_size, output_size, head_count, dropout)
         self.attention = Attention.MultiRelativeAttention(
-            input_size=input_size,
-            output_size=input_size,
+            size=input_size,
             head_count=head_count,
             dropout=dropout,
             num_dists=num_dists,
