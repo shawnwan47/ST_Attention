@@ -15,7 +15,7 @@ def add_data(args):
     args.add_argument('-metrics', nargs='+', default=['mae', 'rmse'])
     args.add_argument('-horizons', nargs='+', default=[15, 30, 60])
 
-    args.add_argument('-num_weekdays', type=int, default=7)
+    args.add_argument('-num_days', type=int, default=7)
     args.add_argument('-num_times', type=int)
     args.add_argument('-num_nodes', type=int)
     args.add_argument('-num_time_dists', type=int)
@@ -23,7 +23,7 @@ def add_data(args):
 
     args.add_argument('-discretize', action='store_true')
     args.add_argument('-use_time', action='store_true')
-    args.add_argument('-use_weekday', action='store_true')
+    args.add_argument('-use_day', action='store_true')
     args.add_argument('-use_node', action='store_true')
     args.add_argument('-od', action='store_true')
 
@@ -52,14 +52,13 @@ def add_model(args):
     # framework and model
     args.add_argument('-model')
     # general
-    args.add_argument('-input_size', type=int)
     args.add_argument('-output_size', type=int)
     args.add_argument('-num_layers', type=int, default=2,
                       choices=[1, 2, 3])
     args.add_argument('-hidden_size', type=int)
     args.add_argument('-dropout', type=float, default=0.2)
     # Embedding
-    args.add_argument('-weekday_dim', type=int, default=16)
+    args.add_argument('-day_dim', type=int, default=16)
     args.add_argument('-time_dim', type=int, default=16)
     args.add_argument('-node_dim', type=int, default=16)
     args.add_argument('-time_dist_dim', type=int, default=16)
@@ -126,26 +125,11 @@ def update_data(args):
 
 
 def update_model(args):
-    if args.model in ['RNN', 'RNNAttn']:
-        args.input_size = args.num_nodes
+    if args.model in ['RNN', 'RNNAttn', '']:
         args.output_size = args.num_nodes
-        if args.use_time:
-            args.input_size += args.time_dim
-        if args.use_weekday:
-            args.input_size += args.weekday_dim
-        _set_args(args, get_model_config(args.model))
     elif args.model in ['DCRNN', 'GARNN', 'GRARNN']:
-        args.input_size = 1
         args.output_size = 1
-        if args.use_node:
-            args.input_size += args.node_dim
-        if args.use_time:
-            args.input_size += args.time_dim
-        if args.use_weekday:
-            args.input_size += args.weekday_dim
-        _set_args(args, get_model_config(args.model))
-    else:
-        raise NameError('model {0} invalid!'.format(args.model))
+    _set_args(args, get_model_config(args.model))
 
     # path
     name = args.model
@@ -154,8 +138,8 @@ def update_model(args):
         name += 'Node'
     if args.use_time:
         name += 'Time'
-    if args.use_weekday:
-        name += 'Weekday'
+    if args.use_day:
+        name += 'Day'
     name += 'Hid' + str(args.hidden_size)
     name += 'Lay' + str(args.num_layers)
     if 'RNN' in args.model:
