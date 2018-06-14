@@ -82,12 +82,12 @@ class MultiAttention(nn.Module):
             aeq(len_key, mask.size(1))
 
     def _shape(self, x):
-        y = x.view(x.size(0), -1, self.head_count, self.head_size)
+        y = x.view(*x.size()[:-1], self.head_count, self.head_size)
         return y.transpose(-2, -3).contiguous()
 
     def _unshape(self, x):
         y = x.transpose(-2, -3).contiguous()
-        return y.view(y.size(0), -1, self.output_size)
+        return y.view(*y.size()[:-2], self.output_size)
 
     def _score(self, key, query):
         scale = math.sqrt(self.head_size)
