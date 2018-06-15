@@ -88,8 +88,7 @@ def build_GCRNN(args):
     gc_func = GCN.DiffusionConvolution
     gc_kwargs = {
         'adj': adj.cuda() if args.cuda else adj,
-        'hops': args.hops,
-        'uni': args.uni
+        'hops': args.hops
     }
 
     encoder = GCRNN.GCRNN(

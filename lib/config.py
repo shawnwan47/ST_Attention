@@ -67,11 +67,11 @@ def add_model(args):
     args.add_argument('-rnn_type', default='RNN',
                       choices=['RNN', 'GRU', 'LSTM'])
     # Attention
-    args.add_argument('-attn_type', choices=['dot', 'general', 'mlp'])
-    args.add_argument('-head_count', type=int)
+    args.add_argument('-attn_type', default='general',
+                      choices=['dot', 'general', 'mlp'])
+    args.add_argument('-head_count', type=int, default=4)
     # DCRNN
-    args.add_argument('-hops', type=int)
-    args.add_argument('-uni', action='store_true')
+    args.add_argument('-hops', type=int, default=3)
     # Save path
     args.add_argument('-path')
 
@@ -83,22 +83,13 @@ def _set_args(args, kwargs):
 
 
 def get_model_config(model):
-    if model == 'RNN':
-        config = {'hidden_size': 256}
-    elif model == 'RNNAttn':
+    if model in ['RNN', 'RNNAttn', 'Transformer']:
         config = {
-            'hidden_size': 256,
-            'attn_type': 'general'
+            'hidden_size': 256
         }
-    elif model == 'DCRNN':
+    elif model in ['GARNN', 'GRARNN', 'DCRNN', 'STTransformer']:
         config = {
-            'hidden_size': 64,
-            'hops': 3,
-        }
-    elif model in ['GARNN', 'GRARNN']:
-        config = {
-            'hidden_size': 64,
-            'head_count': 4
+            'hidden_size': 64
         }
     else:
         raise NameError('Model {model} invalid.'.format(model))

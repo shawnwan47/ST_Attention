@@ -5,19 +5,16 @@ from lib import graph
 
 
 class DiffusionConvolution(nn.Module):
-    def __init__(self, input_size, output_size, adj, hops, uni=False):
+    def __init__(self, input_size, output_size, adj, hops):
         super().__init__()
         # calculate adjs
         self.output_size = output_size
         self.linear = nn.Linear(input_size, output_size)
         self.filters = self._gen_adj_hops(adj, hops)
-        if not uni:
-            self.filters.extend(self._gen_adj_hops(adj.t(), hops))
-        self.num_filters = len(self.filters)
-        # multi-head graph convolution
+        self.filters += self._gen_adj_hops(adj.t(), hops))
         self.linears = nn.ModuleList([
             nn.Linear(input_size, output_size, bias=False)
-            for _ in range(self.num_filters)
+            for _ in range(self.filters)
         ])
 
     @staticmethod
