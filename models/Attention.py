@@ -54,8 +54,10 @@ class GlobalAttention(nn.Module):
 
 
 class MultiAttention(nn.Module):
-    def __init__(self, size, head_count, dropout):
+    def __init__(self, size, head_count, dropout=0.2, output_size=None):
         assert size % head_count == 0
+        if output_size is None:
+            output_size = size
         super().__init__()
         self.size = size
         self.head_count = head_count
@@ -63,7 +65,7 @@ class MultiAttention(nn.Module):
         self.linear_key = nn.Linear(size, size)
         self.linear_value = nn.Linear(size, size)
         self.linear_query = nn.Linear(size, size)
-        self.linear_out = nn.Linear(size, size)
+        self.linear_out = nn.Linear(size, output_size)
         self.softmax = nn.Softmax(-1)
         self.dropout = nn.Dropout(dropout)
 
@@ -116,12 +118,13 @@ class MultiAttention(nn.Module):
 
 
 class MultiRelativeAttention(MultiAttention):
-    def __init__(self, size, head_count, dropout, num_dists, dist):
-        super().__init__(size, head_count, dropout)
+    def __init__(self, size, head_count, num_dists, dist,
+                 dropout=0.2, output_size=None):
+        super().__init__(size, head_count, dropout, output_size)
         key_dist = torch.Tensor(head_count, self.head_size, num_dists)
+        self.key_dist = nn.Parameter(key_dist)
         dist_index = dist.new_tensor(torch.arange(dist.size(0)))
         dist_index = dist_index.unsqueeze(-1) * num_dists
-        self.register_parameter('key_dist', nn.Parameter(key_dist))
         self.register_buffer('dist', dist)
         self.register_buffer('dist_index', dist_index)
         self._reset_key_dist()
