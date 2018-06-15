@@ -63,6 +63,7 @@ class MultiAttention(nn.Module):
         self.linear_key = nn.Linear(size, size)
         self.linear_value = nn.Linear(size, size)
         self.linear_query = nn.Linear(size, size)
+        self.linear_out = nn.Linear(size, size)
         self.softmax = nn.Softmax(-1)
         self.dropout = nn.Dropout(dropout)
 
@@ -94,7 +95,6 @@ class MultiAttention(nn.Module):
         return scores
 
     def _pool(self, attn, value):
-        # drop_attn = self.dropout(attn)
         output = torch.matmul(attn, value)
         output = self._unshape(output)
         return output
@@ -111,6 +111,7 @@ class MultiAttention(nn.Module):
             scores.masked_fill_(mask, -1e8)
         attn = self.softmax(scores)
         output = self._pool(attn, value)
+        output = self.linear_out(output)
         return output, attn
 
 
