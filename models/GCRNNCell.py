@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 class GCRNNCell(nn.Module):
-    def __init__(self, rnn_type, size, dropout, gc_func, gc_kwargs):
+    def __init__(self, rnn_type, size, gc_func, gc_kwargs):
         assert rnn_type in ['RNN', 'GRU']
         super().__init__()
         self.rnn_type = rnn_type
@@ -15,14 +15,13 @@ class GCRNNCell(nn.Module):
         self.gc_i = gc_func(input_size=size, output_size=gate_size, **gc_kwargs)
         self.gc_h = gc_func(input_size=size, output_size=gate_size, **gc_kwargs)
         self.layer_norm = nn.LayerNorm(size)
-        self.dropout = nn.Dropout(dropout, inplace=True)
 
     def forward(self, input, hidden):
         if self.rnn_type in ['RNN', 'RNNReLU']:
             output = self.activation(self.gc_i(input) + self.gc_h(hidden))
         elif self.rnn_type == 'GRU':
             output = self._gru(input, hidden)
-        output = self.dropout(self.layer_norm(output))
+        output = self.layer_norm(output)
         return output
 
     def _gru(self, input, hidden):
@@ -44,7 +43,6 @@ class GARNNCell(GCRNNCell):
         elif self.rnn_type == 'GRU':
             output, attn_i, attn_h = self._gru(input, hidden)
         output = self.layer_norm(output)
-        output = self.dropout(output)
         return output, attn_i, attn_h
 
     def _gru(self, input, hidden):

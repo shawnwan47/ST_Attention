@@ -13,8 +13,9 @@ class GCRNN(nn.Module):
         self.size = size
         self.num_layers = num_layers
         self.layers = nn.ModuleList([
-            GCRNNCell.GCRNNCell(rnn_type, size, dropout, gc_func, gc_kwargs)
-            for i in range(num_layers)])
+            GCRNNCell.GCRNNCell(rnn_type, size, gc_func, gc_kwargs)
+            for i in range(num_layers)
+        ])
 
     def init_hidden(self, batch_size):
         weight = next(self.parameters())
@@ -48,7 +49,7 @@ class GARNN(GCRNN):
         super().__init__(rnn_type, num_nodes, size, num_layers, dropout,
                          gc_func, gc_kwargs)
         self.layers = nn.ModuleList([
-            GCRNNCell.GARNNCell(rnn_type, size, dropout, gc_func, gc_kwargs)
+            GCRNNCell.GARNNCell(rnn_type, size, gc_func, gc_kwargs)
             for i in range(num_layers)
         ])
 

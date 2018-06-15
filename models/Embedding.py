@@ -7,8 +7,9 @@ class EmbeddingIn(nn.Module):
         super().__init__()
         self.chain = nn.Sequential(
             nn.Embedding(num_embeddings, embedding_dim),
-            nn.Dropout(p=dropout, inplace=True),
+            # nn.Dropout(dropout, inplace=True),
             nn.Linear(embedding_dim, size, bias=False)
+            # nn.Dropout(dropout, inplace=True)
         )
 
     def forward(self, input):
@@ -19,9 +20,9 @@ class EmbeddingOut(nn.Module):
     def __init__(self, size, dropout):
         super().__init__()
         self.chain = nn.Sequential(
-            nn.ReLU(inplace=True),
             nn.LayerNorm(size),
-            nn.Dropout(dropout, inplace=True)
+            nn.ReLU(inplace=True)
+            # nn.Dropout(dropout, inplace=True)
         )
 
     def forward(self, input):
@@ -49,7 +50,7 @@ class TempEmbedding(nn.Module):
             output += self.emb_time(time)
         if self.use_day:
             output += self.emb_day(weekday)
-        output = self.dropout(self.relu(self.layer_norm(output)))
+        return emb_out(output)
 
 
 class STEmbedding(nn.Module):
