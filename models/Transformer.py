@@ -50,6 +50,13 @@ class STTransformer(nn.Module):
         self.register_buffer('mask', gen_mask_temporal())
 
     def forward(self, input, bank=None):
+        '''
+        output: batch x lenq x node x size
+        attn_s: batch x lenq x node x node
+        attn_spatial: batch x lenq x lay x node x node
+        attn_t: batch x node x lenq x lenc
+        attn_temporal: batch x lenq x lay x node x lenc
+        '''
         len_input = input.size(-3)
         if bank is None:
             mask = self.mask[-len_input:, -len_input:]
@@ -62,9 +69,9 @@ class STTransformer(nn.Module):
             else:
                 context.append(torch.cat((bank[:, i], query), -3))
             query, attn_t, attn_s = layer(query, context[-1], mask)
-            attn_temporal.append(attn_t)
             attn_spatial.append(attn_s)
+            attn_temporal.append(attn_t.transpose(-2, -3))
         context = torch.stack(context, 1)
-        attn_temporal = torch.stack(attn_temporal, 1)
         attn_spatial = torch.stack(attn_spatial, 1)
+        attn_temporal = torch.stack(attn_temporal, 2)
         return query, context, attn_temporal, attn_spatial

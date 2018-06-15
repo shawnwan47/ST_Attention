@@ -5,7 +5,8 @@ from models import GCRNNCell
 
 
 class GCRNN(nn.Module):
-    def __init__(self, rnn_type, size, num_layers, dropout, gc_func, gc_kwargs):
+    def __init__(self, rnn_type, num_nodes, size, num_layers, dropout,
+                 gc_func, gc_kwargs):
         super().__init__()
         self.rnn_type = rnn_type
         self.num_nodes = num_nodes
@@ -73,8 +74,6 @@ class GARNN(GCRNN):
             attn_input.append(attn_i)
             attn_hidden.append(attn_h)
             output = hidden[:, ilay]
-            if ilay < self.num_layers - 1:
-                output = self.dropout(output)
         attn_input = torch.stack(attn_input, 1)
         attn_hidden = torch.stack(attn_hidden, 1)
         return output, hidden, attn_input, attn_hidden

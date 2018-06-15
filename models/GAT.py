@@ -35,4 +35,5 @@ class GraphRelativeAttention(GraphAttention):
             dropout=dropout,
             num_dists=num_dists,
             dist=dist,
+            output_size=output_size
         )

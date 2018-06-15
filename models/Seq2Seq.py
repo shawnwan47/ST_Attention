@@ -47,15 +47,15 @@ class Seq2SeqGARNN(Seq2SeqBase):
         # encoding
         input = self.embedding(data[:, :his], time[:, :his], weekday[:, :his])
         encoder_output, hidden, attn_i, attn_h = self.encoder(input)
-        attn_i, attn_h = attn_i[:, :, -1], attn_h[:, :, -1]
+        attn_i, attn_h = attn_i[:, -1], attn_h[:, -1]
         # decoding
         output = [self.decoder(encoder_output[:, [-1]])]
         for idx in range(self.horizon - 1):
             idx += his
-            input = data[:, [idx]] if random.random() < teach else output[-1].detach()
-            input = self.embedding(input, time[:, [idx]], weekday[:, [idx]])
-            encoder_output, hidden, _, _ = self.encoder(input, hidden)
-            output.append(self.decoder(encoder_output))
+            data_i = data[:, [idx]] if random.random() < teach else output[-1].detach()
+            input = self.embedding(data_i, time[:, [idx]], weekday[:, [idx]])
+            output_i, hidden, _, _ = self.encoder(input, hidden)
+            output.append(self.decoder(output_i))
         output = torch.cat(output, 1).squeeze(-1)
         return output, attn_i, attn_h
 
@@ -66,19 +66,33 @@ class Seq2SeqTransformer(Seq2SeqBase):
         # encoding
         input = self.embedding(data[:, :his], time[:, :his], weekday[:, :his])
         encoder_output, bank, attn = self.encoder(input)
-        attn = attn[:, :, -1]
+        attn = attn[:, -1]
         # decoding
         output = [self.decoder(encoder_output[:, [-1]])]
-        attn_input, attn_hidden = [], []
         for idx in range(self.horizon - 1):
             idx += his
             input = data[:, [idx]] if random.random() < teach else output[-1].detach()
             input = self.embedding(input, time[:, [idx]], weekday[:, [idx]])
-            encoder_output, hidden, attn_i, attn_h = self.encoder(input, hidden)
-            output.append(self.decoder(encoder_output))
-            attn_input.append(attn_i)
-            attn_hidden.append(attn_h)
-        output = torch.cat(output, 1).squeeze(-1)
-        attn_input = torch.stack(attn_input, 1)
-        attn_hidden = torch.stack(attn_hidden, 1)
-        return output, attn_input, attn_hidden
+            output_i, bank, _ = self.encoder(input, bank)
+            output.append(self.decoder(output_i))
+        output = torch.cat(output, 1)
+        return output, attn
+
+
+class Seq2SeqSTTransformer(Seq2SeqBase):
+    def forward(self, data, time, weekday, teach=0):
+        his = self.history
+        # encoding
+        input = self.embedding(data[:, :his], time[:, :his], weekday[:, :his])
+        encoder_output, bank, attn_s, attn_t = self.encoder(input)
+        attn_s, attn_t = attn_s[:, -1], attn_t[:, -1]
+        # decoding
+        output = [self.decoder(encoder_output[:, [-1]])]
+        for idx in range(self.horizon - 1):
+            idx += his
+            input = data[:, [idx]] if random.random() < teach else output[-1].detach()
+            input = self.embedding(input, time[:, [idx]], weekday[:, [idx]])
+            output_i, bank, _, _ = self.encoder(input, bank)
+            output.append(self.decoder(output_i))
+        output = torch.cat(output, 1)
+        return output, attn_s, attn_t

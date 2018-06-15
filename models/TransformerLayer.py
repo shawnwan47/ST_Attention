@@ -26,6 +26,10 @@ class TransformerLayer(nn.Module):
         self.dropout = nn.Dropout(dropout, inplace=True)
 
     def forward(self, query, context, mask):
+        '''
+        output: batch x lenq x size
+        attn: batch x lenq x lenc
+        '''
         context, attn = self.attention(context, context, query, mask)
         output = self.layer_norm(self.dropout(context) + query)
         output = self.feed_forward(output)
@@ -41,9 +45,14 @@ class STTransformerLayer(nn.Module):
         self.feed_forward = PositionwiseFeedForward(size, dropout)
 
     def forward(self, query, context, mask=None):
-        context_s, attn_s = self.attention_s(query, context)
+        '''
+        output: batch x lenq x size
+        attn_s: batch x lenq x num_nodes x num_nodes
+        attn_t: batch x num_nodes x lenq x lenc
+        '''
+        context_s, attn_s = self.attention_s(query, query)
         query_t, context_t = query.transpose(-2, -3), context.transpose(-2, -3)
-        context_t, attn_t = self.attention_t(query_t, context_t)
+        context_t, attn_t = self.attention_t(query_t, context_t, mask)
         context_t = context_t.transpose(-2, -3)
         output = query + self.dropout(context_s) + self.dropout(context_t)
         output = self.layer_norm(output)

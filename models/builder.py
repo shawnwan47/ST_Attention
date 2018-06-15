@@ -22,8 +22,10 @@ def build_model(args):
         model = build_GCRNN(args)
     elif args.model in ['GARNN', 'GRARNN']:
         model = build_GARNN(args)
-    elif args.model in ['ST_Transformer']:
-        model = build_ST_Transformer(args)
+    elif args.model in ['Transformer']:
+        model = build_Transformer(args)
+    elif args.model in ['STTransformer']:
+        model = build_STTransformer(args)
     else:
         raise NameError('model {0} unfound!'.format(model))
     return model
@@ -48,15 +50,6 @@ def build_st_embedding(args):
 
 def build_linear(args):
     return nn.Linear(args.hidden_size, args.output_size)
-
-
-def build_attn_linear(args):
-    return Decoder.AttnLinear(
-        attn_type=args.attn_type,
-        hidden_size=args.hidden_size,
-        output_size=args.output_size,
-        dropout=args.dropout
-    )
 
 
 def build_RNN(args):
@@ -156,4 +149,30 @@ def build_Transformer(args):
         head_count=args.head_count,
         dropout=args.dropout)
     decoder = build_linear(args)
-    seq2seq = Seq2Seq.Seq2SeqTransformer(embedding, encoder, decoder)
+    seq2seq = Seq2Seq.Seq2SeqTransformer(
+        embedding=embedding,
+        encoder=encoder,
+        decoder=decoder,
+        history=args.history,
+        horizon=args.horizon
+    )
+    return seq2seq
+
+
+def build_STTransformer(args):
+    embedding = build_st_embedding(args)
+    encoder = Transformer.STTransformer(
+        size=args.hidden_size,
+        num_layers=args.num_layers,
+        head_count=args.head_count,
+        dropout=args.dropout
+    )
+    decoder = build_linear(args)
+    seq2seq = Seq2Seq.Seq2SeqSTTransformer(
+        embedding=embedding,
+        encoder=encoder,
+        decoder=decoder,
+        history=args.history,
+        horizon=args.horizon
+    )
+    return seq2seq

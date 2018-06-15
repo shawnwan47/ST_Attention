@@ -44,6 +44,7 @@ class GARNNCell(GCRNNCell):
         elif self.rnn_type == 'GRU':
             output, attn_i, attn_h = self._gru(input, hidden)
         output = self.layer_norm(output)
+        output = self.dropout(output)
         return output, attn_i, attn_h
 
     def _gru(self, input, hidden):
