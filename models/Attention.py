@@ -110,7 +110,7 @@ class MultiAttention(nn.Module):
 
         scores = self._score(key, query)
         if mask is not None:
-            scores.masked_fill_(mask, -1e8)
+            scores.masked_fill_(mask, -float('inf'))
         attn = self.softmax(scores)
         output = self._pool(attn, value)
         output = self.linear_out(output)

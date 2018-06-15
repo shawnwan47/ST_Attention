@@ -47,6 +47,26 @@ class Seq2SeqGARNN(Seq2SeqBase):
         # encoding
         input = self.embedding(data[:, :his], time[:, :his], weekday[:, :his])
         encoder_output, hidden, attn_i, attn_h = self.encoder(input)
+        attn_i, attn_h = attn_i[:, :, -1], attn_h[:, :, -1]
+        # decoding
+        output = [self.decoder(encoder_output[:, [-1]])]
+        for idx in range(self.horizon - 1):
+            idx += his
+            input = data[:, [idx]] if random.random() < teach else output[-1].detach()
+            input = self.embedding(input, time[:, [idx]], weekday[:, [idx]])
+            encoder_output, hidden, _, _ = self.encoder(input, hidden)
+            output.append(self.decoder(encoder_output))
+        output = torch.cat(output, 1).squeeze(-1)
+        return output, attn_i, attn_h
+
+
+class Seq2SeqTransformer(Seq2SeqBase):
+    def forward(self, data, time, weekday, teach=0):
+        his = self.history
+        # encoding
+        input = self.embedding(data[:, :his], time[:, :his], weekday[:, :his])
+        encoder_output, bank, attn = self.encoder(input)
+        attn = attn[:, :, -1]
         # decoding
         output = [self.decoder(encoder_output[:, [-1]])]
         attn_input, attn_hidden = [], []

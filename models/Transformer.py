@@ -36,7 +36,7 @@ class Transformer(nn.Module):
             query, attn_i = layer(query, context[-1], mask)
             attn.append(attn_i)
         context = torch.stack(context, 1)
-        attn = torch.stack(attn, 1)
+        attn = torch.stack(attn)
         return query, context, attn
 
 

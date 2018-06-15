@@ -12,6 +12,7 @@ from models import RNN
 from models import GCRNN
 from models import GCN
 from models import GAT
+from models import Transformer
 
 
 def build_model(args):
@@ -46,10 +47,7 @@ def build_st_embedding(args):
 
 
 def build_linear(args):
-    return Decoder.Linear(
-        hidden_size=args.hidden_size,
-        output_size=args.output_size,
-        dropout=args.dropout)
+    return nn.Linear(args.hidden_size, args.output_size)
 
 
 def build_attn_linear(args):
@@ -65,8 +63,7 @@ def build_RNN(args):
     embedding = build_temp_embedding(args)
     encoder = RNN.RNN(
         rnn_type=args.rnn_type,
-        input_size=args.input_size,
-        hidden_size=args.hidden_size,
+        size=args.hidden_size,
         num_layers=args.num_layers,
         dropout=args.dropout
     )
@@ -149,3 +146,14 @@ def build_GARNN(args):
         history=args.history,
         horizon=args.horizon)
     return seq2seq
+
+
+def build_Transformer(args):
+    embedding = build_temp_embedding(args)
+    encoder = Transformer.Transformer(
+        size=args.hidden_size,
+        num_layers=args.num_layers,
+        head_count=args.head_count,
+        dropout=args.dropout)
+    decoder = build_linear(args)
+    seq2seq = Seq2Seq.Seq2SeqTransformer(embedding, encoder, decoder)
