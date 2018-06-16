@@ -81,6 +81,7 @@ class Seq2SeqTransformer(Seq2SeqBase):
 
 class Seq2SeqSTTransformer(Seq2SeqBase):
     def forward(self, data, time, weekday, teach=0):
+        data = data.unsqueeze(-1)
         his = self.history
         # encoding
         input = self.embedding(data[:, :his], time[:, :his], weekday[:, :his])
@@ -94,5 +95,5 @@ class Seq2SeqSTTransformer(Seq2SeqBase):
             input = self.embedding(input, time[:, [idx]], weekday[:, [idx]])
             output_i, bank, _, _ = self.encoder(input, bank)
             output.append(self.decoder(output_i))
-        output = torch.cat(output, 1)
+        output = torch.cat(output, 1).squeeze(-1)
         return output, attn_s, attn_t

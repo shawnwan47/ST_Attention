@@ -26,14 +26,12 @@ class GraphAttention(nn.Module):
 
 
 class GraphRelativeAttention(GraphAttention):
-    def __init__(self, input_size, output_size, head_count, dropout,
-                 num_dists, dist):
+    def __init__(self, input_size, output_size, head_count, dropout, dist):
         super().__init__(input_size, output_size, head_count, dropout)
         self.attention = Attention.MultiRelativeAttention(
             size=input_size,
             head_count=head_count,
             dropout=dropout,
-            num_dists=num_dists,
             dist=dist,
             output_size=output_size
         )

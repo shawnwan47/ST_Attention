@@ -22,9 +22,9 @@ def build_model(args):
         model = build_GCRNN(args)
     elif args.model in ['GARNN', 'GRARNN']:
         model = build_GARNN(args)
-    elif args.model in ['Transformer']:
+    elif args.model in ['Transformer', 'RelativeTransformer']:
         model = build_Transformer(args)
-    elif args.model in ['STTransformer']:
+    elif args.model in ['STTransformer', 'RelativeSTTransformer']:
         model = build_STTransformer(args)
     else:
         raise NameError('model {0} unfound!'.format(model))
@@ -112,11 +112,10 @@ def build_GARNN(args):
         }
     elif args.model == 'GRARNN':
         gc_func = GAT.GraphRelativeAttention
-        dist = pt_utils.load_dist(args.dataset, args.num_node_dists)
+        dist = pt_utils.load_dist(args.dataset, args.num_dists)
         gc_kwargs = {
             'head_count': args.head_count,
             'dropout': args.dropout,
-            'num_dists': args.num_node_dists,
             'dist': dist.cuda() if args.cuda else dist
         }
 
@@ -143,7 +142,7 @@ def build_GARNN(args):
 
 def build_Transformer(args):
     embedding = build_temp_embedding(args)
-    encoder = Transformer.Transformer(
+    encoder = getattr(Transformer, args.model)(
         size=args.hidden_size,
         num_layers=args.num_layers,
         head_count=args.head_count,
@@ -161,12 +160,22 @@ def build_Transformer(args):
 
 def build_STTransformer(args):
     embedding = build_st_embedding(args)
-    encoder = Transformer.STTransformer(
-        size=args.hidden_size,
-        num_layers=args.num_layers,
-        head_count=args.head_count,
-        dropout=args.dropout
-    )
+    if args.model == 'STTransformer':
+        encoder = Transformer.STTransformer(
+            size=args.hidden_size,
+            num_layers=args.num_layers,
+            head_count=args.head_count,
+            dropout=args.dropout
+        )
+    elif args.model == 'RelativeSTTransformer':
+        dist = pt_utils.load_dist(args.dataset, args.num_dists)
+        encoder = Transformer.RelativeSTTransformer(
+            size=args.hidden_size,
+            num_layers=args.num_layers,
+            head_count=args.head_count,
+            dropout=args.dropout,
+            spatial_dist=dist.cuda() if args.cuda else dist
+        )
     decoder = build_linear(args)
     seq2seq = Seq2Seq.Seq2SeqSTTransformer(
         embedding=embedding,

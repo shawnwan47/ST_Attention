@@ -70,18 +70,16 @@ class MultiAttention(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def _check_args(self, key, value, query, dist=None, mask=None):
-        batch, len_key, key_size = key.size()
-        batch_query, len_query, query_size = query.size()
-        batch_value, len_value, value_size = value.size()
-        aeq(batch, batch_query, batch_value)
-        aeq(len_key, len_value)
-        aeq(self.size, key_size, value_size, query_size)
+        aeq(key.size(), value.size())
+        aeq(key.dim(), query.dim())
+        aeq(key.size(0), query.size(0))
+        aeq(self.size, key.size(-1), query.size(-1))
         if dist is not None:
-            aeq(len_query, dist.size(0))
-            aeq(len_key, dist.size(1))
+            aeq(query.size(-2), dist.size(0))
+            aeq(key.size(-2), dist.size(1))
         if mask is not None:
-            aeq(len_query, mask.size(0))
-            aeq(len_key, mask.size(1))
+            aeq(query.size(-2), mask.size(0))
+            aeq(key.size(-2), mask.size(1))
 
     def _shape(self, x):
         y = x.view(*x.size()[:-1], self.head_count, self.head_size)
@@ -118,11 +116,10 @@ class MultiAttention(nn.Module):
 
 
 class MultiRelativeAttention(MultiAttention):
-    def __init__(self, size, head_count, num_dists, dist,
-                 dropout=0.2, output_size=None):
+    def __init__(self, size, head_count, dist, dropout=0.2, output_size=None):
         super().__init__(size, head_count, dropout, output_size)
-        key_dist = torch.Tensor(head_count, self.head_size, num_dists)
-        self.key_dist = nn.Parameter(key_dist)
+        num_dists = dist.max().item() + 1
+        self.key_dist = nn.Parameter(torch.Tensor(self.head_size, num_dists))
         dist_index = dist.new_tensor(torch.arange(dist.size(0)))
         dist_index = dist_index.unsqueeze(-1) * num_dists
         self.register_buffer('dist', dist)

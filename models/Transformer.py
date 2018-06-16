@@ -1,15 +1,21 @@
+import numpy as np
 import torch
 import torch.nn as nn
 
 from models import TransformerLayer
 
 
-def gen_mask_temporal(self, size=24):
+def gen_temporal_mask(size=24):
     ''' Get an attention mask to avoid using the future info.'''
-    attn_shape = (1, size, size)
-    subsequent_mask = np.triu(np.ones(attn_shape), k=1).astype('uint8')
+    subsequent_mask = np.triu(np.ones((size, size)), k=1).astype('uint8')
     subsequent_mask = torch.from_numpy(subsequent_mask)
     return subsequent_mask
+
+
+def gen_temporal_distance(size=24):
+    dist = np.arange(size).reshape(-1, 1) + np.arange(0, -size, -1)
+    dist = torch.from_numpy(np.tril(dist))
+    return dist
 
 
 class Transformer(nn.Module):
@@ -19,7 +25,7 @@ class Transformer(nn.Module):
             TransformerLayer.TransformerLayer(size, head_count, dropout)
             for i in range(num_layers)
         ])
-        self.register_buffer('mask', gen_mask_temporal())
+        self.register_buffer('mask', gen_temporal_mask())
 
     def forward(self, input, bank=None):
         len_input = input.size(-2)
@@ -40,14 +46,24 @@ class Transformer(nn.Module):
         return query, context, attn
 
 
-class STTransformer(nn.Module):
+class RelativeTransformer(Transformer):
     def __init__(self, size, num_layers, head_count, dropout):
-        super().__init__()
+        super().__init__(size, num_layers, head_count, dropout)
+        temporal_dist = gen_temporal_distance()
+        self.layers = nn.ModuleList([
+            TransformerLayer.RelativeTransformerLayer(
+                size, head_count, dropout, temporal_dist)
+            for i in range(num_layers)
+        ])
+
+
+class STTransformer(Transformer):
+    def __init__(self, size, num_layers, head_count, dropout):
+        super().__init__(size, num_layers, head_count, dropout)
         self.layers = nn.ModuleList([
             TransformerLayer.STTransformerLayer(size, head_count, dropout)
             for i in range(num_layers)
         ])
-        self.register_buffer('mask', gen_mask_temporal())
 
     def forward(self, input, bank=None):
         '''
@@ -75,3 +91,14 @@ class STTransformer(nn.Module):
         attn_spatial = torch.stack(attn_spatial, 1)
         attn_temporal = torch.stack(attn_temporal, 2)
         return query, context, attn_temporal, attn_spatial
+
+
+class RelativeSTTransformer(STTransformer):
+    def __init__(self, size, num_layers, head_count, dropout, spatial_dist):
+        super().__init__(size, num_layers, head_count, dropout)
+        temporal_dist = gen_temporal_distance()
+        self.layers = nn.ModuleList([
+            TransformerLayer.RelativeSTTransformerLayer(
+                size, head_count, dropout, temporal_dist, spatial_dist)
+            for i in range(num_layers)
+        ])

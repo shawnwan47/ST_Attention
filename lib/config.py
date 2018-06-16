@@ -18,8 +18,7 @@ def add_data(args):
     args.add_argument('-num_days', type=int, default=7)
     args.add_argument('-num_times', type=int)
     args.add_argument('-num_nodes', type=int)
-    args.add_argument('-num_time_dists', type=int)
-    args.add_argument('-num_node_dists', type=int, default=64)
+    args.add_argument('-num_dists', type=int, default=64)
 
     args.add_argument('-discretize', action='store_true')
     args.add_argument('-use_time', action='store_true')
@@ -44,7 +43,7 @@ def add_train(args):
     # run
     args.add_argument('-test', action='store_true')
     args.add_argument('-retrain', action='store_true')
-    args.add_argument('-batch_size', type=int, default=16)
+    args.add_argument('-batch_size', type=int)
     args.add_argument('-epoches', type=int, default=100)
 
 
@@ -76,24 +75,9 @@ def add_model(args):
     args.add_argument('-path')
 
 
-def _set_args(args, kwargs):
-    for key, value in kwargs.items():
-        if getattr(args, key) is None:
-            setattr(args, key, value)
-
-
-def get_model_config(model):
-    if model in ['RNN', 'RNNAttn', 'Transformer']:
-        config = {
-            'hidden_size': 256
-        }
-    elif model in ['GARNN', 'GRARNN', 'DCRNN', 'STTransformer']:
-        config = {
-            'hidden_size': 64
-        }
-    else:
-        raise NameError('Model {model} invalid.'.format(model))
-    return config
+def set_args(args, key, value):
+    if getattr(args, key) is None:
+        setattr(args, key, value)
 
 
 def update_data(args):
@@ -112,15 +96,26 @@ def update_data(args):
     args.horizon //= args.freq
     args.horizons = [t // args.freq - 1 for t in args.horizons]
     args.freq = str(args.freq) + 'min'
-    args.num_time_dists = args.history + args.horizon
 
 
 def update_model(args):
-    if args.model in ['RNN', 'RNNAttn', '']:
+    if args.model in ['RNN',
+                      'RNNAttn',
+                      'Transformer',
+                      'RelativeTransformer']:
         args.output_size = args.num_nodes
-    elif args.model in ['DCRNN', 'GARNN', 'GRARNN']:
+        set_args(args, 'batch_size', 64)
+        set_args(args, 'hidden_size', 256)
+    elif args.model in ['DCRNN',
+                        'GARNN',
+                        'GRARNN',
+                        'STTransformer',
+                        'RelativeSTTransformer']:
         args.output_size = 1
-    _set_args(args, get_model_config(args.model))
+        set_args(args, 'batch_size', 16)
+        set_args(args, 'hidden_size', 64)
+    else:
+        raise NameError('Model {model} invalid.'.format(model))
 
     # path
     name = args.model
