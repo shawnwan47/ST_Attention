@@ -52,8 +52,7 @@ def add_model(args):
     args.add_argument('-model')
     # general
     args.add_argument('-output_size', type=int)
-    args.add_argument('-num_layers', type=int, default=2,
-                      choices=[1, 2, 3])
+    args.add_argument('-num_layers', type=int, default=2)
     args.add_argument('-hidden_size', type=int)
     args.add_argument('-dropout', type=float, default=0.2)
     # Embedding

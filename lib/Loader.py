@@ -53,7 +53,7 @@ class BJLoader(LoaderBase):
     def __init__(self, dataset='highway'):
         self._path = Path(DATA_PATH)
         self._path /= BJ_HIGHWAY_PATH if dataset == 'highway' else BJ_METRO_PATH
-        self._node = self._path / 'STATION.txt'
+        self._node = self._path / 'node.csv'
         self._link_raw = self._path / 'link_raw.csv'
         self._link = self._path / 'link.csv'
         if not self._link.exists():
@@ -74,7 +74,7 @@ class BJLoader(LoaderBase):
         link_ids = list(np.unique(self.load_link_raw()))
         ts_ids = [*self._load_ts('O').columns, *self._load_ts('D').columns]
         node_ids = node_ids.intersection(*[link_ids, ts_ids])
-        ids = node.loc[node_ids].sort_values(['ROUTE', 'STATION']).index
+        ids = node.loc[node_ids].sort_values(['route', 'station']).index
         return ids
 
     def _load_ts(self, od='D'):
