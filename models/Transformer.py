@@ -23,82 +23,102 @@ class Transformer(nn.Module):
         super().__init__()
         self.layers = nn.ModuleList([
             TransformerLayer.TransformerLayer(size, head_count, dropout)
-            for i in range(num_layers)
+            for _ in range(num_layers)
         ])
         self.register_buffer('mask', gen_temporal_mask())
 
     def forward(self, input, bank=None):
+        '''
+        input, output: batch x lenq x size
+        bank, memory: lay x batch x lenm x size
+        attn: batch x lay x head x lenq x lenm
+        '''
         len_input = input.size(-2)
         if bank is None:
             mask = self.mask[-len_input:, -len_input:]
         else:
             mask = self.mask[-len_input:, -(len_input + bank.size(-2)):]
-        query, context, attn = input, [], []
-        for i, layer in enumerate(self.layers):
+        query, memory, attn = input, [], []
+        for idx, layer in enumerate(self.layers):
             if bank is None:
-                context.append(query)
+                memory.append(query)
             else:
-                context.append(torch.cat((bank[:, i], query), -2))
-            query, attn_i = layer(query, context[-1], mask)
+                memory.append(torch.cat((bank[idx], query), -2))
+            query, attn_i = layer(query, memory[-1], mask)
             attn.append(attn_i)
-        context = torch.stack(context, 1)
-        attn = torch.stack(attn)
-        return query, context, attn
+        memory = torch.stack(memory)
+        attn = torch.stack(attn, 2)
+        return query, memory, attn
 
 
 class RelativeTransformer(Transformer):
     def __init__(self, size, num_layers, head_count, dropout):
         super().__init__(size, num_layers, head_count, dropout)
-        temporal_dist = gen_temporal_distance()
+        dist_t = gen_temporal_distance()
         self.layers = nn.ModuleList([
             TransformerLayer.RelativeTransformerLayer(
-                size, head_count, dropout, temporal_dist)
-            for i in range(num_layers)
+                size, head_count, dropout, dist_t)
+            for _ in range(num_layers)
         ])
 
 
-class STTransformer(Transformer):
+class STTransformer(nn.Module):
     def __init__(self, size, num_layers, head_count, dropout):
-        super().__init__(size, num_layers, head_count, dropout)
-        self.layers = nn.ModuleList([
-            TransformerLayer.STTransformerLayer(size, head_count, dropout)
-            for i in range(num_layers)
+        super().__init__()
+        self.num_layers = num_layers
+        self.layers_t = nn.ModuleList([
+            TransformerLayer.TransformerLayer(size, head_count, dropout)
+            for _ in range(num_layers)
         ])
+        self.layers_s = nn.ModuleList([
+            TransformerLayer.TransformerLayer(size, head_count, dropout)
+            for _ in range(num_layers)
+        ])
+        self.register_buffer('mask', gen_temporal_mask())
 
     def forward(self, input, bank=None):
         '''
-        output: batch x lenq x node x size
-        attn_s: batch x lenq x node x node
-        attn_spatial: batch x lenq x lay x node x node
-        attn_t: batch x node x lenq x lenc
-        attn_temporal: batch x lenq x lay x node x lenc
+        input, output: batch x lenq x node x size
+        bank: lay x batch x node x lenq x size
+        attn_s: batch x lenq x head x node x node
+        attn_spatial: batch x lay x lenq x head x node x node
+        attn_t: batch x node x head x lenq x lenm
+        attn_temporal: batch x lay x node x head x lenq x lenm
         '''
-        len_input = input.size(-3)
+        len_input = input.size(1)
         if bank is None:
             mask = self.mask[-len_input:, -len_input:]
         else:
-            mask = self.mask[-len_input:, -(len_input + bank.size(-3)):]
-        query, context, attn_temporal, attn_spatial = input, [], [], []
-        for i, layer in enumerate(self.layers):
+            mask = self.mask[-len_input:, -(len_input + bank.size(-2)):]
+        query, memory, attn_temporal, attn_spatial = input, [], [], []
+        for idx in range(self.num_layers):
+            query, attn_s = self.layers_s[idx](query, query)
+            query_t = query.transpose(1, 2)
             if bank is None:
-                context.append(query)
+                memory.append(query_t)
             else:
-                context.append(torch.cat((bank[:, i], query), -3))
-            query, attn_t, attn_s = layer(query, context[-1], mask)
+                memory.append(torch.cat((bank[idx], query_t), -2))
+            query_t, attn_t = self.layers_t[idx](query_t, memory[-1], mask)
+            query = query_t.transpose(1, 2)
             attn_spatial.append(attn_s)
-            attn_temporal.append(attn_t.transpose(-2, -3))
-        context = torch.stack(context, 1)
+            attn_temporal.append(attn_t)
+        memory = torch.stack(memory)
         attn_spatial = torch.stack(attn_spatial, 1)
-        attn_temporal = torch.stack(attn_temporal, 2)
-        return query, context, attn_temporal, attn_spatial
+        attn_temporal = torch.stack(attn_temporal, 1)
+        return query, memory, attn_temporal, attn_spatial
 
 
 class RelativeSTTransformer(STTransformer):
-    def __init__(self, size, num_layers, head_count, dropout, spatial_dist):
+    def __init__(self, size, num_layers, head_count, dropout, dist_s):
         super().__init__(size, num_layers, head_count, dropout)
-        temporal_dist = gen_temporal_distance()
-        self.layers = nn.ModuleList([
-            TransformerLayer.RelativeSTTransformerLayer(
-                size, head_count, dropout, temporal_dist, spatial_dist)
-            for i in range(num_layers)
+        self.layers_s = nn.ModuleList([
+            TransformerLayer.RelativeTransformerLayer(
+                size, head_count, dropout, dist_s)
+            for _ in range(num_layers)
+        ])
+        dist_t = gen_temporal_distance()
+        self.layers_t = nn.ModuleList([
+            TransformerLayer.RelativeTransformerLayer(
+                size, head_count, dropout, dist_t)
+            for _ in range(num_layers)
         ])

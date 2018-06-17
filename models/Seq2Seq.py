@@ -46,15 +46,14 @@ class Seq2SeqGARNN(Seq2SeqBase):
         his = self.history
         # encoding
         input = self.embedding(data[:, :his], time[:, :his], weekday[:, :his])
-        encoder_output, hidden, attn_i, attn_h = self.encoder(input)
-        attn_i, attn_h = attn_i[:, -1], attn_h[:, -1]
+        encoder_output, hidden, _, _ = self.encoder(input)
         # decoding
         output = [self.decoder(encoder_output[:, [-1]])]
         for idx in range(self.horizon - 1):
             idx += his
             data_i = data[:, [idx]] if random.random() < teach else output[-1].detach()
             input = self.embedding(data_i, time[:, [idx]], weekday[:, [idx]])
-            output_i, hidden, _, _ = self.encoder(input, hidden)
+            output_i, hidden, attn_i, attn_h = self.encoder(input, hidden)
             output.append(self.decoder(output_i))
         output = torch.cat(output, 1).squeeze(-1)
         return output, attn_i, attn_h
@@ -65,15 +64,14 @@ class Seq2SeqTransformer(Seq2SeqBase):
         his = self.history
         # encoding
         input = self.embedding(data[:, :his], time[:, :his], weekday[:, :his])
-        encoder_output, bank, attn = self.encoder(input)
-        attn = attn[:, -1]
+        encoder_output, bank, _ = self.encoder(input)
         # decoding
         output = [self.decoder(encoder_output[:, [-1]])]
         for idx in range(self.horizon - 1):
             idx += his
             input = data[:, [idx]] if random.random() < teach else output[-1].detach()
             input = self.embedding(input, time[:, [idx]], weekday[:, [idx]])
-            output_i, bank, _ = self.encoder(input, bank)
+            output_i, bank, attn = self.encoder(input, bank)
             output.append(self.decoder(output_i))
         output = torch.cat(output, 1)
         return output, attn
@@ -85,15 +83,14 @@ class Seq2SeqSTTransformer(Seq2SeqBase):
         his = self.history
         # encoding
         input = self.embedding(data[:, :his], time[:, :his], weekday[:, :his])
-        encoder_output, bank, attn_s, attn_t = self.encoder(input)
-        attn_s, attn_t = attn_s[:, -1], attn_t[:, -1]
+        encoder_output, bank, _, _ = self.encoder(input)
         # decoding
         output = [self.decoder(encoder_output[:, [-1]])]
         for idx in range(self.horizon - 1):
             idx += his
             input = data[:, [idx]] if random.random() < teach else output[-1].detach()
             input = self.embedding(input, time[:, [idx]], weekday[:, [idx]])
-            output_i, bank, _, _ = self.encoder(input, bank)
+            output_i, bank, attn_s, attn_t = self.encoder(input, bank)
             output.append(self.decoder(output_i))
         output = torch.cat(output, 1).squeeze(-1)
         return output, attn_s, attn_t

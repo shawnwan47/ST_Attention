@@ -174,7 +174,7 @@ def build_STTransformer(args):
             num_layers=args.num_layers,
             head_count=args.head_count,
             dropout=args.dropout,
-            spatial_dist=dist.cuda() if args.cuda else dist
+            dist_s=dist.cuda() if args.cuda else dist
         )
     decoder = build_linear(args)
     seq2seq = Seq2Seq.Seq2SeqSTTransformer(
