@@ -118,6 +118,12 @@ def update_model(args):
 
     # path
     name = args.model
+    if 'RNN' in args.model:
+        name += args.rnn_type
+    if args.model in ['GARNN', 'Transformer']:
+        name += 'Head' + str(args.head_count)
+    name += 'Hid' + str(args.hidden_size)
+    name += 'Lay' + str(args.num_layers)
     name += args.freq
     if args.use_node:
         name += 'Node'
@@ -125,12 +131,4 @@ def update_model(args):
         name += 'Time'
     if args.use_day:
         name += 'Day'
-    name += 'Hid' + str(args.hidden_size)
-    name += 'Lay' + str(args.num_layers)
-    if 'RNN' in args.model:
-        name += 'RNN' + args.rnn_type
-    if args.model in ['GARNN', 'Transformer']:
-        name += 'Head' + str(args.head_count)
-    if args.model == 'DCRNN':
-        name += 'Hop' + str(args.hops)
     args.path = MODEL_PATH + args.dataset + '/' + name

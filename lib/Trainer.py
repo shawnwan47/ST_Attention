@@ -46,6 +46,7 @@ class Trainer:
                 output, info = output[0], output[1:]
                 if verbose:
                     infos.append([pt_utils.torch_to_numpy(i) for i in info])
+                del info
             output = self.rescaler(output)
 
             metrics += self.metrics(output, target)
@@ -56,7 +57,7 @@ class Trainer:
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
-            del output, info
+            del output
         if infos:
             infos = [np.concatenate(info) for info in zip(*infos)]
         return metrics, infos

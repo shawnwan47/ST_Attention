@@ -73,11 +73,13 @@ else:
     optimizer = optim.Adam(model.parameters(), weight_decay=args.weight_decay)
 
 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epoches)
-scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-    optimizer=optimizer,
-    patience=5,
-    min_lr=1e-6
-)
+# scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+#     optimizer=optimizer,
+#     factor=0.1,
+#     patience=5,
+#     min_lr=1e-6,
+#     verbose=True
+# )
 # TRAINER
 trainer = Trainer.Trainer(model, rescaler, criterion, loss,
                           optimizer, scheduler, args.epoches, args.cuda)
