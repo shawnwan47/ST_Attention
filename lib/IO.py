@@ -1,7 +1,6 @@
 import datetime
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
 
 from constants import EPS
 from lib.utils import aeq
@@ -38,7 +37,7 @@ def split_data(data, train_ratio=0.7, test_ratio=0.2):
 
 
 class TimeSeries:
-    def __init__(self, df, history=12, horizon=12):
+    def __init__(self, df, history, horizon):
         self.history = history
         self.horizon = horizon
         df_train, df_valid, df_test = split_data(df)
@@ -82,7 +81,7 @@ class TimeSeries:
 
 
 class SparseTimeSeries:
-    def __init__(self, ts, history=12, horizon=12):
+    def __init__(self, ts, history, horizon):
         self.history = history
         self.horizon = horizon
         ss_train, ss_valid, ss_test = split_data(ts)

@@ -1,4 +1,5 @@
 import math
+from collections import OrderedDict
 from constants import MODEL_PATH
 
 def add_data(args):
@@ -12,8 +13,8 @@ def add_data(args):
     args.add_argument('-history', type=int, default=60)
     args.add_argument('-horizon', type=int, default=60)
 
-    args.add_argument('-metrics', nargs='+', default=['mae', 'rmse'])
-    args.add_argument('-horizons', nargs='+', default=[15, 30, 60])
+    args.add_argument('-metrics', nargs='+', default=['mae'])
+    args.add_argument('-horizons', nargs='+', default=[5, 15, 30, 60])
 
     args.add_argument('-num_days', type=int, default=7)
     args.add_argument('-num_times', type=int)
@@ -93,7 +94,8 @@ def update_data(args):
 
     args.history //= args.freq
     args.horizon //= args.freq
-    args.horizons = [t // args.freq - 1 for t in args.horizons]
+    horizons = [t // args.freq - 1 for t in args.horizons]
+    args.horizons = list(OrderedDict.fromkeys(horizons))
     args.freq = str(args.freq) + 'min'
 
 
@@ -124,11 +126,11 @@ def update_model(args):
         name += 'Head' + str(args.head_count)
     name += 'Hid' + str(args.hidden_size)
     name += 'Lay' + str(args.num_layers)
-    name += args.freq
     if args.use_node:
         name += 'Node'
     if args.use_time:
         name += 'Time'
     if args.use_day:
         name += 'Day'
+    name += args.freq
     args.path = MODEL_PATH + args.dataset + '/' + name

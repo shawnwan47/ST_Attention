@@ -1,6 +1,6 @@
 import numpy as np
 from constants import EPS
-from lib.Loss import MetricDict
+from lib import Loss
 from lib import pt_utils
 
 
@@ -14,12 +14,12 @@ class Rescaler:
 
 
 class Trainer:
-    def __init__(self, model, rescaler, criterion, metrics,
+    def __init__(self, model, rescaler, criterion, loss,
                  optimizer, scheduler, epoches, cuda):
         self.model = model
         self.rescaler = rescaler
         self.criterion = criterion
-        self.metrics = metrics
+        self.loss = loss
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.cuda = cuda
@@ -32,16 +32,19 @@ class Trainer:
             self.model.train()
         else:
             self.model.eval()
-        metrics = MetricDict()
+        metrics = Loss.MetricDict()
         infos = []
-        for data, time, weekday, target in dataloader:
+        for data, time, day, target in dataloader:
             if self.cuda:
                 data = data.cuda()
                 time = time.cuda()
-                weekday = weekday.cuda()
+                day = day.cuda()
                 target = target.cuda()
             teach = self.teach if train else 0
-            output = self.model(data, time, weekday, teach)
+            if teach > 0.5:
+                output = self.model.super_forward(data, time, day)
+            else:
+                output = self.model(data, time, day, teach)
             if isinstance(output, tuple):
                 output, info = output[0], output[1:]
                 if verbose:
@@ -49,7 +52,7 @@ class Trainer:
                 del info
             output = self.rescaler(output)
 
-            metrics += self.metrics(output, target)
+            metrics = metrics + self.loss(output, target)
             # train
             if train:
                 output, target = pt_utils.mask_target(output, target)

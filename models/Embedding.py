@@ -37,6 +37,7 @@ class TempEmbedding(nn.Module):
         self.use_time = use_time
         self.use_day = use_day
         self.linear_data = nn.Linear(num_nodes, size)
+        self.dropout = nn.Dropout(dropout)
         if use_time:
             self.emb_time = EmbeddingIn(num_times, time_dim, size, dropout)
         if use_day:
@@ -44,11 +45,11 @@ class TempEmbedding(nn.Module):
         self.emb_out = EmbeddingOut(size, dropout)
 
     def forward(self, data, time, weekday):
-        output = self.linear_data(data)
+        output = self.dropout(self.linear_data(data))
         if self.use_time:
-            output += self.emb_time(time)
+            output += self.dropout(self.emb_time(time))
         if self.use_day:
-            output += self.emb_day(weekday)
+            output += self.dropout(self.emb_day(weekday))
         return self.emb_out(output)
 
 

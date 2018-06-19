@@ -6,6 +6,24 @@ from constants import EPS
 from lib.pt_utils import mask_target
 
 
+
+def get_loss(output, target, metric):
+    if metric == 'mae':
+        loss = F.l1_loss(output, target)
+    elif metric == 'rmse':
+        loss = F.mse_loss(output, target).sqrt()
+    elif metric == 'mape':
+        loss = ((output - target).abs() / (target + EPS)).mean() * 100
+    elif metric == 'wape':
+        loss = F.l1_loss(output, target) / (target.mean() + EPS) * 100
+
+    if metric == 'wape':
+        loss = Metric(loss.item(), target.mean() + EPS)
+    else:
+        loss = Metric(loss.item(), target.numel())
+    return loss
+
+
 class Metric:
     def __init__(self, value, norm):
         self.value = value
@@ -22,25 +40,15 @@ class Metric:
 
 class MetricDict(dict):
     def __add__(self, other):
-        if not self:
-            return other
-        elif not other:
-            return self
+        if not (self and other):
+            return self or other
         else:
-            assert(len(self) == len(other))
+            assert(self.keys() == other.keys())
             return MetricDict({key: self[key] + other[key]
                                for key in self.keys()})
 
     def __iadd__(self, other):
-        if not self:
-            return other
-        elif not other:
-            return self
-        else:
-            assert(len(self) == len(other))
-            for key in self.keys():
-                self[key] += other[key]
-        return self
+        raise NotImplementedError
 
     def __repr__(self):
         return ' '.join([f'{key}:{val}' for key, val in self.items()])
@@ -54,7 +62,7 @@ class Loss:
     def __call__(self, output, target):
         ret = MetricDict({horizon: self._eval(output[:, horizon], target[:, horizon])
                           for horizon in self.horizons})
-        ret['average'] = self._eval(output, target)
+        ret['avg'] = self._eval(output, target)
         return ret
 
     def _eval(self, output, target):
@@ -62,23 +70,5 @@ class Loss:
         if not target.numel():
             return MetricDict()
         else:
-            metrics = MetricDict({metric: self._loss(output, target, metric)
-                                  for metric in self.metrics})
-            return metrics
-
-    @staticmethod
-    def _loss(output, target, loss):
-        if loss == 'mae':
-            ret = F.l1_loss(output, target)
-        elif loss == 'rmse':
-            ret = F.mse_loss(output, target).sqrt()
-        elif loss == 'mape':
-            ret = ((output - target).abs() / (target + EPS)).mean() * 100
-        elif loss == 'wape':
-            ret = F.l1_loss(output, target) / (target.mean() + EPS) * 100
-
-        if loss == 'wape':
-            ret = Metric(ret.item(), target.mean() + EPS)
-        else:
-            ret = Metric(ret.item(), target.numel())
-        return ret
+            return MetricDict({metric: get_loss(output, target, metric)
+                               for metric in self.metrics})
