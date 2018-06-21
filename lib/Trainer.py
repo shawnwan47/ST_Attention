@@ -27,6 +27,37 @@ class Trainer:
         self.teach = 1
         self.teach_annealing = 0.01 ** (1 / epoches)
 
+    def train(self, data, time, day):
+        self.model.train()
+        if self.teach > 0.5:
+            output = self.model.super_forward(data, time, day)
+        else:
+            output = self.model(data, time, day, self.teach)
+        if isinstance(output, tuple):
+            output = output[0]
+        output = self.rescaler(output)
+
+        metric = self.loss(output, target)
+
+        output, target = pt_utils.mask_target(output, target)
+        crit = self.criterion(output, target)
+        self.optimizer.zero_grad()
+        crit.backward()
+        self.optimizer.step()
+        del output
+        return metric
+
+    def eval(self, data, time, day):
+        self.model.eval()
+        output = self.model(data, time, day)
+        info = None
+        if isinstance(output, tuple):
+            output, info = output[0], output[1:]
+            info = [pt_utils.torch_to_numpy(i) for i in info]
+        output = self.rescaler(output)
+        metrics = metrics + self.loss(output, target)
+        return output, info
+
     def eval(self, dataloader, train=False, verbose=False):
         if train:
             self.model.train()

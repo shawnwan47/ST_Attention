@@ -46,6 +46,7 @@ def add_train(args):
     args.add_argument('-retrain', action='store_true')
     args.add_argument('-batch_size', type=int)
     args.add_argument('-epoches', type=int, default=100)
+    args.add_argument('-iterations', type=int, default=100)
 
 
 def add_model(args):
@@ -63,7 +64,7 @@ def add_model(args):
     args.add_argument('-time_dist_dim', type=int, default=16)
     args.add_argument('-node_dist_dim', type=int, default=16)
     # RNN
-    args.add_argument('-rnn_type', default='RNN',
+    args.add_argument('-rnn_type', default='GRU',
                       choices=['RNN', 'GRU', 'LSTM'])
     # Attention
     args.add_argument('-attn_type', default='general',
@@ -94,7 +95,7 @@ def update_data(args):
 
     args.history //= args.freq
     args.horizon //= args.freq
-    horizons = [t // args.freq - 1 for t in args.horizons]
+    horizons = [max(0, t // args.freq - 1) for t in args.horizons]
     args.horizons = list(OrderedDict.fromkeys(horizons))
     args.freq = str(args.freq) + 'min'
 

@@ -62,8 +62,8 @@ class TimeSeries:
             return seq
 
         # data
-        data = df.fillna(method='ffill').fillna(method='bfill')
-        data = np.nan_to_num(self._scale(data.values))
+        # data = df.fillna(method='ffill').fillna(method='bfill')
+        data = np.nan_to_num(self._scale(df.values))
         # time, weekday
         _, time = np.unique(df.index.time, return_inverse=True)
         weekday = df.index.weekday

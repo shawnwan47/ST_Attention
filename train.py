@@ -93,5 +93,5 @@ error = trainer.eval(data_test)
 print(f'{args.path}:\n{error}')
 if args.model in ['GARNN', 'GRARNN']:
     error_case, infos = trainer.eval(data_case, verbose=True)
-    print(f'Case error: error_case')
+    print(f'Case error: {error_case}')
     pickle.dump(infos, open(args.path + '.pkl', 'wb'))
