@@ -22,3 +22,16 @@ class RNN(nn.Module):
 
     def forward(self, input, hidden=None):
         return self.rnn(input, hidden)
+
+
+class RNNDecoder(RNN):
+    def __init__(self, rnn_type, size, out_size, num_layers, dropout=0):
+        super().__init__(rnn_type, size, num_layers, dropout)
+        self.linear_out = nn.Linear(size, out_size)
+        self.layer_norm = nn.LayerNorm(size)
+
+    def forward(self, input, hidden):
+        output, hidden = super().forward(input, hidden)
+        output = self.layer_norm(output)
+        output = self.linear_out(output)
+        return output, hidden

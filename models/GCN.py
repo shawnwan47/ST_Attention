@@ -14,7 +14,7 @@ class DiffusionConvolution(nn.Module):
         self.filters += self._gen_adj_hops(adj.t(), hops)
         self.linears = nn.ModuleList([
             nn.Linear(input_size, output_size, bias=False)
-            for _ in range(self.filters)
+            for _ in self.filters
         ])
 
     @staticmethod

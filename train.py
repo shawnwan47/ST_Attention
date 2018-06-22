@@ -80,6 +80,7 @@ scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epoches)
 #     min_lr=1e-6,
 #     verbose=True
 # )
+
 # TRAINER
 trainer = Trainer.Trainer(
     model=model,

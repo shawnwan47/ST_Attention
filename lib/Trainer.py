@@ -26,13 +26,16 @@ class Trainer:
         self.scheduler = scheduler
         self.cuda = cuda
         self.epoches = epoches
+        self.iterations = iterations
         self.teach = 1
         self.teach_annealing = 0.01 ** (1 / epoches)
 
     def train(self, dataloader):
         metrics = Loss.MetricDict()
-        for iter in range(self.iterations):
-            data, time, day, target = next(dataloader)
+        for iter, data_batch in enumerate(dataloader):
+            if iter == self.iterations:
+                break
+            data, time, day, target = data_batch
             if self.cuda:
                 data = data.cuda()
                 time = time.cuda()
@@ -42,7 +45,10 @@ class Trainer:
             if isinstance(output, tuple):
                 output = output[0]
             output = self.rescaler(output)
+
             metric = self.loss(output, target)
+            metrics = metrics + metric
+
             output, target = pt_utils.mask_target(output, target)
             crit = self.criterion(output, target)
             self.optimizer.zero_grad()
@@ -50,7 +56,6 @@ class Trainer:
             clip_grad_norm_(self.model.parameters(), 1.)
             self.optimizer.step()
             del output
-            metrics = metrics + metric
         return metrics
 
     def eval(self, dataloader):

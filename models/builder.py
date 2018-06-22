@@ -19,7 +19,7 @@ def build_model(args):
     if args.model in ['RNN', 'RNNAttn']:
         model = build_RNN(args)
     elif args.model in ['DCRNN']:
-        model = build_GCRNN(args)
+        model = build_DCRNN(args)
     elif args.model in ['GARNN', 'GRARNN']:
         model = build_GARNN(args)
     elif args.model in ['Transformer', 'RelativeTransformer']:
@@ -48,10 +48,6 @@ def build_st_embedding(args):
         size=args.hidden_size, dropout=args.dropout)
 
 
-def build_linear(args):
-    return nn.Linear(args.hidden_size, args.output_size)
-
-
 def build_RNN(args):
     embedding = build_temp_embedding(args)
     encoder = RNN.RNN(
@@ -61,7 +57,13 @@ def build_RNN(args):
         dropout=args.dropout
     )
 
-    decoder = build_linear(args)
+    decoder = RNN.RNNDecoder(
+        rnn_type=args.rnn_type,
+        size=args.hidden_size,
+        out_size = args.output_size,
+        num_layers=args.num_layers,
+        dropout=args.dropout
+    )
 
     seq2seq = Seq2Seq.Seq2SeqRNN(
         embedding=embedding,
@@ -72,8 +74,9 @@ def build_RNN(args):
     return seq2seq
 
 
-def build_GCRNN(args):
+def build_DCRNN(args):
     embedding = build_st_embedding(args)
+
     adj = pt_utils.load_adj(args.dataset)
     gc_func = GCN.DiffusionConvolution
     gc_kwargs = {
@@ -91,7 +94,16 @@ def build_GCRNN(args):
         gc_kwargs=gc_kwargs
     )
 
-    decoder = build_linear(args)
+    decoder = GCRNN.GCRNNDecoder(
+        rnn_type=args.rnn_type,
+        num_nodes=args.num_nodes,
+        size=args.hidden_size,
+        out_size=args.output_size,
+        num_layers=args.num_layers,
+        dropout=args.dropout,
+        gc_func=gc_func,
+        gc_kwargs=gc_kwargs
+    )
 
     seq2seq = Seq2Seq.Seq2SeqDCRNN(
         embedding=embedding,
@@ -129,7 +141,16 @@ def build_GARNN(args):
         gc_kwargs=gc_kwargs
     )
 
-    decoder = build_linear(args)
+    decoder = GCRNN.GARNNDecoder(
+        rnn_type=args.rnn_type,
+        num_nodes=args.num_nodes,
+        size=args.hidden_size,
+        out_size=args.output_size,
+        num_layers=args.num_layers,
+        dropout=args.dropout,
+        gc_func=gc_func,
+        gc_kwargs=gc_kwargs
+    )
 
     seq2seq = Seq2Seq.Seq2SeqGARNN(
         embedding=embedding,
@@ -144,6 +165,12 @@ def build_Transformer(args):
     embedding = build_temp_embedding(args)
     encoder = getattr(Transformer, args.model)(
         size=args.hidden_size,
+        num_layers=args.num_layers,
+        head_count=args.head_count,
+        dropout=args.dropout)
+    decoder = getattr(Transformer, args.model)(
+        size=args.hidden_size,
+        out_size=args.output_size,
         num_layers=args.num_layers,
         head_count=args.head_count,
         dropout=args.dropout)

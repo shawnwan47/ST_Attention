@@ -7,7 +7,7 @@ class EmbeddingIn(nn.Module):
         super().__init__()
         self.chain = nn.Sequential(
             nn.Embedding(num_embeddings, embedding_dim),
-            nn.Dropout(dropout),
+            nn.Dropout(dropout, inplace=True),
             nn.Linear(embedding_dim, size, bias=False)
         )
 
@@ -34,10 +34,11 @@ class TempEmbedding(nn.Module):
                  num_days, day_dim,
                  num_nodes, size, dropout):
         super().__init__()
+        self.size = size
         self.use_time = use_time
         self.use_day = use_day
         self.linear_data = nn.Linear(num_nodes, size)
-        self.dropout = nn.Dropout(dropout)
+        self.dropout = nn.Dropout(dropout, inplace=True)
         if use_time:
             self.emb_time = EmbeddingIn(num_times, time_dim, size, dropout)
         if use_day:
@@ -60,7 +61,7 @@ class STEmbedding(nn.Module):
                  num_days, day_dim,
                  size, dropout):
         super().__init__()
-        self.num_nodes = num_nodes
+        self.size = size
         self.use_node = use_node
         self.use_time = use_time
         self.use_day = use_day
@@ -76,7 +77,6 @@ class STEmbedding(nn.Module):
 
     def forward(self, data, time, weekday):
         batch, seq, num_nodes, _ = data.size()
-        assert num_nodes == self.num_nodes
         shape = (batch, seq, num_nodes, -1)
         output = self.linear_data(data)
         if self.use_node:
