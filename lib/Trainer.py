@@ -1,4 +1,6 @@
 import numpy as np
+from torch.nn.utils import clip_grad_norm_
+
 from constants import EPS
 from lib import Loss
 from lib import pt_utils
@@ -15,7 +17,7 @@ class Rescaler:
 
 class Trainer:
     def __init__(self, model, rescaler, criterion, loss,
-                 optimizer, scheduler, epoches, cuda):
+                 optimizer, scheduler, epoches, iterations, cuda):
         self.model = model
         self.rescaler = rescaler
         self.criterion = criterion
@@ -27,42 +29,31 @@ class Trainer:
         self.teach = 1
         self.teach_annealing = 0.01 ** (1 / epoches)
 
-    def train(self, data, time, day):
-        self.model.train()
-        if self.teach > 0.5:
-            output = self.model.super_forward(data, time, day)
-        else:
+    def train(self, dataloader):
+        metrics = Loss.MetricDict()
+        for iter in range(self.iterations):
+            data, time, day, target = next(dataloader)
+            if self.cuda:
+                data = data.cuda()
+                time = time.cuda()
+                day = day.cuda()
+                target = target.cuda()
             output = self.model(data, time, day, self.teach)
-        if isinstance(output, tuple):
-            output = output[0]
-        output = self.rescaler(output)
+            if isinstance(output, tuple):
+                output = output[0]
+            output = self.rescaler(output)
+            metric = self.loss(output, target)
+            output, target = pt_utils.mask_target(output, target)
+            crit = self.criterion(output, target)
+            self.optimizer.zero_grad()
+            crit.backward()
+            clip_grad_norm_(self.model.parameters(), 1.)
+            self.optimizer.step()
+            del output
+            metrics = metrics + metric
+        return metrics
 
-        metric = self.loss(output, target)
-
-        output, target = pt_utils.mask_target(output, target)
-        crit = self.criterion(output, target)
-        self.optimizer.zero_grad()
-        crit.backward()
-        self.optimizer.step()
-        del output
-        return metric
-
-    def eval(self, data, time, day):
-        self.model.eval()
-        output = self.model(data, time, day)
-        info = None
-        if isinstance(output, tuple):
-            output, info = output[0], output[1:]
-            info = [pt_utils.torch_to_numpy(i) for i in info]
-        output = self.rescaler(output)
-        metrics = metrics + self.loss(output, target)
-        return output, info
-
-    def eval(self, dataloader, train=False, verbose=False):
-        if train:
-            self.model.train()
-        else:
-            self.model.eval()
+    def eval(self, dataloader):
         metrics = Loss.MetricDict()
         infos = []
         for data, time, day, target in dataloader:
@@ -71,26 +62,13 @@ class Trainer:
                 time = time.cuda()
                 day = day.cuda()
                 target = target.cuda()
-            teach = self.teach if train else 0
-            if teach > 0.5:
-                output = self.model.super_forward(data, time, day)
-            else:
-                output = self.model(data, time, day, teach)
+            output = self.model(data, time, day)
             if isinstance(output, tuple):
                 output, info = output[0], output[1:]
-                if verbose:
-                    infos.append([pt_utils.torch_to_numpy(i) for i in info])
+                infos.append([pt_utils.torch_to_numpy(i) for i in info])
                 del info
             output = self.rescaler(output)
-
             metrics = metrics + self.loss(output, target)
-            # train
-            if train:
-                output, target = pt_utils.mask_target(output, target)
-                loss = self.criterion(output, target)
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
             del output
         if infos:
             infos = [np.concatenate(info) for info in zip(*infos)]
@@ -98,7 +76,7 @@ class Trainer:
 
     def run(self, data_train, data_valid, data_test):
         for epoch in range(self.epoches):
-            error_train, _ = self.eval(data_train, train=True)
+            error_train = self.train(data_train)
             error_valid, _ = self.eval(data_valid)
             error_test, _ = self.eval(data_test)
             print(f'Epoch: {epoch}',

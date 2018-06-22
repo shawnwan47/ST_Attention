@@ -81,8 +81,17 @@ scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epoches)
 #     verbose=True
 # )
 # TRAINER
-trainer = Trainer.Trainer(model, rescaler, criterion, loss,
-                          optimizer, scheduler, args.epoches, args.cuda)
+trainer = Trainer.Trainer(
+    model=model,
+    rescaler=rescaler,
+    criterion=criterion,
+    loss=loss,
+    optimizer=optimizer,
+    scheduler=scheduler,
+    epoches=args.epoches,
+    iterations=args.iterations,
+    cuda=args.cuda
+)
 
 
 if not args.test:

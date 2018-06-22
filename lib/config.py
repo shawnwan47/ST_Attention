@@ -34,7 +34,7 @@ def add_train(args):
     args.add_argument('-gpuid', type=int, default=3)
     args.add_argument('-seed', type=int, default=47)
     # optimization
-    args.add_argument('-criterion', default='L1Loss',
+    args.add_argument('-criterion', default='SmoothL1Loss',
                       choices=['L1Loss', 'MSELoss', 'SmoothL1Loss'])
     args.add_argument('-optim', default='Adam', choices=['SGD', 'Adam'])
     args.add_argument('-lr', type=float, default=0.001)

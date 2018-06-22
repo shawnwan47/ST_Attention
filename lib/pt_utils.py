@@ -30,7 +30,10 @@ def load_dataset(dataset, freq, history, horizon, batch_size):
     )
 
     data_loaders = (
-        DataLoader(dataset=dataset, batch_size=batch_size, shuffle=i==0)
+        DataLoader(
+            dataset=dataset,
+            batch_size=batch_size * ()(i > 0) * 4 or 1),
+            shuffle=i==0)
         for i, dataset in enumerate(datasets)
     )
 
