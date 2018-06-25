@@ -87,3 +87,20 @@ class STEmbedding(nn.Module):
             output += self.emb_day(weekday).unsqueeze(-2)
         output = self.emb_out(output)
         return output
+
+
+def build_temp_embedding(args):
+    return TempEmbedding(
+        use_time=args.use_time, use_day=args.use_day,
+        num_times=args.num_times, time_dim=args.time_dim,
+        num_days=args.num_days, day_dim=args.day_dim,
+        num_nodes=args.num_nodes, size=args.hidden_size, dropout=args.dropout)
+
+
+def build_st_embedding(args):
+    return STEmbedding(
+        use_node=args.use_node, use_time=args.use_time, use_day=args.use_day,
+        num_nodes=args.num_nodes, node_dim=args.node_dim,
+        num_times=args.num_times, time_dim=args.time_dim,
+        num_days=args.num_days, day_dim=args.day_dim,
+        size=args.hidden_size, dropout=args.dropout)

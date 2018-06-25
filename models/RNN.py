@@ -35,3 +35,11 @@ class RNNDecoder(RNN):
         output = self.layer_norm(output)
         output = self.linear_out(output)
         return output, hidden
+
+def build_RNN(args):
+    return RNN(
+        rnn_type=args.rnn_type,
+        size=args.hidden_size,
+        num_layers=args.num_layers,
+        dropout=args.dropout,
+    )

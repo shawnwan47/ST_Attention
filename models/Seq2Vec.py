@@ -14,20 +14,16 @@ class Seq2VecBase(nn.Module):
 
 class Seq2VecRNN(Seq2VecBase):
     def forward(self, data, time, day):
-        batch = data.size(0)
         input = self.embedding(data, time, day)
         hidden, _ = self.encoder(input)
         output = self.decoder(hidden[:, -1])
-        output = output.view(batch, self.horizon, -1)
         return output
 
 class Seq2VecRNNAttn(Seq2VecBase):
     def forward(self, data, time, day):
-        batch = data.size(0)
         input = self.embedding(data, time, day)
         hidden, _ = self.encoder(input)
         output, attention = self.decoder(hidden[:, [-1]], hidden)
-        output = output.view(batch, self.horizon, -1)
         return output, attention
 
 
@@ -36,8 +32,6 @@ class Seq2VecDCRNN(Seq2VecBase):
         input = self.embedding(data.unsqueeze(-1), time, day)
         hidden, _ = self.encoder(input)
         output = self.decoder(hidden[:, -1])
-        assert output.dim() == 3
-        output = output.transpose(1, 2)
         return output
 
 
@@ -46,7 +40,6 @@ class Seq2VecGARNN(Seq2VecBase):
         input = self.embedding(data.unsqueeze(-1), time, day)
         hidden, _, attn_i, attn_h = self.encoder(input)
         output = self.decoder(hidden[:, -1])
-        output = output.transpose(1, 2)
         return output, attn_i[:, -1], attn_h[:, -1]
 
 
@@ -54,7 +47,7 @@ class Seq2VecTransformer(Seq2VecBase):
     def forward(self, data, time, day):
         input = self.embedding(data.unsqueeze(-1), time, day)
         hidden, attention = self.encoder(input)
-        output = self.decoder(hidden[:, -1]).transpose(1, 2)
+        output = self.decoder(hidden[:, -1])
         return output, attention[:, -1]
 
 
@@ -62,5 +55,14 @@ def Seq2VecSTTransformer(Seq2VecBase):
     def forward(self, data, time, day):
         input = self.embedding(data.unsqueeze(-1), time, day)
         hidde, attn_s, attn_t = self.encoder(input)
-        output = self.decoder(hidden[:, -1]).transpose(1, 2)
+        output = self.decoder(hidden[:, -1])
         return output, attn_s[:, -1], attn_t[:, -1]
+
+
+def build_Seq2Vec(args):
+    if args.model == 'RNN':
+        embedding = Embedding.build_temp_embedding(args)
+        encoder = RNN.build_RNN(args)
+        decoder = Decoder.build_temp_vec(args)
+        seq2vec = Seq2VecRNN
+    elif args.model == 'DCRNN':
