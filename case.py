@@ -9,15 +9,15 @@ import torch.optim as optim
 from lib import config
 from lib import pt_utils
 from lib import Loss
-from lib import Trainer
+from lib import Interpreter
 
 from models import builder
 
 
 args = argparse.ArgumentParser()
 config.add_data(args)
-config.add_device(args)
 config.add_model(args)
+config.add_device(args)
 config.add_train(args)
 args = args.parse_args()
 config.update_data(args)
@@ -41,44 +41,34 @@ data_loaders, mean, std = pt_utils.load_dataset(
     horizon=args.horizon,
     batch_size=args.batch_size
 )
-data_train, data_valid, data_test, _ = data_loaders
+_, _, _, data_case = data_loaders
+
 if args.cuda:
     mean, std = mean.cuda(), std.cuda()
-rescaler = pt_utils.Rescaler(mean, std)
-
 
 # MODEL
 model = builder.build_model(args)
-if args.test:
-    model.load_state_dict(torch.load(args.path + '.pt'))
+model.load_state_dict(torch.load(args.path + '.pt'))
 if args.cuda:
     model.cuda()
 print(f'{args.path} parameters: {pt_utils.count_parameters(model)}')
 
-# criterion, loss
-criterion = getattr(torch.nn, args.criterion)()
+# rescaler, loss
+rescaler = pt_utils.Rescaler(mean, std)
 loss = Loss.Loss(metrics=args.metrics, horizons=args.horizons)
 
-# optimizer, scheduler
-optimizer = optim.Adam(model.parameters(), weight_decay=args.weight_decay)
-scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epoches)
-
-# TRAINER
-trainer = Trainer.Trainer(
+# interpreter
+interpreter = Interpreter.Interpreter(
     model=model,
     rescaler=rescaler,
-    criterion=criterion,
     loss=loss,
-    optimizer=optimizer,
-    scheduler=scheduler,
-    epoches=args.epoches,
     cuda=args.cuda
 )
 
-
-if not args.test:
-    trainer.run(data_train, data_valid, data_test)
-    torch.save(trainer.model.state_dict(), args.path + '.pt')
-
-_, error_test = trainer.run_epoch(data_test)
-print(f'{args.path}:\n{error_test}')
+targets, outputs, infos = interpreter.eval(data_case)
+for i, (target, output) in enumerate(zip(targets, outputs)):
+    target.dump(args.path + '_target_' + str(i))
+    output.dump(args.path + '_output_' + str(i))
+for i, info_i in enumerate(infos):
+    for j, info_j in enumerate(info_i):
+        info_j.dump(args.path + '_info_' + str(i) + str(j))

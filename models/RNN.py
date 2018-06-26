@@ -43,3 +43,13 @@ def build_RNN(args):
         num_layers=args.num_layers,
         dropout=args.dropout,
     )
+
+
+def build_RNNDecoder(args):
+    return RNN(
+        rnn_type=args.rnn_type,
+        size=args.hidden_size,
+        out_size=args.num_nodes,
+        num_layers=args.num_layers,
+        dropout=args.dropout,
+    )

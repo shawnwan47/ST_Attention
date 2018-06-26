@@ -45,10 +45,13 @@ class TimeSeries:
         data_train = self._gen_seq2seq_io(df_train)
         data_valid = self._gen_seq2seq_io(df_valid)
         data_test = self._gen_seq2seq_io(df_test)
-        data_case = self._gen_data_sample(df)
+        data_case = self._gen_data_case(df)
         self.data = (data_train, data_valid, data_test, data_case)
 
-    def _gen_data_sample(self, df):
+    def _scale(self, df):
+        return (df - self.mean) / (self.std + EPS)
+
+    def _gen_data_case(self, df):
         df_week = df[df.index.weekofyear == (df.index.weekofyear[0] + 1)]
         df_days = [df_week[df_week.index.weekday == day] for day in range(7)]
         io_cases = [self._gen_seq2seq_io(df_day) for df_day in df_days]
@@ -75,9 +78,6 @@ class TimeSeries:
         targets = _gen_seq(df.values[self.history:], self.horizon)
         aeq(len(data), len(time), len(weekday), len(targets))
         return data, time, weekday, targets
-
-    def _scale(self, df):
-        return (df - self.mean) / (self.std + EPS)
 
 
 class SparseTimeSeries:

@@ -28,11 +28,13 @@ def add_data(args):
     args.add_argument('-od', action='store_true')
 
 
-def add_train(args):
-    # gpu
+def add_device(args):
     args.add_argument('-cuda', action='store_true')
     args.add_argument('-gpuid', type=int, default=3)
     args.add_argument('-seed', type=int, default=47)
+
+
+def add_train(args):
     # optimization
     args.add_argument('-criterion', default='SmoothL1Loss',
                       choices=['L1Loss', 'MSELoss', 'SmoothL1Loss'])
@@ -43,10 +45,8 @@ def add_train(args):
 
     # run
     args.add_argument('-test', action='store_true')
-    args.add_argument('-retrain', action='store_true')
     args.add_argument('-batch_size', type=int)
     args.add_argument('-epoches', type=int, default=100)
-    args.add_argument('-iterations', type=int, default=500)
 
 
 def add_model(args):

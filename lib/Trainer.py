@@ -1,89 +1,63 @@
+import torch
 import numpy as np
 from torch.nn.utils import clip_grad_norm_
 
-from constants import EPS
 from lib import Loss
 from lib import pt_utils
 
 
-class Rescaler:
-    def __init__(self, mean, std):
-        self.mean = mean
-        self.std = std
-
-    def __call__(self, input):
-        return (input * (self.std + EPS)) + self.mean
-
-
 class Trainer:
     def __init__(self, model, rescaler, criterion, loss,
-                 optimizer, scheduler, epoches, iterations, cuda):
+                 optimizer, scheduler, epoches, cuda):
         self.model = model
         self.rescaler = rescaler
         self.criterion = criterion
         self.loss = loss
         self.optimizer = optimizer
         self.scheduler = scheduler
-        self.cuda = cuda
         self.epoches = epoches
-        self.iterations = iterations
         self.teach = 1
         self.teach_annealing = 0.01 ** (1 / epoches)
+        if cuda:
+            self.float_type = torch.cuda.FloatTensor
+            self.long_type = torch.cuda.LongTensor
+        else:
+            self.float_type = torch.FloatTensor
+            self.long_type = torch.LongTensor
 
-    def train(self, dataloader):
-        metrics = Loss.MetricDict()
-        for iter, data_batch in enumerate(dataloader):
-            if iter == self.iterations:
-                break
-            data, time, day, target = data_batch
-            if self.cuda:
-                data = data.cuda()
-                time = time.cuda()
-                day = day.cuda()
-                target = target.cuda()
-            output = self.model(data, time, day, self.teach)
+    def run_epoch(self, dataloader, train=False):
+        if train:
+            self.model.train()
+        else:
+            self.model.eval()
+        error = Loss.MetricDict()
+        for data, time, day, target in dataloader:
+            data = data.type(self.float_type)
+            time = time.type(self.long_type)
+            day = day.type(self.long_type)
+            target = target.type(self.float_type)
+
+            output = self.model(data, time, day, self.teach if train else 0)
             if isinstance(output, tuple):
                 output = output[0]
             output = self.rescaler(output)
 
-            metric = self.loss(output, target)
-            metrics = metrics + metric
-
+            error = error + self.loss(output, target)
             output, target = pt_utils.mask_target(output, target)
             crit = self.criterion(output, target)
-            self.optimizer.zero_grad()
-            crit.backward()
-            clip_grad_norm_(self.model.parameters(), 1.)
-            self.optimizer.step()
+            if train:
+                self.optimizer.zero_grad()
+                crit.backward()
+                clip_grad_norm_(self.model.parameters(), 1.)
+                self.optimizer.step()
             del output
-        return metrics
-
-    def eval(self, dataloader):
-        metrics = Loss.MetricDict()
-        infos = []
-        for data, time, day, target in dataloader:
-            if self.cuda:
-                data = data.cuda()
-                time = time.cuda()
-                day = day.cuda()
-                target = target.cuda()
-            output = self.model(data, time, day)
-            if isinstance(output, tuple):
-                output, info = output[0], output[1:]
-                infos.append([pt_utils.torch_to_numpy(i) for i in info])
-                del info
-            output = self.rescaler(output)
-            metrics = metrics + self.loss(output, target)
-            del output
-        if infos:
-            infos = [np.concatenate(info) for info in zip(*infos)]
-        return metrics, infos
+        return crit, error
 
     def run(self, data_train, data_valid, data_test):
         for epoch in range(self.epoches):
-            error_train = self.train(data_train)
-            error_valid, _ = self.eval(data_valid)
-            error_test, _ = self.eval(data_test)
+            crit_train, error_train = self.run_epoch(data_train, train=True)
+            crit_valid, error_valid = self.run_epoch(data_valid)
+            crit_test, error_test = self.run_epoch(data_test)
             print(f'Epoch: {epoch}',
                   f'train: {error_train}',
                   f'valid: {error_valid}',

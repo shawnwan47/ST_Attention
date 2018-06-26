@@ -6,6 +6,7 @@ from torch.utils.data import Dataset, TensorDataset, DataLoader
 from lib import Loader
 from lib import IO
 from lib.utils import aeq
+from constants import EPS
 
 
 def _get_loader(dataset):
@@ -124,3 +125,12 @@ class HybridDataset(Dataset):
 
     def __getitem__(self, index):
         return (*self.tensor_dataset[index], *self.list_dataset[index])
+
+
+class Rescaler:
+    def __init__(self, mean, std):
+        self.mean = mean
+        self.std = std
+
+    def __call__(self, input):
+        return (input * (self.std + EPS)) + self.mean
