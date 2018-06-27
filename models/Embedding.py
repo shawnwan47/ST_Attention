@@ -20,8 +20,7 @@ class EmbeddingOut(nn.Module):
         super().__init__()
         self.chain = nn.Sequential(
             nn.LayerNorm(size),
-            nn.ReLU(inplace=True),
-            nn.Dropout(dropout)
+            nn.ReLU(inplace=True)
         )
 
     def forward(self, input):
@@ -38,7 +37,7 @@ class TempEmbedding(nn.Module):
         self.use_time = use_time
         self.use_day = use_day
         self.linear_data = nn.Linear(num_nodes, size)
-        self.dropout = nn.Dropout(dropout, inplace=True)
+        self.dropout = nn.Dropout(dropout)
         if use_time:
             self.emb_time = EmbeddingIn(num_times, time_dim, size, dropout)
         if use_day:

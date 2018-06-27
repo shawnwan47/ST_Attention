@@ -31,39 +31,11 @@ def build_model(args):
     return model
 
 
-def build_temp_embedding(args):
-    return Embedding.TempEmbedding(
-        use_time=args.use_time, use_day=args.use_day,
-        num_times=args.num_times, time_dim=args.time_dim,
-        num_days=args.num_days, day_dim=args.day_dim,
-        num_nodes=args.num_nodes, size=args.hidden_size, dropout=args.dropout)
-
-
-def build_st_embedding(args):
-    return Embedding.STEmbedding(
-        use_node=args.use_node, use_time=args.use_time, use_day=args.use_day,
-        num_nodes=args.num_nodes, node_dim=args.node_dim,
-        num_times=args.num_times, time_dim=args.time_dim,
-        num_days=args.num_days, day_dim=args.day_dim,
-        size=args.hidden_size, dropout=args.dropout)
-
-
 def build_RNN(args):
-    embedding = build_temp_embedding(args)
-    encoder = RNN.RNN(
-        rnn_type=args.rnn_type,
-        size=args.hidden_size,
-        num_layers=args.num_layers,
-        dropout=args.dropout
-    )
+    embedding = Embedding.build_temp_embedding(args)
+    encoder = RNN.build_RNN(args)
+    decoder = RNN.build_RNNDecoder(args)
 
-    decoder = RNN.RNNDecoder(
-        rnn_type=args.rnn_type,
-        size=args.hidden_size,
-        out_size = args.output_size,
-        num_layers=args.num_layers,
-        dropout=args.dropout
-    )
 
     seq2seq = Seq2Seq.Seq2SeqRNN(
         embedding=embedding,
@@ -75,7 +47,7 @@ def build_RNN(args):
 
 
 def build_DCRNN(args):
-    embedding = build_st_embedding(args)
+    embedding = Embedding.build_st_embedding(args)
 
     adj = pt_utils.load_adj(args.dataset)
     gc_func = GCN.DiffusionConvolution
@@ -115,7 +87,7 @@ def build_DCRNN(args):
 
 
 def build_GARNN(args):
-    embedding = build_st_embedding(args)
+    embedding = Embedding.build_st_embedding(args)
     if args.model == 'GARNN':
         gc_func = GAT.GraphAttention
         gc_kwargs = {
@@ -162,7 +134,7 @@ def build_GARNN(args):
 
 
 def build_Transformer(args):
-    embedding = build_temp_embedding(args)
+    embedding = Embedding.build_temp_embedding(args)
     encoder = getattr(Transformer, args.model)(
         size=args.hidden_size,
         num_layers=args.num_layers,
@@ -186,7 +158,7 @@ def build_Transformer(args):
 
 
 def build_STTransformer(args):
-    embedding = build_st_embedding(args)
+    embedding = Embedding.build_st_embedding(args)
     if args.model == 'STTransformer':
         encoder = Transformer.STTransformer(
             size=args.hidden_size,

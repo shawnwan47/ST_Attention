@@ -36,6 +36,7 @@ class RNNDecoder(RNN):
         output = self.linear_out(output)
         return output, hidden
 
+
 def build_RNN(args):
     return RNN(
         rnn_type=args.rnn_type,
@@ -46,7 +47,7 @@ def build_RNN(args):
 
 
 def build_RNNDecoder(args):
-    return RNN(
+    return RNNDecoder(
         rnn_type=args.rnn_type,
         size=args.hidden_size,
         out_size=args.num_nodes,

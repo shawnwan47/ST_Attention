@@ -39,6 +39,19 @@ def build_attention_graph(attention, node):
     return G
 
 
+def dist_to_long(dist, num):
+    shape = dist.shape
+    dist = dist.reshape(-1)
+    dist_median = np.median(dist)
+    dist[dist > dist_median] = dist_median
+    dist = np.ceil(dist / dist_median * (num - 1))
+    assert max(dist) == num - 1
+    dist = dist.reshape(shape)
+    return dist
+
+
+def od_to_long(od, num):
+    pass
 
 
 

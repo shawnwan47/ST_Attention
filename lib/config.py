@@ -47,6 +47,7 @@ def add_train(args):
     args.add_argument('-test', action='store_true')
     args.add_argument('-batch_size', type=int)
     args.add_argument('-epoches', type=int, default=100)
+    args.add_argument('-iterations', type=int, default=300)
 
 
 def add_model(args):
@@ -106,7 +107,7 @@ def update_model(args):
                       'Transformer',
                       'RelativeTransformer']:
         args.output_size = args.num_nodes
-        set_args(args, 'batch_size', 64)
+        set_args(args, 'batch_size', 128)
         set_args(args, 'hidden_size', 256)
     elif args.model in ['DCRNN',
                         'GARNN',
@@ -114,7 +115,7 @@ def update_model(args):
                         'STTransformer',
                         'RelativeSTTransformer']:
         args.output_size = 1
-        set_args(args, 'batch_size', 16)
+        set_args(args, 'batch_size', 30)
         set_args(args, 'hidden_size', 64)
     else:
         raise NameError('Model {model} invalid.'.format(model))

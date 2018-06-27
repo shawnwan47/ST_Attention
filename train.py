@@ -72,13 +72,14 @@ trainer = Trainer.Trainer(
     optimizer=optimizer,
     scheduler=scheduler,
     epoches=args.epoches,
+    iterations=args.iterations,
     cuda=args.cuda
 )
 
 
 if not args.test:
-    trainer.run(data_train, data_valid, data_test)
+    trainer.run(data_train, data_valid)
     torch.save(trainer.model.state_dict(), args.path + '.pt')
 
-_, error_test = trainer.run_epoch(data_test)
+error_test = trainer.run_epoch(data_test)
 print(f'{args.path}:\n{error_test}')

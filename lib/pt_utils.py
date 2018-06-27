@@ -5,6 +5,7 @@ from torch.utils.data import Dataset, TensorDataset, DataLoader
 
 from lib import Loader
 from lib import IO
+from lib import graph
 from lib.utils import aeq
 from constants import EPS
 
@@ -30,10 +31,9 @@ def load_dataset(dataset, freq, history, horizon, batch_size):
         for data_tuple in io.data
     )
 
-    data_loaders = (DataLoader(
-        dataset=dataset,
-        batch_size=batch_size,
-        shuffle=i==0) for i, dataset in enumerate(datasets)
+    data_loaders = (
+        DataLoader(dataset=dataset, batch_size=batch_size, shuffle=i==0)
+        for i, dataset in enumerate(datasets)
     )
 
     return data_loaders, mean, std
@@ -65,15 +65,16 @@ def load_adj(dataset):
     return adj
 
 
-def load_dist(dataset, num_dists):
+def load_dist(dataset, num):
     dist = _get_loader(dataset).load_dist().values
-    shape = dist.shape
-    dist = dist.reshape(-1)
-    dist_median = np.median(dist)
-    dist[dist > dist_median] = dist_median
-    dist = np.ceil(dist / dist_median * (num_dists - 1))
-    assert max(dist) == num_dists - 1
-    return torch.LongTensor(dist.reshape(shape))
+    dist = graph.dist_to_long(dist, num)
+    return torch.LongTensor(dist)
+
+
+def load_od(dataset, num):
+    dist = _get_loader(dataset).load_dist().values
+    dist = graph.dist_to_long(dist, num)
+    return torch.LongTensor(dist)
 
 
 def mask_target(output, target):

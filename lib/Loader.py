@@ -57,7 +57,7 @@ class BJLoader(LoaderBase):
         self._link_raw = self._path / 'link_raw.csv'
         self._link = self._path / 'link.csv'
         if not self._link.exists():
-            self.calc_link()
+            self._calc_link()
         self._hop = self._path / 'hop.csv'
         self._dist = self._path / 'dist.csv'
         self._ts_o = self._path / 'O.csv'
@@ -71,7 +71,7 @@ class BJLoader(LoaderBase):
     def _load_ids(self):
         node = self.load_node()
         node_ids = set(node.index)
-        link_ids = list(np.unique(self.load_link_raw()))
+        link_ids = list(np.unique(self._load_link_raw()))
         ts_ids = [*self._load_ts('O').columns, *self._load_ts('D').columns]
         node_ids = node_ids.intersection(*[link_ids, ts_ids])
         ids = node.loc[node_ids].sort_values(['route', 'station']).index
@@ -83,11 +83,11 @@ class BJLoader(LoaderBase):
         ts.columns = [int(col) for col in ts.columns]
         return ts
 
-    def load_link_raw(self):
+    def _load_link_raw(self):
         return pd.read_csv(self._link_raw, dtype=int)
 
-    def calc_link(self):
-        link = self.load_link_raw()
+    def _calc_link(self):
+        link = self._load_link_raw()
         node = self.load_node()
         pos = node.apply(lambda x: (x['latitude'], x['longitude']), axis=1)
         def dist(i, j):

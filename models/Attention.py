@@ -119,22 +119,17 @@ class MultiRelativeAttention(MultiAttention):
     def __init__(self, size, head_count, dist, dropout=0.2, output_size=None):
         super().__init__(size, head_count, dropout, output_size)
         num_dists = dist.max().item() + 1
-        self.key_dist = nn.Parameter(torch.Tensor(self.head_size, num_dists))
+        self.embedding_dist = nn.Embedding(num_dists, self.head_size)
         dist_index = dist.new_tensor(torch.arange(dist.size(0)))
         dist_index = dist_index.unsqueeze(-1) * num_dists
         self.register_buffer('dist', dist)
         self.register_buffer('dist_index', dist_index)
-        self._reset_key_dist()
-
-    def _reset_key_dist(self):
-        stdv = 1. / math.sqrt(self.key_dist.size(1))
-        self.key_dist.data.uniform_(-stdv, stdv)
 
     def _score(self, key, query):
         len_query, len_key = query.size(-2), key.size(-2)
         score = query.matmul(key.transpose(-1, -2))
         # compute and flatten dist score
-        score_dist = query.matmul(self.key_dist)
+        score_dist = query.matmul(self.embedding_dist.weight.transpose(0, 1))
         score_dist = score_dist.view(*score_dist.size()[:-2], -1)
         # index dist
         dist = self.dist[-len_query:, -len_key:] + self.dist_index[:len_query]
