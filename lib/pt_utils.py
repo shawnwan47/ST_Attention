@@ -77,12 +77,10 @@ def load_adj(dataset):
 def load_adj_long(dataset):
     loader = _get_loader(dataset)
     dist = loader.load_dist().values
-    dist = graph.dist_to_long(dist)
+    dist = graph.digitize_dist(dist)
     if dataset.startswith('BJ'):
         od = loader.load_od().values
-        od, do = graph.od_to_long(od)
-        od = torch.LongTensor(od)
-        do = torch.LongTensor(do)
+        od, do = graph.digitize_od(od)
         od += dist.max() + 1
         do += od.max() + 1
         adj0 = np.hstack((dist, od))
@@ -95,7 +93,6 @@ def load_adj_long(dataset):
     adj = torch.LongTensor(adj)
     mask = torch.ByteTensor(mask.astype(int))
     return adj, mask
-
 
 
 def mask_target(output, target):

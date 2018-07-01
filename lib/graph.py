@@ -4,6 +4,7 @@ import pandas as pd
 import scipy.sparse as sp
 from scipy.sparse import linalg
 import networkx as nx
+import sklearn.preprocessing as preprocessing
 
 
 def build_link_graph(node, link):
@@ -39,18 +40,22 @@ def build_attention_graph(attention, node):
     return G
 
 
-def dist_to_long(dist, num=16):
+def digitize_dist(dist, num=16):
     dist_median = np.median(dist)
     dist[dist > dist_median] = dist_median
-    dist = np.ceil(dist / dist_median * (num - 1))
+    dist = np.ceil(dist / dist_median * (num - 1)).astype(int)
     return dist
 
 
-def od_to_long(od, num=8):
-    do_ = od / od.sum(0)
-    od_ = od.T / od.sum(1)
-    od_ = np.floor(od_.T / max(od_) * (num - 1))
-    do_ = np.floor(do_.T / max(do_) * (num - 1))
+def digitize_od(od, num=8):
+    def model(data):
+        bins = np.linspace(data.min(), data.max(), num + 1)
+        digit = np.digitize(data, bins)
+        return digit
+    do_ = od / (od.sum(0) + 1e-8)
+    od_ = od.T / (od.sum(1) + 1e-8)
+    od_ = model(od_.T)
+    do_ = model(do_.T)
     return od_, do_
 
 
