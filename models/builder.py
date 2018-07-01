@@ -36,7 +36,6 @@ def build_RNN(args):
     encoder = RNN.build_RNN(args)
     decoder = RNN.build_RNNDecoder(args)
 
-
     seq2seq = Seq2Seq.Seq2SeqRNN(
         embedding=embedding,
         encoder=encoder,
@@ -88,19 +87,24 @@ def build_DCRNN(args):
 
 def build_GARNN(args):
     embedding = Embedding.build_st_embedding(args)
+    adj, mask = pt_utils.load_adj_long(args.dataset)
+    if args.cuda:
+        adj = adj.cuda()
+        mask = mask.cuda()
     if args.model == 'GARNN':
         gc_func = GAT.GraphAttention
         gc_kwargs = {
             'head_count': args.head_count,
-            'dropout': args.dropout
+            'dropout': args.dropout,
+            'mask': mask if args.mask else None
         }
     elif args.model == 'GRARNN':
         gc_func = GAT.GraphRelativeAttention
-        dist = pt_utils.load_dist(args.dataset, args.num_dists)
         gc_kwargs = {
             'head_count': args.head_count,
             'dropout': args.dropout,
-            'dist': dist.cuda() if args.cuda else dist
+            'adj': adj,
+            'mask': mask if args.mask else None
         }
 
     encoder = GCRNN.GARNN(

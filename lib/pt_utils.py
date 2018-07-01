@@ -60,21 +60,42 @@ def load_dataset_od(dataset, freq, history, horizon):
 
 
 def load_adj(dataset):
-    adj = _get_loader(dataset).load_adj()
-    adj = torch.FloatTensor(adj)
-    return adj
+    loader = _get_loader(dataset)
+    if dataset == 'LA':
+        adj = loader.load_adj()
+    else:
+        dist = loader.load_dist().values
+        od = loader.load_od().values
+        dist = graph.calculate_dist_adj(dist)
+        od, do = graph.calculate_od_adj(od)
+        adj0 = np.hstack((dist, od))
+        adj1 = np.hstack((do, dist))
+        adj = np.vstack((adj0, adj1))
+    return torch.FloatTensor(adj)
 
 
-def load_dist(dataset, num):
-    dist = _get_loader(dataset).load_dist().values
-    dist = graph.dist_to_long(dist, num)
-    return torch.LongTensor(dist)
+def load_adj_long(dataset):
+    loader = _get_loader(dataset)
+    dist = loader.load_dist().values
+    dist = graph.dist_to_long(dist)
+    if dataset.startswith('BJ'):
+        od = loader.load_od().values
+        od, do = graph.od_to_long(od)
+        od = torch.LongTensor(od)
+        do = torch.LongTensor(do)
+        od += dist.max() + 1
+        do += od.max() + 1
+        adj0 = np.hstack((dist, od))
+        adj1 = np.hstack((do, dist))
+        adj = np.vstack((adj0, adj1))
+        mask = (adj == dist.max()) | (adj == od.min()) | (adj == do.min())
+    else:
+        adj = dist
+        mask = dist == dist.max()
+    adj = torch.LongTensor(adj)
+    mask = torch.ByteTensor(mask.astype(int))
+    return adj, mask
 
-
-def load_od(dataset, num):
-    dist = _get_loader(dataset).load_dist().values
-    dist = graph.dist_to_long(dist, num)
-    return torch.LongTensor(dist)
 
 
 def mask_target(output, target):

@@ -39,20 +39,19 @@ def build_attention_graph(attention, node):
     return G
 
 
-def dist_to_long(dist, num):
-    shape = dist.shape
-    dist = dist.reshape(-1)
+def dist_to_long(dist, num=16):
     dist_median = np.median(dist)
     dist[dist > dist_median] = dist_median
     dist = np.ceil(dist / dist_median * (num - 1))
-    assert max(dist) == num - 1
-    dist = dist.reshape(shape)
     return dist
 
 
-def od_to_long(od, num):
-    pass
-
+def od_to_long(od, num=8):
+    do_ = od / od.sum(0)
+    od_ = od.T / od.sum(1)
+    od_ = np.floor(od_.T / max(od_) * (num - 1))
+    do_ = np.floor(do_.T / max(do_) * (num - 1))
+    return od_, do_
 
 
 def graph_dist(G):
@@ -67,10 +66,16 @@ def graph_hop(G):
     return pd.DataFrame(dist)
 
 
-def calculate_dist_adj(dist):
-    adj = np.exp(-np.square(dist / dist.std()))
-    adj[adj < 0.1] = 0
+def calculate_dist_adj(dist, param=0.05):
+    adj = np.exp(-np.square(dist / dist[dist < np.median(dist)].std()))
+    adj[adj < param] = 0
     return adj
+
+
+def calculate_od_adj(od):
+    do_ = od / od.sum(0)
+    od_ = od.T / od.sum(1)
+    return od_.T, do_.T
 
 
 def calculate_normalized_laplacian(adj):

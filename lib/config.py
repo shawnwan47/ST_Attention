@@ -71,6 +71,7 @@ def add_model(args):
     args.add_argument('-attn_type', default='general',
                       choices=['dot', 'general', 'mlp'])
     args.add_argument('-head_count', type=int, default=4)
+    args.add_argument('-mask', action='store_true')
     # DCRNN
     args.add_argument('-hops', type=int, default=3)
     # Save path
@@ -115,7 +116,7 @@ def update_model(args):
                         'STTransformer',
                         'RelativeSTTransformer']:
         args.output_size = 1
-        set_args(args, 'batch_size', 30)
+        set_args(args, 'batch_size', 16)
         set_args(args, 'hidden_size', 64)
     else:
         raise NameError('Model {model} invalid.'.format(model))

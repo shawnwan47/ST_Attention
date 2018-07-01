@@ -131,7 +131,7 @@ class BJLoader(LoaderBase):
             ret = pd.DataFrame(0, index=self.ids, columns=self.ids)
             ret.loc[od.index, od.columns] = od
             ret.to_csv(self._od_sum, index=True)
-        return ret.as_matrix()
+        return ret
 
     def load_adj(self):
         dist = graph.calculate_dist_adj(self.load_dist())

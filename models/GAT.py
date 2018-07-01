@@ -6,7 +6,7 @@ from models import Attention
 
 
 class GraphAttention(nn.Module):
-    def __init__(self, input_size, output_size, head_count, dropout):
+    def __init__(self, input_size, output_size, head_count, dropout, mask=None):
         super().__init__()
         self.attention = Attention.MultiAttention(
             size=input_size,
@@ -15,19 +15,20 @@ class GraphAttention(nn.Module):
             output_size=output_size
         )
         self.linear_query = nn.Linear(input_size, output_size, bias=False)
+        self.register_buffer('mask', mask)
 
     def forward(self, input):
         '''
         input: batch_size x ... x node_count x input_size
         '''
-        context, attn = self.attention(input, input, input)
+        context, attn = self.attention(input, input, input, self.mask)
         output = self.linear_query(input) + context
         return output, attn
 
 
 class GraphRelativeAttention(GraphAttention):
-    def __init__(self, input_size, output_size, head_count, dropout, dist):
-        super().__init__(input_size, output_size, head_count, dropout)
+    def __init__(self, input_size, output_size, head_count, dropout, dist, mask=None):
+        super().__init__(input_size, output_size, head_count, dropout, mask)
         self.attention = Attention.MultiRelativeAttention(
             size=input_size,
             head_count=head_count,
