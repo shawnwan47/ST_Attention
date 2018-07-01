@@ -132,6 +132,7 @@ class MultiRelativeAttention(MultiAttention):
         '''
         len_query, len_key = query.size(-2), key.size(-2)
         score = query.matmul(key.transpose(-1, -2))
+        # elegant but inefficient way
         # adj = self.adj[-len_query:, -len_key:]
         # adj_key = self.embedding_adj_key(self.adj).transpose(-1, -2)
         # score_adj = query.unsqueeze(-2).matmul(adj_key).squeeze(-2)
