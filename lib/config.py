@@ -122,13 +122,16 @@ def update_model(args):
         raise NameError('Model {model} invalid.'.format(model))
 
     # path
+    # model
     name = args.model
     if 'RNN' in args.model:
         name += args.rnn_type
-    if args.model in ['GARNN', 'Transformer']:
+    if args.model in ['GRARNN', 'GARNN', 'Transformer', 'STTransformer']:
         name += 'Head' + str(args.head_count)
+        name += 'Masked' if args.mask else ''
     name += 'Hid' + str(args.hidden_size)
     name += 'Lay' + str(args.num_layers)
+    # data
     if args.use_node:
         name += 'Node'
     if args.use_time:

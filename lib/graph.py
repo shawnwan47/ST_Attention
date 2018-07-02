@@ -1,10 +1,11 @@
 import pickle
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 import scipy.sparse as sp
 from scipy.sparse import linalg
 import networkx as nx
-import sklearn.preprocessing as preprocessing
+from lib.utils import aeq
 
 
 def build_link_graph(node, link):
@@ -24,20 +25,75 @@ def build_node_graph(node):
 
 
 def build_multi_attention_graph(attention, node):
-    assert attention.ndim() == 3
+    assert attention.ndim == 3
     head, len_q, len_c = attention.shape
-    Gs = (build_attention_graph(attention[i], node) for i in range(head))
+    Gs = [build_attention_graph(attention[i], node) for i in range(head)]
     return Gs
 
 
 def build_attention_graph(attention, node):
-    assert attention.ndim() == 2
+    assert attention.ndim == 2
     aeq(attention.shape[0], attention.shape[1], node.shape[0])
     G = build_node_graph(node)
     nnode = node.shape[0]
+    G.node_weight = list(attention.sum(0))
     G.add_weighted_edges_from([(node.id[i], node.id[j], attention[i, j])
-                               for i in range(nnode) for j in range(nnode)])
+                               for i in range(nnode) for j in range(nnode)
+                               if attention[i, j] >= 0.01])
     return G
+
+
+def draw_network(g, **kwargs):
+    draw_nodes(g, **kwargs)
+    edges_weight = [tup[-1] for tup in g.edges.data('weight')]
+    nx.draw_networkx_edges(
+        G=g,
+        pos=g.pos,
+        edge_color=edges_weight,
+        edge_cmap=plt.get_cmap('Blues'),
+        alpha=0.5,
+        width=0.5,
+        edge_vmin=0,
+        edge_vmax=0.5,
+        arrows=False,
+        **kwargs)
+
+
+def draw_node_edges(g, node, **kwargs):
+    draw_nodes(g)
+    edgelist = [(u, v) for u, v in g.edges if u == node]
+    edge_color = [g.edges[u, v]['weight'] for u, v in edgelist]
+    nx.draw_networkx_edges(
+        G=g,
+        pos=g.pos,
+        edgelist=edgelist,
+        edge_color=edge_color,
+        edge_cmap=plt.get_cmap('Blues'),
+        alpha=0.5,
+        width=1,
+        edge_vmin=0,
+        edge_vmax=0.5,
+        arrows=False,
+        **kwargs
+    )
+
+
+def draw_nodes(g, **kwargs):
+    nx.draw_networkx_nodes(
+        g,
+        pos=g.pos,
+        node_color=g.node_weight,
+        cmap='Reds',
+        vmin=0,
+        vmax=3,
+        node_size=25,
+        alpha=0.5,
+        linewidths=0,
+        **kwargs)
+
+
+def draw_attn_networkx(g, node):
+    nx.draw_networkx
 
 
 def digitize_dist(dist, num=16):
