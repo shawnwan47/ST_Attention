@@ -24,23 +24,27 @@ def build_node_graph(node):
     return G
 
 
-def build_multi_attention_graph(attention, node):
-    assert attention.ndim == 3
-    head, len_q, len_c = attention.shape
-    Gs = [build_attention_graph(attention[i], node) for i in range(head)]
-    return Gs
-
-
 def build_attention_graph(attention, node):
     assert attention.ndim == 2
     aeq(attention.shape[0], attention.shape[1], node.shape[0])
     G = build_node_graph(node)
-    nnode = node.shape[0]
-    G.node_weight = list(attention.sum(0))
-    G.add_weighted_edges_from([(node.id[i], node.id[j], attention[i, j])
-                               for i in range(nnode) for j in range(nnode)
-                               if attention[i, j] >= 0.01])
+    num = node.shape[0]
+    G.node_color = list(attention.sum(0))
+    weighted_edges = [(node.id.iloc[i], node.id.iloc[j], attention[i, j])
+                      for i in range(num) for j in range(num)
+                      if attention[i, j] > 0.01]
+    G.add_weighted_edges_from(weighted_edges)
     return G
+
+
+def build_od_attention_graphs(attn, node):
+    assert node.shape[0] == attn.shape[0] / 2
+    num = node.shape[0]
+    return [build_attention_graph(att, node)
+            for att in [attn[:num, :num],
+                        attn[:num, num:],
+                        attn[num:, :num],
+                        attn[num:, num:]]]
 
 
 def draw_network(g, **kwargs):
@@ -82,7 +86,7 @@ def draw_nodes(g, **kwargs):
     nx.draw_networkx_nodes(
         g,
         pos=g.pos,
-        node_color=g.node_weight,
+        node_color=g.node_color,
         cmap='Reds',
         vmin=0,
         vmax=3,

@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from lib.utils import aeq
+from lib import pt_utils
 
 
 class GlobalAttention(nn.Module):
@@ -112,7 +113,7 @@ class MultiAttention(nn.Module):
         attn = self.softmax(scores)
         output = self._pool(attn, value)
         output = self.linear_out(output)
-        return output, attn
+        return output, pt_utils.torch_to_numpy(attn)
 
 
 class MultiRelativeAttention(MultiAttention):

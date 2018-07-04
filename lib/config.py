@@ -47,7 +47,7 @@ def add_train(args):
     args.add_argument('-test', action='store_true')
     args.add_argument('-batch_size', type=int)
     args.add_argument('-epoches', type=int, default=100)
-    args.add_argument('-iterations', type=int, default=300)
+    args.add_argument('-iterations', type=int, default=100)
 
 
 def add_model(args):

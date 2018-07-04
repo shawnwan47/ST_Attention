@@ -41,9 +41,9 @@ class GARNNCell(GCRNNCell):
             output_h, attn_h = self.gc_h(hidden)
             output = F.tanh(output_i + output_h)
         elif self.rnn_type == 'GRU':
-            output, attn_i, attn_h = self._gru(input, hidden)
+            output = self._gru(input, hidden)
         output = self.layer_norm(output)
-        return output, attn_i, attn_h
+        return output
 
     def _gru(self, input, hidden):
         output_i, attn_i = self.gc_i(input)
@@ -54,4 +54,4 @@ class GARNNCell(GCRNNCell):
         inputgate = F.sigmoid(i_i + h_i)
         newgate = F.tanh(i_n + resetgate * h_n)
         output = newgate + inputgate * (hidden - newgate)
-        return output, attn_i, attn_h
+        return output
