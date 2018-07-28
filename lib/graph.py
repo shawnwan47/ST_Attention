@@ -24,23 +24,22 @@ def build_node_graph(node):
     return G
 
 
-def build_attention_graph(attention, node):
-    assert attention.ndim == 2
-    aeq(attention.shape[0], attention.shape[1], node.shape[0])
+def build_dense_graph(adj, node):
+    assert adj.ndim == 2
+    aeq(adj.shape[0], adj.shape[1], node.shape[0])
     G = build_node_graph(node)
     num = node.shape[0]
-    G.node_color = list(attention.sum(0))
-    weighted_edges = [(node.id.iloc[i], node.id.iloc[j], attention[i, j])
-                      for i in range(num) for j in range(num)
-                      if attention[i, j] > 0.01]
+    G.node_color = list(adj.sum(0))
+    weighted_edges = [(node.id.iloc[i], node.id.iloc[j], adj[i, j])
+                      for i in range(num) for j in range(num)]
     G.add_weighted_edges_from(weighted_edges)
     return G
 
 
-def build_od_attention_graphs(attn, node):
+def build_od_dense_graphs(attn, node):
     assert node.shape[0] == attn.shape[0] / 2
     num = node.shape[0]
-    return [build_attention_graph(att, node)
+    return [build_dense_graph(att, node)
             for att in [attn[:num, :num],
                         attn[:num, num:],
                         attn[num:, :num],
@@ -94,10 +93,6 @@ def draw_nodes(g, **kwargs):
         alpha=0.5,
         linewidths=0,
         **kwargs)
-
-
-def draw_attn_networkx(g, node):
-    nx.draw_networkx
 
 
 def digitize_dist(dist, num=16):

@@ -1,3 +1,6 @@
+import datetime
+
+
 def aeq(*args):
     arguments = (arg for arg in args)
     first = next(arguments)
@@ -15,3 +18,9 @@ def minute_str(minute):
         return str(t) if t >= 10 else '0' + str(t)
     hour, minute = divmod(minute, 60)
     return time_str(hour) + ':' + time_str(minute)
+
+
+def select_index(index, start, end):
+    assert isinstance(start, datetime.time)
+    assert isinstance(end, datetime.time)
+    return index[(index.time >= start) & (index.time < end)]
