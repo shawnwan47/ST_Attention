@@ -6,7 +6,7 @@ from models import Attention
 
 class PositionwiseFeedForward(nn.Module):
     def __init__(self, size, dropout=0.1):
-        super(PositionwiseFeedForward, self).__init__()
+        super().__init__()
         self.w_1 = nn.Linear(size, size // 2)
         self.relu = nn.ReLU(inplace=True)
         self.w_2 = nn.Linear(size // 2, size)
