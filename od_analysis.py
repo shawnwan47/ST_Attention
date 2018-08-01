@@ -52,14 +52,15 @@ def load_od():
     return loader.load_ts_od(od='OD'), loader.load_ts_od('DO')
 
 
-def asfreq(OD, freq):
-    names = OD.index.names
+def od_asfreq(od, freq):
+    names = od.index.names
     datetime_group = pd.Grouper(level=names[0], freq=freq)
-    od_freq = OD.groupby([datetime_group, names[1], names[2]]).sum()
+    od_freq = od.groupby([datetime_group, names[1], names[2]]).sum()
     return od_freq
 
 
-def get_week_index(datetime):
+def get_week_index(od):
+    datetime = od.index.levels[0]
     return datetime[datetime.weekofyear == (datetime.weekofyear[0] + 2)]
 
 
@@ -74,7 +75,14 @@ def get_period_index(datetime, period):
 
 
 ################################################################################
-# Computing
+# temporal sparsity
+################################################################################
+
+
+
+
+################################################################################
+# od distance
 ################################################################################
 def od_distance(od, od_):
     if od.empty or od_.empty:
@@ -113,7 +121,7 @@ def calc_dump_results():
 
 
 def calc_od_dynamic(od, period='last'):
-    index = get_week_index(od.index.levels[0])
+    index = get_week_index(od)
     index_ = get_period_index(index, period)
     distances = [od_distance(od[idx], od[idx_])
                  for idx, idx_ in zip(index, index_)]
@@ -121,7 +129,7 @@ def calc_od_dynamic(od, period='last'):
 
 
 def calc_od_symmetric(od, do):
-    index = get_week_index(od.index.levels[0])
+    index = get_week_index(od)
     distances = [od_distance(od[idx], do[idx]) for idx in index]
     return pd.Series(distances, index=index)
 

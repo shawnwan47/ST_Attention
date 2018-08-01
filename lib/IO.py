@@ -36,6 +36,23 @@ def split_data(data, train_ratio=0.7, test_ratio=0.2):
     return df_train, df_valid, df_test
 
 
+def scale_all(df):
+    mean = np.mean(df.values)
+    std = np.std(df.values)
+    return mean, std
+
+def scale_col(df):
+    return df.mean(), df.std()
+
+
+def discretize(df, num=100):
+    values = df.values
+    m, M = np.min(values), np.max(values)
+    values = np.ceil((values - m) / (M - m) * (num - 1))
+    df[:] = values
+    return df
+
+
 class TimeSeries:
     def __init__(self, df, history, horizon):
         self.history = history

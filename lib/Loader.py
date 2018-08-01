@@ -114,11 +114,11 @@ class BJLoader(LoaderBase):
         names = ret.index.names
         ret = ret.groupby([pd.Grouper(level=names[0], freq=freq),
                            names[1], names[2]]).sum()
-        _, entry, exit = ret.index.levels
-        entry = [self.id_to_idx[ent] for ent in entry]
-        exit = [self.id_to_idx[exi] for exi in exit]
-        ret.index.set_levels(entry, level=1, inplace=True)
-        ret.index.set_levels(exit, level=2, inplace=True)
+        # _, entry, exit = ret.index.levels
+        # entry = [self.id_to_idx[ent] for ent in entry]
+        # exit = [self.id_to_idx[exi] for exi in exit]
+        # ret.index.set_levels(entry, level=1, inplace=True)
+        # ret.index.set_levels(exit, level=2, inplace=True)
         return ret
 
     def load_od(self):
