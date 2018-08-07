@@ -7,16 +7,10 @@ from scipy.sparse import linalg
 import networkx as nx
 from lib.utils import aeq
 
-
-def build_link_graph(node, link):
-    G = build_node_graph(node)
-    edges = [(i, j, c) for _, i, j, c in link.itertuples()
-             if i in G.nodes() and j in G.nodes()]
-    G.add_weighted_edges_from(edges)
-    return G
-
-
-def build_node_graph(node):
+################################################################################
+# Build
+################################################################################
+def build_graph_node(node):
     G = nx.DiGraph()
     G.add_nodes_from(node['id'])
     G.pos = {tup.id: (tup.latitude, tup.longitude)
@@ -24,10 +18,19 @@ def build_node_graph(node):
     return G
 
 
-def build_dense_graph(adj, node):
+def build_graph_link(node, link):
+    G = build_graph_node(node)
+    edges = [(i, j, c) for _, i, j, c in link.itertuples()
+             if i in G.nodes() and j in G.nodes()]
+    G.add_weighted_edges_from(edges)
+    return G
+
+
+
+def build_graph_dense(adj, node):
     assert adj.ndim == 2
     aeq(adj.shape[0], adj.shape[1], node.shape[0])
-    G = build_node_graph(node)
+    G = build_graph_node(node)
     num = node.shape[0]
     G.node_color = list(adj.sum(0))
     weighted_edges = [(node.id.iloc[i], node.id.iloc[j], adj[i, j])
@@ -39,11 +42,17 @@ def build_dense_graph(adj, node):
 def build_od_dense_graphs(attn, node):
     assert node.shape[0] == attn.shape[0] / 2
     num = node.shape[0]
-    return [build_dense_graph(att, node)
+    return [build_graph_dense(att, node)
             for att in [attn[:num, :num],
                         attn[:num, num:],
                         attn[num:, :num],
                         attn[num:, num:]]]
+
+
+################################################################################
+# Draw
+################################################################################
+def draw_graph_node(g, node_val, ):
 
 
 def draw_network(g, **kwargs):
@@ -82,19 +91,17 @@ def draw_node_edges(g, node, **kwargs):
 
 
 def draw_nodes(g, **kwargs):
-    nx.draw_networkx_nodes(
+    nx.draw_networkx(
         g,
         pos=g.pos,
-        node_color=g.node_color,
-        cmap='Reds',
-        vmin=0,
-        vmax=3,
-        node_size=25,
         alpha=0.5,
         linewidths=0,
         **kwargs)
 
 
+################################################################################
+# Compute
+################################################################################
 def digitize_dist(dist, num=16):
     dist_median = np.median(dist)
     dist[dist > dist_median] = dist_median
