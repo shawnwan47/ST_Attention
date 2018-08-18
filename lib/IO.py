@@ -36,7 +36,7 @@ def split_dataset(df, train_ratio=0.7, test_ratio=0.2):
     return df_train, df_valid, df_test
 
 
-def scale_dataset(df, method='all'):
+def scale_df(df, method='all'):
     if method is 'all':
         mean = np.mean(df.values)
         std = np.std(df.values)
@@ -47,7 +47,7 @@ def scale_dataset(df, method='all'):
     return df, mean, std
 
 
-def discretize(df, num=100):
+def discretize_df(df, num=100):
     values = df.values
     m, M = np.min(values), np.max(values)
     values = np.ceil((values - m) / (M - m) * (num - 1))
@@ -79,7 +79,18 @@ def df_to_io(df, history, horizon):
 
 
 def prepare_dataset(df, hisotry, horizon):
-    pass
+    df_train, df_valid, df_test = split_dataset(df)
+    data_train = df_to_io(df_train)
+    data_valid = df_to_io(df_valid)
+    data_test = df_to_io(df_test)
+    return data_train, data_valid, data_test
+
+
+def prepare_case(df, history, horizon):
+    df_week = df[df.index.weekofyear == (df.index.weekofyear[0] + 1)]
+    df_days = [df_week[df_week.index.weekday == day] for day in range(7)]
+    io_cases = [df_to_io(df_day) for df_day in df_days]
+    return (df_to_io(df_day) for df_day in df_days)
 
 
 class TimeSeries:
