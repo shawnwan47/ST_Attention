@@ -14,11 +14,12 @@ from lib.utils import cat_strs
 
 
 args = argparse.ArgumentParser()
-config.add_data(args)
+args.add_argument('-dataset', choices=['BJ_highway', 'BJ_metro'])
 args = args.parse_args()
-config.update_data(args)
 
-assert args.dataset in ['BJ_highway', 'BJ_metro']
+DATASET = args.dataset
+NUM_NODES = 536 if DATASET is 'BJ_metro' else 264
+
 FREQS = ['5min', '10min', '15min', '30min', '1h', '3h', '6h', '12h', '1d']
 PERIODS = ['last', 'day', 'week']
 PRE_OD = 'OD'
@@ -30,12 +31,12 @@ PRE_DOD = 'DOD'
 ################################################################################
 def csvpath(*strs):
     name = cat_strs(*strs) + '.csv'
-    return Path(RESULT_PATH) / args.dataset / name
+    return Path(RESULT_PATH) / DATASET / name
 
 
 def pngpath(*strs):
     name = cat_strs(*strs) + '.png'
-    return Path(FIG_PATH) / args.dataset / name
+    return Path(FIG_PATH) / DATASET / name
 
 
 def read_csv_series(path):
@@ -47,7 +48,7 @@ def read_csv_series(path):
 
 
 def load_od():
-    if args.dataset == 'BJ_highway': loader = Loader.BJLoader('highway')
+    if DATASET == 'BJ_highway': loader = Loader.BJLoader('highway')
     else: loader = Loader.BJLoader('metro')
     return loader.load_ts_od(od='OD'), loader.load_ts_od('DO')
 
@@ -93,7 +94,7 @@ def od_distance(od, od_):
     qdata = (od_.values / od_.values.sum()).tolist()
     qrow = od_.index.get_level_values(0).tolist()
     qcol = od_.index.get_level_values(1).tolist()
-    shape = (args.node_count // 2, args.node_count // 2)
+    shape = (NUM_NODES // 2, NUM_NODES // 2)
     pk = coo_matrix((pdata, (prow, pcol)), shape=shape)
     qk = coo_matrix((qdata, (qrow, qcol)), shape=shape)
     return hellinger_distance(pk, qk)

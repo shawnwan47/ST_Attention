@@ -1,9 +1,8 @@
 import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
 import numpy as np
 import seaborn as sns
 
-import Data
+import Loader
 
 
 def savefig(path):
@@ -47,14 +46,16 @@ class RelationPainter(MapPainter):
 
 
 
-class ODPainter:
+class ODPlotter:
     def __init__(self, dataset):
+        assert dataset in ['BJ_higway', 'BJ_metro']
         loader = Loader(dataset)
         self.station = loader.load_station()
-        self.routes = self._get_routes()
+        self.routes = self._get_routes(self.station)
 
-    def _get_routes(self):
-        station = self.station
+    @staticmethod
+    def _get_routes(station):
+        station = station
         route = 0
         routes = []
         for i in range(station.shape[0]):

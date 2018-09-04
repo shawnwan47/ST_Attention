@@ -20,15 +20,16 @@ def _get_loader(dataset):
     return loader
 
 
-def load_dataset(dataset, freq, history, horizon, batch_size):
+def load_dataloaders(dataset, freq, history, horizon, batch_size):
     df = _get_loader(dataset).load_ts(freq)
-    io = IO.TimeSeries(df, history, horizon)
-    mean = numpy_to_torch(io.mean)
-    std = numpy_to_torch(io.std)
+    # io = IO.TimeSeries(df, history, horizon)
+    data = IO.prepare_dataset(df, history, horizon)
+    # mean = numpy_to_torch(io.mean)
+    # std = numpy_to_torch(io.std)
 
     datasets = (
         TensorDataset(*[numpy_to_torch(data) for data in data_tuple])
-        for data_tuple in io.data
+        for data_tuple in data
     )
 
     data_loaders = (
@@ -36,7 +37,7 @@ def load_dataset(dataset, freq, history, horizon, batch_size):
         for i, dataset in enumerate(datasets)
     )
 
-    return data_loaders, mean, std
+    return data_loaders
 
 
 def load_dataset_od(dataset, freq, history, horizon):

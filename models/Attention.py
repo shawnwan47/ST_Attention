@@ -2,7 +2,6 @@ import math
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from lib.utils import aeq
 from lib import pt_utils
@@ -50,7 +49,7 @@ class GlobalAttention(nn.Module):
             score_size = (batch, len_q, len_c, size)
             sc1 = self.linear_query(query).unsqueeze(2).expand(score_size)
             sc2 = self.linear_context(context).unsqueeze(1).expand(score_size)
-            score = self.linear_score(F.tanh(sc1 + sc2))
+            score = self.linear_score(torch.tanh(sc1 + sc2))
         return score.view(batch, len_q, len_c)
 
 

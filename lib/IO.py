@@ -62,35 +62,32 @@ def gen_seq(arr, length):
 
 
 def df_to_io(df, history, horizon):
-    # data
-    # data = df.fillna(method='ffill').fillna(method='bfill')
-    data = np.nan_to_num(self._scale(df.values))
-    # time, weekday
+    # data, time, weekday
+    data = df.fillna(method='ffill').fillna(method='bfill').values
     _, time = np.unique(df.index.time, return_inverse=True)
     weekday = df.index.weekday
     # input sequences
-    data_len = self.history + self.horizon - 1
-    data, time, weekday = (_gen_seq(dat[:-1], data_len)
+    data_len = history + horizon - 1
+    data, time, weekday = (gen_seq(dat[:-1], data_len)
                            for dat in (data, time, weekday))
     # output sequences
-    targets = _gen_seq(df.values[self.history:], self.horizon)
+    targets = gen_seq(df.values[history:], horizon)
     aeq(len(data), len(time), len(weekday), len(targets))
     return data, time, weekday, targets
 
 
-def prepare_dataset(df, hisotry, horizon):
+def prepare_dataset(df, history, horizon):
     df_train, df_valid, df_test = split_dataset(df)
-    data_train = df_to_io(df_train)
-    data_valid = df_to_io(df_valid)
-    data_test = df_to_io(df_test)
+    data_train = df_to_io(df_train, history, horizon)
+    data_valid = df_to_io(df_valid, history, horizon)
+    data_test = df_to_io(df_test, history, horizon)
     return data_train, data_valid, data_test
 
 
 def prepare_case(df, history, horizon):
     df_week = df[df.index.weekofyear == (df.index.weekofyear[0] + 1)]
     df_days = [df_week[df_week.index.weekday == day] for day in range(7)]
-    io_cases = [df_to_io(df_day) for df_day in df_days]
-    return (df_to_io(df_day) for df_day in df_days)
+    return (df_to_io(df_day, history, horizon) for df_day in df_days)
 
 
 class TimeSeries:

@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 class GCRNNCell(nn.Module):
@@ -27,9 +26,9 @@ class GCRNNCell(nn.Module):
     def _gru(self, input, hidden):
         i_r, i_i, i_n = self.gc_i(input).chunk(chunks=3, dim=-1)
         h_r, h_i, h_n = self.gc_h(hidden).chunk(chunks=3, dim=-1)
-        resetgate = F.sigmoid(i_r + h_r)
-        inputgate = F.sigmoid(i_i + h_i)
-        newgate = F.tanh(i_n + resetgate * h_n)
+        resetgate = torch.sigmoid(i_r + h_r)
+        inputgate = torch.sigmoid(i_i + h_i)
+        newgate = torch.tanh(i_n + resetgate * h_n)
         output = newgate + inputgate * (hidden - newgate)
         return output
 
@@ -39,7 +38,7 @@ class GARNNCell(GCRNNCell):
         if self.rnn_type == 'RNN':
             output_i, attn_i = self.gc_i(input)
             output_h, attn_h = self.gc_h(hidden)
-            output = F.tanh(output_i + output_h)
+            output = torch.tanh(output_i + output_h)
         elif self.rnn_type == 'GRU':
             output = self._gru(input, hidden)
         output = self.layer_norm(output)
@@ -50,8 +49,8 @@ class GARNNCell(GCRNNCell):
         output_h, attn_h = self.gc_h(input)
         i_r, i_i, i_n = output_i.chunk(chunks=3, dim=-1)
         h_r, h_i, h_n = output_h.chunk(chunks=3, dim=-1)
-        resetgate = F.sigmoid(i_r + h_r)
-        inputgate = F.sigmoid(i_i + h_i)
-        newgate = F.tanh(i_n + resetgate * h_n)
+        resetgate = torch.sigmoid(i_r + h_r)
+        inputgate = torch.sigmoid(i_i + h_i)
+        newgate = torch.tanh(i_n + resetgate * h_n)
         output = newgate + inputgate * (hidden - newgate)
         return output

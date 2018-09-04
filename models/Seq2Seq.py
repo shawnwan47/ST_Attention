@@ -3,7 +3,6 @@ from random import random
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from lib.utils import aeq
 
