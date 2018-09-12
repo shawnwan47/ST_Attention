@@ -60,9 +60,11 @@ def od_asfreq(od, freq):
     return od_freq
 
 
-def get_week_index(od):
+def get_time_index(od):
     datetime = od.index.levels[0]
-    return datetime[datetime.weekofyear == (datetime.weekofyear[0] + 2)]
+    week_index = datetime[datetime.weekofyear == (datetime.weekofyear[0] + 2)]
+    time_index = week_index[(week_index.hour >= 8) & (week_index.hour < 22)]
+    return time_index
 
 
 def get_period_index(datetime, period):
@@ -73,6 +75,14 @@ def get_period_index(datetime, period):
         return datetime - pd.Timedelta(days=1)
     elif period == 'week':
         return datetime - pd.Timedelta(days=7)
+
+
+################################################################################
+# select destination
+################################################################################
+
+def select_dest(od, dest):
+    series = od.reorder_levels([2, 0, 1])
 
 
 ################################################################################
@@ -100,6 +110,19 @@ def od_distance(od, od_):
     return hellinger_distance(pk, qk)
 
 
+def o_distance(o1, o2):
+    if od.empty or od_.empty:
+        return np.nan
+    pdata = (od.values / od.values.sum()).tolist()
+    pindex = od.index
+    qdata = (od_.values / od_.values.sum()).tolist()
+    qindex = od_.index
+    shape = (NUM_NODES // 2, 1)
+    pk = coo_matrix((pdata, (prow, [0] * len(pindex))), shape=shape)
+    qk = coo_matrix((qdata, (qrow, [0] * len(qindex))), shape=shape)
+    return hellinger_distance(pk, qk)
+
+
 def hellinger_distance(pk, qk):
     BC = pk.multiply(qk).sqrt().sum()
     return np.sqrt(1 - BC)
@@ -122,7 +145,7 @@ def calc_dump_results():
 
 
 def calc_od_dynamic(od, period='last'):
-    index = get_week_index(od)
+    index = get_time_index(od)
     index_ = get_period_index(index, period)
     distances = [od_distance(od[idx], od[idx_])
                  for idx, idx_ in zip(index, index_)]
@@ -130,7 +153,7 @@ def calc_od_dynamic(od, period='last'):
 
 
 def calc_od_symmetric(od, do):
-    index = get_week_index(od)
+    index = get_time_index(od)
     distances = [od_distance(od[idx], do[idx]) for idx in index]
     return pd.Series(distances, index=index)
 
@@ -164,6 +187,22 @@ def plot_results():
 
 
 if __name__ == '__main__':
+    reload(Loader)
+    station = {}
+    ts_od = {}
+    ts_od_ = {}
+    index = {}
+    index_ = {}
+
+    for dataset in ['highway', 'metro']:
+        loader = Loader.BJLoader(dataset)
+        station[dataset] = loader.load_node()
+        ts_od[dataset] = loader.load_ts_od()
+        index[dataset] = get_time_index(ts_od[dataset], start=7, end=22)
+        index_[dataset] = get_period_index(index[dataset])
+        ts_od[dataset] = ts_od[dataset][index[dataset]]
+        ts_od_[dataset] = ts_od[dataset][index_[dataset]]
+
     calc_dump_results()
     # plot_results()
 

@@ -21,7 +21,7 @@ class LoaderBase:
         raise NotImplementedError
 
     def load_node(self):
-        return pd.read_csv(self._node, index_col=0)
+        raise NotImplementedError
 
     def load_link(self):
         return pd.read_csv(self._link)
@@ -69,13 +69,16 @@ class BJLoader(LoaderBase):
         self.id_to_idx = {id: i for i, id in enumerate(self.ids)}
 
     def _load_ids(self):
-        node = self.load_node()
+        node = self._load_node()
         node_ids = set(node.index)
         link_ids = list(np.unique(self._load_link_raw()))
         ts_ids = [*self._load_ts('O').columns, *self._load_ts('D').columns]
         node_ids = node_ids.intersection(*[link_ids, ts_ids])
         ids = node.loc[node_ids].sort_values(['route', 'station']).index
         return ids
+
+    def _load_node(self):
+        return pd.read_csv(self._node, index_col=0)
 
     def _load_ts(self, od='D'):
         filepath = self._ts_o if od is 'O' else self._ts_d
@@ -88,7 +91,7 @@ class BJLoader(LoaderBase):
 
     def _calc_link(self):
         link = self._load_link_raw()
-        node = self.load_node()
+        node = self._load_node()
         pos = node.apply(lambda x: (x['latitude'], x['longitude']), axis=1)
         def dist(i, j):
             if i in node.index and j in node.index:
@@ -97,9 +100,20 @@ class BJLoader(LoaderBase):
         link['cost'] = link.apply(lambda x: dist(x['from'], x['to']), axis=1)
         link.to_csv(self._link, index=False)
 
-    def load_ts(self, freq='5min'):
-        o = self._load_ts('O').reindex(columns=self.ids)
-        d = self._load_ts('D').reindex(columns=self.ids)
+    def load_node(self):
+        node = self._load_node().loc[self.ids]
+        node.index = [self.id_to_idx[i] for i in node.index]
+        return node
+
+    def load_ts_o(self, freq='15min'):
+        return self._load_ts('O').loc[:, self.ids].resample(freq).sum()
+
+    def load_ts_d(self, freq='15min'):
+        return self._load_ts('D').loc[:, self.ids].resample(freq).sum()
+
+    def load_ts(self, freq='15min'):
+        o = self.load_ts_o(freq)
+        d = self.load_ts_d(freq)
         ts = pd.concat((o, d), axis=1).fillna(0)
         ts = ts.resample(freq).sum()
         return ts
@@ -158,6 +172,9 @@ class LALoader(LoaderBase):
     def _prep_ids(self):
         self.ids = sorted(self.ids, key=lambda x: self.id_to_idx[x])
         self.ids = [int(x) for x in self.ids]
+
+    def load_node(self):
+        return pd.read_csv(self._node, index_col=0)
 
     def load_ts(self, freq='5min'):
         ts = pd.read_hdf(self._ts)

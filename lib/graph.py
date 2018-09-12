@@ -10,68 +10,89 @@ from lib.utils import aeq
 ################################################################################
 # Build
 ################################################################################
-def build_graph_node(node):
+
+def build_graph_node(node, node_size=None, node_color='red'):
+    for col in ['id', 'latitude', 'longitude']:
+        assert col in node.columns
     G = nx.DiGraph()
-    G.add_nodes_from(node['id'])
-    G.pos = {tup.id: (tup.latitude, tup.longitude)
-             for _, tup in node.iterrows()}
+    G.add_nodes_from(node.index)
+    G.pos = {i: (tup.latitude, tup.longitude)
+             for i, tup in node.iterrows()}
+    G.node_size = node_size
+    G.node_color = node_color
     return G
 
 
-def build_graph_link(node, link):
-    G = build_graph_node(node)
-    edges = [(i, j, c) for _, i, j, c in link.itertuples()
+def add_road_edges(G, link):
+    roads = [(i, j) for _, i, j, c in link.itertuples()
              if i in G.nodes() and j in G.nodes()]
+    G.roads = roads
+    return G
+
+
+def add_sparse_edges(G, link):
+    edges = [(u, v, w) for (u, v), w in link.iteritems()]
     G.add_weighted_edges_from(edges)
     return G
 
 
-
-def build_graph_dense(adj, node):
+def add_dense_edges(G, adj):
     assert adj.ndim == 2
-    aeq(adj.shape[0], adj.shape[1], node.shape[0])
-    G = build_graph_node(node)
-    num = node.shape[0]
-    G.node_color = list(adj.sum(0))
-    weighted_edges = [(node.id.iloc[i], node.id.iloc[j], adj[i, j])
-                      for i in range(num) for j in range(num)]
+    aeq(adj.shape[0], adj.shape[1], len(G.nodes()))
+    num = adj.shape[0]
+    weighted_edges = [(i, j, adj[i, j])
+                      for i in range(num) for j in range(num)
+                      if adj[i, j] > 0]
     G.add_weighted_edges_from(weighted_edges)
     return G
-
-
-def build_od_dense_graphs(attn, node):
-    assert node.shape[0] == attn.shape[0] / 2
-    num = node.shape[0]
-    return [build_graph_dense(att, node)
-            for att in [attn[:num, :num],
-                        attn[:num, num:],
-                        attn[num:, :num],
-                        attn[num:, num:]]]
-
 
 ################################################################################
 # Draw
 ################################################################################
 
+def draw_nodes(g, **kwargs):
+    if g.node_size is not None:
+        node_size = g.node_size / max(g.node_size) * 100
+    else:
+        node_size = None
+    nx.draw_networkx_nodes(
+        g,
+        pos=g.pos,
+        node_size=node_size,
+        node_color=g.node_color,
+        cmap=plt.get_cmap('Reds'),
+        linewidths=0,
+        **kwargs)
 
-def draw_network(g, **kwargs):
-    draw_nodes(g, **kwargs)
-    edges_weight = [tup[-1] for tup in g.edges.data('weight')]
+
+def draw_roads(g, **kwargs):
+    nx.draw_networkx_edges(
+        G=g,
+        edgeslist=g.roads,
+        pos=g.pos,
+        edge_color='grey',
+        alpha=0.5,
+        width=1,
+        arrows=False,
+        edge_vmin=0,
+        **kwargs)
+
+
+def draw_edges(g, **kwargs):
+    edges_weight = [g.edges[u, v]['weight'] for u, v in g.edges]
     nx.draw_networkx_edges(
         G=g,
         pos=g.pos,
         edge_color=edges_weight,
         edge_cmap=plt.get_cmap('Blues'),
-        alpha=0.5,
-        width=0.5,
-        edge_vmin=0,
-        edge_vmax=0.5,
+        alpha=0.1,
+        width=1,
         arrows=False,
+        edge_vmin=0,
         **kwargs)
 
 
-def draw_node_edges(g, node, **kwargs):
-    draw_nodes(g)
+def draw_edges_of_node(g, node, **kwargs):
     edgelist = [(u, v) for u, v in g.edges if u == node]
     edge_color = [g.edges[u, v]['weight'] for u, v in edgelist]
     nx.draw_networkx_edges(
@@ -88,14 +109,6 @@ def draw_node_edges(g, node, **kwargs):
         **kwargs
     )
 
-
-def draw_nodes(g, **kwargs):
-    nx.draw_networkx(
-        g,
-        pos=g.pos,
-        alpha=0.5,
-        linewidths=0,
-        **kwargs)
 
 
 ################################################################################

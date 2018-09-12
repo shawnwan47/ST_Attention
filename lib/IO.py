@@ -36,15 +36,14 @@ def split_dataset(df, train_ratio=0.7, test_ratio=0.2):
     return df_train, df_valid, df_test
 
 
-def scale_df(df, method='all'):
+def df_mean_std(df, method='all'):
     if method is 'all':
-        mean = np.mean(df.values)
-        std = np.std(df.values)
+        mean = np.nanmean(df.values)
+        std = np.nanstd(df.values)
     else:
         mean = df.mean()
         std = df.std()
-    df = (df - mean) / std
-    return df, mean, std
+    return mean, std
 
 
 def discretize_df(df, num=100):
@@ -61,9 +60,10 @@ def gen_seq(arr, length):
     return seq
 
 
-def df_to_io(df, history, horizon):
+def df_to_io(df, history, horizon, mean, std):
     # data, time, weekday
     data = df.fillna(method='ffill').fillna(method='bfill').values
+    data = (data - mean) / std
     _, time = np.unique(df.index.time, return_inverse=True)
     weekday = df.index.weekday
     # input sequences
@@ -71,17 +71,20 @@ def df_to_io(df, history, horizon):
     data, time, weekday = (gen_seq(dat[:-1], data_len)
                            for dat in (data, time, weekday))
     # output sequences
-    targets = gen_seq(df.values[history:], horizon)
+    targets = df.values[history:]
+    targets = (targets - mean) / std
+    targets = gen_seq(targets, horizon)
     aeq(len(data), len(time), len(weekday), len(targets))
     return data, time, weekday, targets
 
 
 def prepare_dataset(df, history, horizon):
     df_train, df_valid, df_test = split_dataset(df)
-    data_train = df_to_io(df_train, history, horizon)
-    data_valid = df_to_io(df_valid, history, horizon)
-    data_test = df_to_io(df_test, history, horizon)
-    return data_train, data_valid, data_test
+    mean, std = df_mean_std(df_train, method='all')
+    data_train = df_to_io(df_train, history, horizon, mean, std)
+    data_valid = df_to_io(df_valid, history, horizon, mean, std)
+    data_test = df_to_io(df_test, history, horizon, mean, std)
+    return data_train, data_valid, data_test, mean, std
 
 
 def prepare_case(df, history, horizon):
