@@ -24,7 +24,7 @@ class LoaderBase:
         raise NotImplementedError
 
     def load_link(self):
-        return pd.read_csv(self._link)
+        raise NotImplementedError
 
     def load_dist(self):
         if self._dist.exists():
@@ -105,6 +105,9 @@ class BJLoader(LoaderBase):
         node.index = [self.id_to_idx[i] for i in node.index]
         return node
 
+    def load_link(self):
+        link = pd.read_csv(self._link)
+
     def load_ts_o(self, freq='15min'):
         return self._load_ts('O').loc[:, self.ids].resample(freq).sum()
 
@@ -175,6 +178,9 @@ class LALoader(LoaderBase):
 
     def load_node(self):
         return pd.read_csv(self._node, index_col=0)
+
+    def load_link(self):
+        return pd.read_csv(self._link)
 
     def load_ts(self, freq='5min'):
         ts = pd.read_hdf(self._ts)
