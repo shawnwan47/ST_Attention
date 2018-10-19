@@ -34,17 +34,16 @@ else:
     print('Using CPU')
 
 # DATA
-data_loaders = pt_utils.load_dataloaders(
+dataloader_train, dataloader_valid, dataloader_test, mean, std = pt_utils.load_data(
     dataset=args.dataset,
     freq=args.freq,
     history=args.history,
     horizon=args.horizon,
     batch_size=args.batch_size
 )
-data_train, data_valid, data_test = data_loaders
-# if args.cuda:
-#     mean, std = mean.cuda(), std.cuda()
-# rescaler = pt_utils.Rescaler(mean, std)
+if args.cuda:
+    mean, std = mean.cuda(), std.cuda()
+rescaler = pt_utils.Rescaler(mean, std)
 
 
 # MODEL
@@ -61,11 +60,11 @@ loss = Loss.Loss(metrics=args.metrics, horizons=args.horizons)
 
 # optimizer, scheduler
 optimizer = optim.Adam(model.parameters(), weight_decay=args.weight_decay)
-# scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epoches)
 
 # TRAINER
 trainer = Trainer.Trainer(
     model=model,
+    rescaler=rescaler,
     criterion=criterion,
     loss=loss,
     optimizer=optimizer,
@@ -76,8 +75,8 @@ trainer = Trainer.Trainer(
 
 
 if not args.test:
-    trainer.run(data_train, data_valid)
+    trainer.run(dataloader_train, dataloader_valid)
     torch.save(trainer.model.state_dict(), args.path + '.pt')
 
-error_test = trainer.run_epoch(data_test)
+error_test = trainer.run_epoch(dataloader_test)
 print(f'{args.path}:\n{error_test}')

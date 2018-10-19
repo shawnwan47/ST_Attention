@@ -7,14 +7,13 @@ from lib import pt_utils
 
 
 class Trainer:
-    def __init__(self, model, criterion, loss,
+    def __init__(self, model, rescaler, criterion, loss,
                  optimizer, epoches, iterations, cuda):
         self.model = model
-        # self.rescaler = rescaler
+        self.rescaler = rescaler
         self.criterion = criterion
         self.loss = loss
         self.optimizer = optimizer
-        # self.scheduler = scheduler
         self.epoches = epoches
         self.iterations = iterations
         if cuda:
@@ -43,7 +42,7 @@ class Trainer:
             output = self.model(data, time, day, self.teach if train else 0)
             if isinstance(output, tuple):
                 output = output[0]
-            # output = self.rescaler(output)
+            output = self.rescaler(output)
 
             error = error + self.loss(output, target)
             output, target = pt_utils.mask_target(output, target)
@@ -66,5 +65,4 @@ class Trainer:
                   f'teach ratio: {self.teach}',
                   f'learning rate: {self.optimizer.param_groups[0]["lr"]}',
                   sep='\n')
-            # self.scheduler.step()
             self.teach *= self.teach_annealing
