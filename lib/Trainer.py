@@ -63,6 +63,5 @@ class Trainer:
                   f'train: {error_train}',
                   f'valid: {error_eval}',
                   f'teach ratio: {self.teach}',
-                  f'learning rate: {self.optimizer.param_groups[0]["lr"]}',
                   sep='\n')
             self.teach *= self.teach_annealing
