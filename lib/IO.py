@@ -10,11 +10,8 @@ from lib.utils import aeq
 def prepare_dataset(df, history, horizon):
     df_train, df_valid, df_test = _split_dataset(df)
     mean, std = df_train.mean().values, df_train.std().values
-    df_train, df_valid, df_test = (_scale_df(df, mean, std)
-                                   for df in (df_train, df_valid, df_test))
-
-    data_train, data_valid, data_test = (_df_to_io(df, history, horizon)
-                                   for df in (df_train, df_valid, df_test))
+    data_train, data_valid, data_test = (_df_to_io(df, history, horizon, mean, std)
+                                         for df in (df_train, df_valid, df_test))
 
     return data_train, data_valid, data_test, mean, std
 
@@ -24,13 +21,8 @@ def prepare_case(df, history, horizon):
     mean, std = df_train.mean(), df_train.std()
     df_week = df[df.index.weekofyear == (df.index.weekofyear[0] + 1)]
     df_days = [df_week[df_week.index.weekday == day] for day in range(7)]
-    data = (_df_to_io(_scale_df(df_day, mean, std), history, horizon)
-            for df_day in df_days)
+    data = (_df_to_io(df, history, horizon, mean, std) for df in df_days)
     return data, mean, std
-
-
-def _scale_df(df, mean, std):
-    return (df - mean) / std
 
 
 def _split_dataset(df, train_ratio=0.7, test_ratio=0.2):
@@ -55,7 +47,7 @@ def _split_dataset(df, train_ratio=0.7, test_ratio=0.2):
     return df_train, df_valid, df_test
 
 
-def _df_to_io(df, history, horizon):
+def _df_to_io(df, history, horizon, mean, std):
     def _gen_seq(arr, length):
         samples = arr.shape[0] - length + 1
         seq = np.stack([arr[i:i + length] for i in range(samples)], axis=0)
@@ -63,6 +55,7 @@ def _df_to_io(df, history, horizon):
 
     # data, time, weekday
     data = df.fillna(method='ffill').fillna(method='bfill').values
+    data = (data - mean) / std
     _, time = np.unique(df.index.time, return_inverse=True)
     weekday = df.index.weekday
     # input sequences
