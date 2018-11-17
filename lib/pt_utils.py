@@ -10,6 +10,7 @@ from lib.utils import aeq
 from constants import EPS
 
 
+<<<<<<< HEAD
 def load_dataloaders(dataset, freq, history, horizon, batch_size):
     df = get_loader(dataset).load_ts(freq)
     # io = IO.TimeSeries(df, history, horizon)
@@ -22,15 +23,39 @@ def load_dataloaders(dataset, freq, history, horizon, batch_size):
 
     datasets = (
         TensorDataset(*[numpy_to_torch(data) for data in data_tuple])
+=======
+def _get_loader(dataset):
+    if dataset == 'BJ_highway':
+        loader = Loader.BJLoader('highway')
+    elif dataset == 'BJ_metro':
+        loader = Loader.BJLoader('metro')
+    elif dataset == 'LA':
+        loader = Loader.LALoader()
+    return loader
+
+
+def load_data(dataset, freq, history, horizon, batch_size):
+    df = _get_loader(dataset).load_ts(freq)
+    data_train, data_valid, data_test, mean, std = IO.prepare_dataset(df, history, horizon)
+    mean = _numpy_to_torch(mean)
+    std = _numpy_to_torch(std)
+
+    datasets = (
+        TensorDataset(*[_numpy_to_torch(data) for data in data_tuple])
+>>>>>>> b2a99cf93dd7a5a9f4edc617b2042d28cb22a0dc
         for data_tuple in (data_train, data_valid, data_test)
     )
 
-    data_loaders = (
+    dataloader_train, dataloader_valid, dataloader_test = (
         DataLoader(dataset=dataset, batch_size=batch_size, shuffle=i==0)
         for i, dataset in enumerate(datasets)
     )
 
+<<<<<<< HEAD
     return data_loaders, mean, std
+=======
+    return dataloader_train, dataloader_valid, dataloader_test, mean, std
+>>>>>>> b2a99cf93dd7a5a9f4edc617b2042d28cb22a0dc
 
 
 def load_dataset_od(dataset, freq, history, horizon):
@@ -98,8 +123,8 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters())
 
 
-def numpy_to_torch(arr):
-    assert isinstance(arr, np.ndarray)
+def _numpy_to_torch(arr):
+    assert isinstance(arr, np.ndarray), arr
     if arr.dtype == np.dtype(int):
         return torch.LongTensor(arr)
     return torch.FloatTensor(arr)
