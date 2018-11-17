@@ -1,6 +1,5 @@
 import datetime
 
-
 def aeq(*args):
     arguments = (arg for arg in args)
     first = next(arguments)
@@ -24,3 +23,12 @@ def select_index(index, start, end):
     assert isinstance(start, datetime.time)
     assert isinstance(end, datetime.time)
     return index[(index.time >= start) & (index.time < end)]
+
+
+class Rescaler:
+    def __init__(self, mean, std):
+        self.mean = mean
+        self.std = std
+
+    def __call__(self, input):
+        return (input * (self.std + EPS)) + self.mean

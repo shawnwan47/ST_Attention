@@ -7,7 +7,7 @@ import networkx as nx
 from geopy.distance import geodesic
 
 from constants import DATA_PATH, BJ_HIGHWAY_PATH, BJ_METRO_PATH, LA_PATH
-from lib import graph
+# from lib import graph
 
 
 def get_loader(dataset):

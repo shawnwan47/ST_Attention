@@ -10,39 +10,14 @@ from lib.utils import aeq
 from constants import EPS
 
 
-<<<<<<< HEAD
 def load_dataloaders(dataset, freq, history, horizon, batch_size):
     df = get_loader(dataset).load_ts(freq)
-    # io = IO.TimeSeries(df, history, horizon)
     data_train, data_valid, data_test, mean, std = IO.prepare_dataset(
         df, history, horizon
     )
 
-    # mean = numpy_to_torch(io.mean)
-    # std = numpy_to_torch(io.std)
-
     datasets = (
         TensorDataset(*[numpy_to_torch(data) for data in data_tuple])
-=======
-def _get_loader(dataset):
-    if dataset == 'BJ_highway':
-        loader = Loader.BJLoader('highway')
-    elif dataset == 'BJ_metro':
-        loader = Loader.BJLoader('metro')
-    elif dataset == 'LA':
-        loader = Loader.LALoader()
-    return loader
-
-
-def load_data(dataset, freq, history, horizon, batch_size):
-    df = _get_loader(dataset).load_ts(freq)
-    data_train, data_valid, data_test, mean, std = IO.prepare_dataset(df, history, horizon)
-    mean = _numpy_to_torch(mean)
-    std = _numpy_to_torch(std)
-
-    datasets = (
-        TensorDataset(*[_numpy_to_torch(data) for data in data_tuple])
->>>>>>> b2a99cf93dd7a5a9f4edc617b2042d28cb22a0dc
         for data_tuple in (data_train, data_valid, data_test)
     )
 
@@ -51,31 +26,27 @@ def load_data(dataset, freq, history, horizon, batch_size):
         for i, dataset in enumerate(datasets)
     )
 
-<<<<<<< HEAD
     return data_loaders, mean, std
-=======
-    return dataloader_train, dataloader_valid, dataloader_test, mean, std
->>>>>>> b2a99cf93dd7a5a9f4edc617b2042d28cb22a0dc
 
-
-def load_dataset_od(dataset, freq, history, horizon):
-    data_train, data_valid, data_test, mean, std = load_dataset(args)
-
-    loader = get_loader(args.dataset)
-    od = loader.load_ts_od('DO', args.freq)
-    ts = IO.SparseTimeSeries(od, args.history, args.horizon)
-    od_train, od_valid, od_test = (
-        SparseDataset(coo_seqs, (args.node_count, args.node_count))
-        for coo_seqs in (ts.data_train, ts.data_valid, ts.data_test)
-    )
-
-    data_train, data_valid, data_test = (
-        HybridDataset(data1, data2)
-        for data1, data2 in zip([data_train, data_valid, data_test],
-                                [od_train, od_valid, od_test])
-    )
-
-    return data_train, data_valid, data_test, mean, std
+#
+# def load_dataset_od(dataset, freq, history, horizon):
+#     data_train, data_valid, data_test, mean, std = load_dataset(args)
+#
+#     loader = get_loader(args.dataset)
+#     od = loader.load_ts_od('DO', args.freq)
+#     ts = IO.SparseTimeSeries(od, args.history, args.horizon)
+#     od_train, od_valid, od_test = (
+#         SparseDataset(coo_seqs, (args.node_count, args.node_count))
+#         for coo_seqs in (ts.data_train, ts.data_valid, ts.data_test)
+#     )
+#
+#     data_train, data_valid, data_test = (
+#         HybridDataset(data1, data2)
+#         for data1, data2 in zip([data_train, data_valid, data_test],
+#                                 [od_train, od_valid, od_test])
+#     )
+#
+#     return data_train, data_valid, data_test, mean, std
 
 
 def load_adj(dataset):
@@ -123,7 +94,7 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters())
 
 
-def _numpy_to_torch(arr):
+def numpy_to_torch(arr):
     assert isinstance(arr, np.ndarray), arr
     if arr.dtype == np.dtype(int):
         return torch.LongTensor(arr)
@@ -163,12 +134,3 @@ class HybridDataset(Dataset):
 
     def __getitem__(self, index):
         return (*self.tensor_dataset[index], *self.list_dataset[index])
-
-
-class Rescaler:
-    def __init__(self, mean, std):
-        self.mean = mean
-        self.std = std
-
-    def __call__(self, input):
-        return (input * (self.std + EPS)) + self.mean

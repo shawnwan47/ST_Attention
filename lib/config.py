@@ -1,4 +1,3 @@
-import math
 from collections import OrderedDict
 from constants import MODEL_PATH
 
@@ -25,7 +24,7 @@ def add_data(args):
     args.add_argument('-use_time', action='store_true')
     args.add_argument('-use_day', action='store_true')
     args.add_argument('-use_node', action='store_true')
-    args.add_argument('-od', action='store_true')
+    args.add_argument('-use_od', action='store_true')
 
 
 def add_device(args):

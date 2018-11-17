@@ -36,24 +36,17 @@ else:
     print('Using CPU')
 
 # DATA
-<<<<<<< HEAD
 data_loaders, mean, std = pt_utils.load_dataloaders(
-=======
-dataloader_train, dataloader_valid, dataloader_test, mean, std = pt_utils.load_data(
->>>>>>> b2a99cf93dd7a5a9f4edc617b2042d28cb22a0dc
     dataset=args.dataset,
     freq=args.freq,
     history=args.history,
     horizon=args.horizon,
     batch_size=args.batch_size
 )
-<<<<<<< HEAD
 data_train, data_valid, data_test = data_loaders
-=======
->>>>>>> b2a99cf93dd7a5a9f4edc617b2042d28cb22a0dc
 if args.cuda:
     mean, std = mean.cuda(), std.cuda()
-rescaler = pt_utils.Rescaler(mean, std)
+rescaler = utils.Rescaler(mean, std)
 
 
 # MODEL
