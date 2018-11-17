@@ -3,33 +3,26 @@ import scipy as sp
 import torch
 from torch.utils.data import Dataset, TensorDataset, DataLoader
 
-from lib import Loader
+from lib.Loader import get_loader
 from lib import IO
 from lib import graph
 from lib.utils import aeq
 from constants import EPS
 
 
-def _get_loader(dataset):
-    if dataset == 'BJ_highway':
-        loader = Loader.BJLoader('highway')
-    elif dataset == 'BJ_metro':
-        loader = Loader.BJLoader('metro')
-    elif dataset == 'LA':
-        loader = Loader.LALoader()
-    return loader
-
-
 def load_dataloaders(dataset, freq, history, horizon, batch_size):
-    df = _get_loader(dataset).load_ts(freq)
+    df = get_loader(dataset).load_ts(freq)
     # io = IO.TimeSeries(df, history, horizon)
-    data = IO.prepare_dataset(df, history, horizon)
+    data_train, data_valid, data_test, mean, std = IO.prepare_dataset(
+        df, history, horizon
+    )
+
     # mean = numpy_to_torch(io.mean)
     # std = numpy_to_torch(io.std)
 
     datasets = (
         TensorDataset(*[numpy_to_torch(data) for data in data_tuple])
-        for data_tuple in data
+        for data_tuple in (data_train, data_valid, data_test)
     )
 
     data_loaders = (
@@ -37,13 +30,13 @@ def load_dataloaders(dataset, freq, history, horizon, batch_size):
         for i, dataset in enumerate(datasets)
     )
 
-    return data_loaders
+    return data_loaders, mean, std
 
 
 def load_dataset_od(dataset, freq, history, horizon):
     data_train, data_valid, data_test, mean, std = load_dataset(args)
 
-    loader = _get_loader(args.dataset)
+    loader = get_loader(args.dataset)
     od = loader.load_ts_od('DO', args.freq)
     ts = IO.SparseTimeSeries(od, args.history, args.horizon)
     od_train, od_valid, od_test = (
@@ -61,7 +54,7 @@ def load_dataset_od(dataset, freq, history, horizon):
 
 
 def load_adj(dataset):
-    loader = _get_loader(dataset)
+    loader = get_loader(dataset)
     if dataset == 'LA':
         adj = loader.load_adj()
     else:
@@ -76,7 +69,7 @@ def load_adj(dataset):
 
 
 def load_adj_long(dataset):
-    loader = _get_loader(dataset)
+    loader = get_loader(dataset)
     dist = loader.load_dist().values
     dist = graph.digitize_dist(dist)
     if dataset.startswith('BJ'):

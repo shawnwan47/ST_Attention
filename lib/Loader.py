@@ -10,6 +10,16 @@ from constants import DATA_PATH, BJ_HIGHWAY_PATH, BJ_METRO_PATH, LA_PATH
 from lib import graph
 
 
+def get_loader(dataset):
+    if dataset == 'BJ_highway':
+        loader = BJLoader('highway')
+    elif dataset == 'BJ_metro':
+        loader = BJLoader('metro')
+    elif dataset == 'LA':
+        loader = LALoader()
+    return loader
+
+
 class LoaderBase:
     def __init__(self):
         raise NotImplementedError

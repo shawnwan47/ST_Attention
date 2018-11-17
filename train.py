@@ -13,6 +13,8 @@ from lib import Trainer
 
 from models import builder
 
+# run with "python train.py -cuda -model=GARNN"
+
 
 args = argparse.ArgumentParser()
 config.add_data(args)
@@ -34,7 +36,7 @@ else:
     print('Using CPU')
 
 # DATA
-data_loaders = pt_utils.load_dataloaders(
+data_loaders, mean, std = pt_utils.load_dataloaders(
     dataset=args.dataset,
     freq=args.freq,
     history=args.history,
@@ -42,9 +44,9 @@ data_loaders = pt_utils.load_dataloaders(
     batch_size=args.batch_size
 )
 data_train, data_valid, data_test = data_loaders
-# if args.cuda:
-#     mean, std = mean.cuda(), std.cuda()
-# rescaler = pt_utils.Rescaler(mean, std)
+if args.cuda:
+    mean, std = mean.cuda(), std.cuda()
+rescaler = pt_utils.Rescaler(mean, std)
 
 
 # MODEL
