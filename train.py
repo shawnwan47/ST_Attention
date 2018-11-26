@@ -18,7 +18,6 @@ from models import builder
 
 args = argparse.ArgumentParser()
 config.add_data(args)
-config.add_device(args)
 config.add_model(args)
 config.add_train(args)
 args = args.parse_args()

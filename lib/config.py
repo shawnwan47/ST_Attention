@@ -18,35 +18,11 @@ def add_data(args):
     args.add_argument('-num_days', type=int, default=7)
     args.add_argument('-num_times', type=int)
     args.add_argument('-num_nodes', type=int)
-    args.add_argument('-num_dists', type=int, default=64)
 
-    args.add_argument('-discretize', action='store_true')
     args.add_argument('-use_time', action='store_true')
     args.add_argument('-use_day', action='store_true')
     args.add_argument('-use_node', action='store_true')
-    args.add_argument('-use_od', action='store_true')
-
-
-def add_device(args):
-    args.add_argument('-cuda', action='store_true')
-    args.add_argument('-gpuid', type=int, default=3)
-    args.add_argument('-seed', type=int, default=47)
-
-
-def add_train(args):
-    # optimization
-    args.add_argument('-criterion', default='SmoothL1Loss',
-                      choices=['L1Loss', 'MSELoss', 'SmoothL1Loss'])
-    args.add_argument('-optim', default='Adam', choices=['SGD', 'Adam'])
-    args.add_argument('-lr', type=float, default=0.001)
-    args.add_argument('-min_lr', type=float, default=1e-6)
-    args.add_argument('-weight_decay', type=float, default=1e-5)
-
-    # run
-    args.add_argument('-test', action='store_true')
-    args.add_argument('-batch_size', type=int)
-    args.add_argument('-epoches', type=int, default=100)
-    args.add_argument('-iterations', type=int, default=100)
+    # args.add_argument('-use_od', action='store_true')
 
 
 def add_model(args):
@@ -75,6 +51,26 @@ def add_model(args):
     args.add_argument('-hops', type=int, default=3)
     # Save path
     args.add_argument('-path')
+
+
+def add_train(args):
+    # device
+    args.add_argument('-cuda', action='store_true')
+    args.add_argument('-gpuid', type=int, default=3)
+    args.add_argument('-seed', type=int, default=47)
+    # optimization
+    args.add_argument('-criterion', default='SmoothL1Loss',
+                      choices=['L1Loss', 'MSELoss', 'SmoothL1Loss'])
+    args.add_argument('-optim', default='Adam', choices=['SGD', 'Adam'])
+    args.add_argument('-lr', type=float, default=0.001)
+    args.add_argument('-min_lr', type=float, default=1e-6)
+    args.add_argument('-weight_decay', type=float, default=1e-5)
+
+    # run
+    args.add_argument('-test', action='store_true')
+    args.add_argument('-batch_size', type=int)
+    args.add_argument('-epoches', type=int, default=100)
+    args.add_argument('-iterations', type=int, default=100)
 
 
 def set_args(args, key, value):
