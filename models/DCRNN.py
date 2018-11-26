@@ -42,7 +42,7 @@ class DCRNN(GRNNBase.GRNN):
 
 class DCRNNDecoder(DCRNN):
     def __init__(self, rnn_type, size, num_layers, num_nodes, adj, hops):
-        super().__init__(self, rnn_type, size, num_layers, num_nodes, adj, hops)
+        super().__init__(rnn_type, size, num_layers, num_nodes, adj, hops)
         self.linear_out = nn.Linear(size, 1)
 
     def forward(self, input, hidden):

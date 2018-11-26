@@ -3,7 +3,7 @@ import torch.nn as nn
 
 
 class GRNNCell(nn.Module):
-    def __init__(self, rnn_type, size, func, func_args):
+    def __init__(self, rnn_type, size, func, **func_args):
         assert rnn_type in ['RNN', 'GRU']
         super().__init__()
         self.rnn_type = rnn_type
@@ -34,15 +34,15 @@ class GRNNCell(nn.Module):
 
 
 class GRNN(nn.Module):
-    def __init__(self, rnn_type, size, num_layers, num_nodes, dropout,
-                 func, func_args):
+    def __init__(self, rnn_type, size, num_layers, num_nodes,
+                 func, **func_args):
         super().__init__()
         self.rnn_type = rnn_type
         self.num_nodes = num_nodes
         self.size = size
         self.num_layers = num_layers
         self.layers = nn.ModuleList([
-            GRNNCell(rnn_type, size, func, func_args)
+            GRNNCell(rnn_type, size, func, **func_args)
             for i in range(num_layers)
         ])
 

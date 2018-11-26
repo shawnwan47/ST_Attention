@@ -19,16 +19,16 @@ def add_data(args):
     args.add_argument('-num_times', type=int)
     args.add_argument('-num_nodes', type=int)
 
-    args.add_argument('-use_time', action='store_true')
-    args.add_argument('-use_day', action='store_true')
-    args.add_argument('-use_node', action='store_true')
-    # args.add_argument('-use_od', action='store_true')
+    args.add_argument('-del_time', action='store_true')
+    args.add_argument('-del_day', action='store_true')
+    args.add_argument('-del_node', action='store_true')
 
 
 def add_model(args):
     # framework and model
     args.add_argument('-model')
     # general
+    args.add_argument('-framework', default='Seq2Seq')
     args.add_argument('-output_size', type=int)
     args.add_argument('-num_layers', type=int, default=2)
     args.add_argument('-hidden_size', type=int)
@@ -43,7 +43,7 @@ def add_model(args):
     args.add_argument('-rnn_type', default='GRU',
                       choices=['RNN', 'GRU', 'LSTM'])
     # Attention
-    args.add_argument('-attn_type', default='general',
+    args.add_argument('-attn_type', default='dot',
                       choices=['dot', 'general', 'mlp'])
     args.add_argument('-head_count', type=int, default=4)
     args.add_argument('-mask', action='store_true')
@@ -127,11 +127,11 @@ def update_model(args):
     name += 'Hid' + str(args.hidden_size)
     name += 'Lay' + str(args.num_layers)
     # data
-    if args.use_node:
+    if args.del_node:
         name += 'Node'
-    if args.use_time:
+    if args.del_time:
         name += 'Time'
-    if args.use_day:
+    if args.del_day:
         name += 'Day'
     name += args.freq
     args.path = MODEL_PATH + args.dataset + '/' + name

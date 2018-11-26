@@ -1,4 +1,6 @@
 import datetime
+from constants import EPS
+
 
 def aeq(*args):
     arguments = (arg for arg in args)

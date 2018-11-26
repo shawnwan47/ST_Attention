@@ -5,14 +5,9 @@ import torch.nn as nn
 
 from lib import pt_utils
 
-from models import Seq2Seq
-from models import Decoder
 from models import Embedding
 from models import RNN
 from models import DCRNN
-from models import GCN
-from models import GAT
-from models import Transformer
 
 
 def build_model(args):
@@ -33,7 +28,7 @@ def build_model(args):
 
 def build_temp_embedding(args):
     return Embedding.TempEmbedding(
-        use_time=args.use_time, use_day=args.use_day,
+        del_time=args.del_time, del_day=args.del_day,
         num_times=args.num_times, time_dim=args.time_dim,
         num_days=args.num_days, day_dim=args.day_dim,
         num_nodes=args.num_nodes, size=args.hidden_size, dropout=args.dropout)
@@ -41,7 +36,7 @@ def build_temp_embedding(args):
 
 def build_st_embedding(args):
     return Embedding.STEmbedding(
-        use_node=args.use_node, use_time=args.use_time, use_day=args.use_day,
+        del_node=args.del_node, del_time=args.del_time, del_day=args.del_day,
         num_nodes=args.num_nodes, node_dim=args.node_dim,
         num_times=args.num_times, time_dim=args.time_dim,
         num_days=args.num_days, day_dim=args.day_dim,
@@ -49,7 +44,7 @@ def build_st_embedding(args):
 
 
 def build_decoder(args):
-
+    pass
 
 
 def build_RNN(args):
@@ -88,18 +83,15 @@ def build_DCRNN(args):
         num_nodes=args.num_nodes,
         size=args.hidden_size,
         num_layers=args.num_layers,
-        dropout=args.dropout,
         adj=adj.cuda() if args.cuda else adj,
         hops=args.hops
     )
 
-    decoder = DCRNN.GCRNNDecoder(
+    decoder = DCRNN.DCRNNDecoder(
         rnn_type=args.rnn_type,
         num_nodes=args.num_nodes,
         size=args.hidden_size,
-        out_size=args.output_size,
         num_layers=args.num_layers,
-        dropout=args.dropout,
         adj=adj.cuda() if args.cuda else adj,
         hops=args.hops
     )
@@ -149,7 +141,7 @@ def build_GARNN(args):
         rnn_type=args.rnn_type,
         num_nodes=args.num_nodes,
         size=args.hidden_size,
-        out_size=args.output_size,
+        output_size=args.output_size,
         num_layers=args.num_layers,
         dropout=args.dropout,
         gc_func=gc_func,
@@ -174,7 +166,7 @@ def build_Transformer(args):
         dropout=args.dropout)
     decoder = getattr(Transformer, args.model)(
         size=args.hidden_size,
-        out_size=args.output_size,
+        output_size=args.output_size,
         num_layers=args.num_layers,
         head_count=args.head_count,
         dropout=args.dropout)
