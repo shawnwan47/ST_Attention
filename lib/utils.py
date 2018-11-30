@@ -29,8 +29,8 @@ def select_index(index, start, end):
 
 class Rescaler:
     def __init__(self, mean, std):
-        self.mean = mean
-        self.std = std
+        self.mean = mean.unsqueeze(-1)
+        self.std = std.unsqueeze(-1)
 
     def __call__(self, input):
         return (input * (self.std + EPS)) + self.mean

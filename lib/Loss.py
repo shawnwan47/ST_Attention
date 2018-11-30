@@ -59,7 +59,7 @@ class Loss:
         self.horizons = horizons
 
     def __call__(self, output, target):
-        ret = MetricDict({horizon: self._eval(output[:, horizon], target[:, horizon])
+        ret = MetricDict({horizon: self._eval(output[..., horizon], target[..., horizon])
                           for horizon in self.horizons})
         ret['avg'] = self._eval(output, target)
         return ret

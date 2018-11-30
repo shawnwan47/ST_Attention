@@ -48,6 +48,7 @@ class Embedding2D(nn.Module):
                  del_day, num_days, day_dim,
                  output_size, dropout):
         super().__init__()
+        self.output_size = output_size
         self.del_node = del_node
         self.del_time = del_time
         self.del_day = del_day

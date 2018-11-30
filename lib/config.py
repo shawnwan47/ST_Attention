@@ -2,7 +2,6 @@ from collections import OrderedDict
 from constants import MODEL_PATH
 
 def add_data(args):
-    # data attribute
     args.add_argument('-dataset', default='LA',
                       choices=['LA', 'BJ_highway', 'BJ_metro'])
 
@@ -29,7 +28,6 @@ def add_model(args):
     # framework and model
     args.add_argument('-model')
     # general
-    args.add_argument('-io', default='graph', choices=['graph', 'vector'])
     args.add_argument('-framework', default='seq2seq',
                       choices=['seq2seq', 'seq2vec', 'vec2vec'])
     args.add_argument('-hidden_size', type=int)
@@ -71,7 +69,7 @@ def add_train(args):
 
     # run
     args.add_argument('-test', action='store_true')
-    args.add_argument('-batch_size', type=int)
+    args.add_argument('-batch_size', type=int, default=128)
     args.add_argument('-epoches', type=int, default=100)
     args.add_argument('-iterations', type=int, default=100)
 
@@ -104,8 +102,13 @@ def update_data(args):
 
 
 def update_model(args):
-    # io
-    if args.io is 'vector':
+    # hidden_size
+    if args.model == 'RNN':
+        set_args(args, 'hidden_size', 512)
+    else:
+        set_args(args, 'hidden_size', 64)
+    # output_size
+    if args.model == 'RNN':
         args.output_size = args.num_nodes
     else:
         args.output_size = 1

@@ -5,34 +5,39 @@ import torch.nn as nn
 
 from lib import pt_utils
 
-from models import Embedding
-from models import RNN
-from models import DCRNN
+from models.Framework import Seq2Seq, Seq2Vec
+from models.Embedding import Embedding1D, Embedding2D
+from models.MLP import MLP
+from models.RNN import RNN
+from models.DCRNN import DCRNN
+
 
 
 def build_model(args):
-    if args.framework in ['Seq2Vec', 'Vec2Vec']:
-        decoder = MLP(args.hidden_size, args.horizon)
+    framework, model = args.framework, args.model
+    history, horizon = args.history, args.horizon
+    decoder = MLP(input_size=args.hidden_size, output_size=args.output_size)
+    if model == 'RNN':
+        embedding = build_Embedding1D(args)
+        encoder = build_RNN(args)
+        if framework == 'Seq2Vec':
+            model = Seq2Vec(embedding, encoder, decoder)
+        else:
+            model = Seq2Seq(embedding, encoder, decoder, history, horizon)
+    elif model == 'DCRNN':
+        embedding = build_Embedding2D(args)
+        encoder = build_DCRNN(args)
+        if framework == 'Seq2Vec':
+            model = Seq2Vec(embedding, encoder, decoder)
+        else:
+            model = Seq2Seq(embedding, encoder, decoder, history, horizon)
     else:
-        decoder = MLP(args.hidden_size, 1)
-
-    if args.model in ['RNN', 'RNNAttn']:
-        model = build_RNN(args)
-    elif args.model in ['DCRNN']:
-        model = build_DCRNN(args)
-    elif args.model in ['GARNN', 'GRARNN']:
-        model = build_GARNN(args)
-    elif args.model in ['Transformer', 'RelativeTransformer']:
-        model = build_Transformer(args)
-    elif args.model in ['STTransformer', 'RelativeSTTransformer']:
-        model = build_STTransformer(args)
-    else:
-        raise NameError('model {0} unfound!'.format(model))
+        raise Exception('model unspecified!')
     return model
 
 
 def build_Embedding1D(args):
-    return Embedding.Embedding1D(
+    return Embedding1D(
         num_nodes=args.num_nodes,
         del_time=args.del_time,
         num_times=args.num_times, time_dim=args.time_dim,
@@ -44,7 +49,7 @@ def build_Embedding1D(args):
 
 def build_Embedding2D(args):
     data_size = args.history if args.framework is 'vec2vec' else 1
-    return Embedding.STEmbedding(
+    return Embedding2D(
         data_size=data_size,
         del_nodes=args.del_nodes,
         num_nodes=args.num_nodes, node_dim=args.node_dim,
@@ -56,44 +61,21 @@ def build_Embedding2D(args):
     )
 
 
-def build_decoder(args):
-    return MLP(input_size=args.hidden_size, output_size=args.output_size)
-
-
 def build_MLP(args):
     assert args.framework is 'vec2vec'
     embedding = build_Embedding1D(args)
-    mlp = MLP(input_size=args.hidden_size, args.output_size)
+    mlp = MLP(input_size=args.hidden_size, output_size=args.output_size)
     model = nn.Sequential(embedding, mlp)
     return model
 
 
 def build_RNN(args):
-    assert args.framework in ['seq2seq', 'seq2vec']
-    embedding = build_Embedding1D(args)
-    decoder = build_decoder(args)
-    encoder = RNN.RNN(
+    return RNN(
         rnn_type=args.rnn_type,
         size=args.hidden_size,
         num_layers=args.num_layers,
-        dropout=args.dropout,
+        dropout=args.dropout
     )
-
-    if args.framework is 'seq2seq':
-        model = RNN.RNNSeq2Seq(
-            embedding=embedding,
-            encoder=encoder,
-            decoder=decoder,
-            history=args.history,
-            horizon=args.horizon
-        )
-    else:
-        model = RNN.RNNSeq2Vec(
-            embedding=embedding,
-            encoder=encoder,
-            dcoder=decoder
-        )
-    return model
 
 
 def build_DCRNN(args):
@@ -110,22 +92,16 @@ def build_DCRNN(args):
         hops=args.hops
     )
 
-    decoder = DCRNN.DCRNNDecoder(
-        rnn_type=args.rnn_type,
-        num_nodes=args.num_nodes,
-        size=args.hidden_size,
-        num_layers=args.num_layers,
-        adj=adj.cuda() if args.cuda else adj,
-        hops=args.hops
-    )
+    decoder = build_decoder(args)
 
-    seq2seq = DCRNN.DCRNNSeq2Seq(
+    model = Seq2Seq(
         embedding=embedding,
         encoder=encoder,
         decoder=decoder,
         history=args.history,
-        horizon=args.horizon)
-    return seq2seq
+        horizon=args.horizon
+    )
+    return model
 
 
 def build_GARNN(args):

@@ -42,6 +42,7 @@ class Trainer:
             output = self.model(data, time, day, self.teach if train else 0)
             if isinstance(output, tuple):
                 output = output[0]
+            print(output.size())
             output = self.rescaler(output)
 
             error = error + self.loss(output, target)

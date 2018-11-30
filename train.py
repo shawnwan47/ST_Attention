@@ -36,16 +36,7 @@ else:
     print('Using CPU')
 
 # DATA
-loader_train, loader_valid, loader_test, mean, std = pt_utils.load_dataloaders(
-    dataset=args.dataset,
-    freq=args.freq,
-    bday=args.bday,
-    start=args.start,
-    end=args.end,
-    history=args.history,
-    horizon=args.horizon,
-    batch_size=args.batch_size
-)
+loader_train, loader_valid, loader_test, mean, std = pt_utils.load_loaders(args)
 if args.cuda:
     mean, std = mean.cuda(), std.cuda()
 rescaler = utils.Rescaler(mean, std)

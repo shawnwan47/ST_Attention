@@ -10,22 +10,28 @@ from lib.utils import aeq
 from constants import EPS
 
 
-def load_dataloaders(dataset, freq, bday, start, end, history, horizon, batch_size):
-    df = get_loader(dataset).load_ts(freq)
+def load_loaders(args):
+    df = get_loader(args.dataset).load_ts(args.freq)
     data_train, data_valid, data_test, mean, std = IO.prepare_dataset(
-        df, bday, start, end, history, horizon
+        df=df,
+        bday=args.bday,
+        start=args.start,
+        end=args.end,
+        history=args.history,
+        horizon=args.horizon,
+        framework=args.framework,
+        model=args.model
     )
     mean, std = numpy_to_torch(mean), numpy_to_torch(std)
 
-    datasets = (
+    dataset_train, dataset_valid, dataset_test = (
         TensorDataset(*[numpy_to_torch(data) for data in data_tuple])
         for data_tuple in (data_train, data_valid, data_test)
     )
 
-    loader_train, loader_valid, loader_test = (
-        DataLoader(dataset=dataset, batch_size=batch_size, shuffle=i==0)
-        for i, dataset in enumerate(datasets)
-    )
+    loader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True)
+    loader_valid = DataLoader(dataset_valid, batch_size=args.batch_size)
+    loader_test = DataLoader(dataset_test, batch_size=args.batch_size)
 
     return loader_train, loader_valid, loader_test, mean, std
 
