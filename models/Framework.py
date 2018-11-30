@@ -16,12 +16,11 @@ class Vec2VecBase(nn.Module):
 
 
 class Seq2VecBase(nn.Module):
-    def __init__(self, embedding, encoder, decoder, history):
+    def __init__(self, embedding, encoder, decoder):
         super().__init__()
         self.embedding = embedding
         self.encoder = encoder
         self.decoder = decoder
-        self.history = history
 
 
 class Seq2SeqBase(nn.Module):

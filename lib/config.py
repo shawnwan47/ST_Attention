@@ -7,8 +7,9 @@ def add_data(args):
                       choices=['LA', 'BJ_highway', 'BJ_metro'])
 
     args.add_argument('-freq', type=int, default=5)
-    args.add_argument('-start', type=int, default=0)
-    args.add_argument('-end', type=int, default=24)
+    args.add_argument('-start', type=int, default=6)
+    args.add_argument('-end', type=int, default=22)
+    args.add_argument('-bday', action='store_true')
     args.add_argument('-history', type=int, default=60)
     args.add_argument('-horizon', type=int, default=60)
 
@@ -28,10 +29,12 @@ def add_model(args):
     # framework and model
     args.add_argument('-model')
     # general
-    args.add_argument('-framework', default='Seq2Seq')
-    args.add_argument('-output_size', type=int)
-    args.add_argument('-num_layers', type=int, default=2)
+    args.add_argument('-io', default='graph', choices=['graph', 'vector'])
+    args.add_argument('-framework', default='seq2seq',
+                      choices=['seq2seq', 'seq2vec', 'vec2vec'])
     args.add_argument('-hidden_size', type=int)
+    args.add_argument('-output_size', type=int)
+    args.add_argument('-num_layers', type=int, default=1)
     args.add_argument('-dropout', type=float, default=0.2)
     # Embedding
     args.add_argument('-day_dim', type=int, default=16)
@@ -96,27 +99,18 @@ def update_data(args):
     args.horizons = list(OrderedDict.fromkeys(horizons))
     args.freq = str(args.freq) + 'min'
 
+    if args.bday:
+        args.del_day = True
+
 
 def update_model(args):
-    if args.model in ['RNN',
-                      'RNNAttn',
-                      'Transformer',
-                      'RelativeTransformer']:
+    # io
+    if args.io is 'vector':
         args.output_size = args.num_nodes
-        set_args(args, 'batch_size', 128)
-        set_args(args, 'hidden_size', 256)
-    elif args.model in ['DCRNN',
-                        'GARNN',
-                        'GRARNN',
-                        'STTransformer',
-                        'RelativeSTTransformer']:
-        args.output_size = 1
-        set_args(args, 'batch_size', 16)
-        set_args(args, 'hidden_size', 64)
     else:
-        raise NameError('Model {model} invalid.'.format(model))
-
-    # path
+        args.output_size = 1
+    if args.framework is not 'seq2seq':
+        args.output_size *= args.horizon
     # model
     name = args.model
     if 'RNN' in args.model:

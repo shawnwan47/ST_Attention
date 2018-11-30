@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from models import GRNNBase
+from models import GRNN
 from models.Framework import Seq2VecBase, Seq2SeqBase
 
 
@@ -32,7 +32,7 @@ class DiffusionConvolution(nn.Module):
         return output
 
 
-class DCRNN(GRNNBase.GRNN):
+class DCRNN(GRNN.GRNN):
     def __init__(self, rnn_type, size, num_layers, num_nodes, adj, hops):
         super().__init__(rnn_type, size, num_layers, num_nodes,
                          func=DiffusionConvolution,
@@ -52,7 +52,7 @@ class DCRNNDecoder(DCRNN):
 
 
 class DCRNNSeq2Seq(Seq2SeqBase):
-    def forward(self, data, time, day, teach=0):
+    def forward(self, data, time, day):
         data = data.unsqueeze(-1)
         self._check_args(data, time, day)
         his = self.history
@@ -64,10 +64,20 @@ class DCRNNSeq2Seq(Seq2SeqBase):
         output_i, hidden = self.decoder(input, hidden)
         output = [output_i]
         for idx in range(his, his + self.horizon - 1):
-            # data_i = data[:, [idx]] if random() < teach else output_i.detach()
             data_i = output_i.detach()
             input = self.embedding(data_i, time[:, [idx]], day[:, [idx]])
             output_i, hidden = self.decoder(input, hidden)
             output.append(output_i)
         output = torch.cat(output, 1).squeeze(-1)
+        return output
+
+
+class DCRNNSeq2Vec(Seq2VecBase):
+    def forward(self, data, time, day):
+        data = data.unsqueeze(-1)
+        # encoding
+        input = self.embedding(data, time, day)
+        encoder_output, hidden = self.encoder(input)
+        # decoding
+        output = self.decoder(encoder_output[:, -1])
         return output

@@ -11,6 +11,11 @@ from models import DCRNN
 
 
 def build_model(args):
+    if args.framework in ['Seq2Vec', 'Vec2Vec']:
+        decoder = MLP(args.hidden_size, args.horizon)
+    else:
+        decoder = MLP(args.hidden_size, 1)
+
     if args.model in ['RNN', 'RNNAttn']:
         model = build_RNN(args)
     elif args.model in ['DCRNN']:
@@ -26,51 +31,69 @@ def build_model(args):
     return model
 
 
-def build_temp_embedding(args):
-    return Embedding.TempEmbedding(
-        del_time=args.del_time, del_day=args.del_day,
+def build_Embedding1D(args):
+    return Embedding.Embedding1D(
+        num_nodes=args.num_nodes,
+        del_time=args.del_time,
         num_times=args.num_times, time_dim=args.time_dim,
+        del_day=args.del_day,
         num_days=args.num_days, day_dim=args.day_dim,
-        num_nodes=args.num_nodes, size=args.hidden_size, dropout=args.dropout)
+        output_size=args.hidden_size, dropout=args.dropout
+    )
 
 
-def build_st_embedding(args):
+def build_Embedding2D(args):
+    data_size = args.history if args.framework is 'vec2vec' else 1
     return Embedding.STEmbedding(
-        del_node=args.del_node, del_time=args.del_time, del_day=args.del_day,
+        data_size=data_size,
+        del_nodes=args.del_nodes,
         num_nodes=args.num_nodes, node_dim=args.node_dim,
+        del_time=args.del_time,
         num_times=args.num_times, time_dim=args.time_dim,
+        del_day=args.del_day,
         num_days=args.num_days, day_dim=args.day_dim,
-        size=args.hidden_size, dropout=args.dropout)
+        output_size=args.hidden_size, dropout=args.dropout
+    )
 
 
 def build_decoder(args):
-    pass
+    return MLP(input_size=args.hidden_size, output_size=args.output_size)
+
+
+def build_MLP(args):
+    assert args.framework is 'vec2vec'
+    embedding = build_Embedding1D(args)
+    mlp = MLP(input_size=args.hidden_size, args.output_size)
+    model = nn.Sequential(embedding, mlp)
+    return model
 
 
 def build_RNN(args):
-    embedding = build_temp_embedding(args)
+    assert args.framework in ['seq2seq', 'seq2vec']
+    embedding = build_Embedding1D(args)
+    decoder = build_decoder(args)
     encoder = RNN.RNN(
         rnn_type=args.rnn_type,
         size=args.hidden_size,
         num_layers=args.num_layers,
         dropout=args.dropout,
     )
-    decoder = RNN.RNNDecoder(
-        rnn_type=args.rnn_type,
-        size=args.hidden_size,
-        output_size=args.num_nodes,
-        num_layers=args.num_layers,
-        dropout=args.dropout,
-    )
 
-    seq2seq = RNN.RNNSeq2Seq(
-        embedding=embedding,
-        encoder=encoder,
-        decoder=decoder,
-        history=args.history,
-        horizon=args.horizon
-    )
-    return seq2seq
+    if args.framework is 'seq2seq':
+        model = RNN.RNNSeq2Seq(
+            embedding=embedding,
+            encoder=encoder,
+            decoder=decoder,
+            history=args.history,
+            horizon=args.horizon
+        )
+    else:
+        model = RNN.RNNSeq2Vec(
+            embedding=embedding,
+            encoder=encoder,
+            dcoder=decoder
+        )
+    return model
 
 
 def build_DCRNN(args):
@@ -158,7 +181,7 @@ def build_GARNN(args):
 
 
 def build_Transformer(args):
-    embedding = build_temp_embedding(args)
+    embedding = build_Embedding1D(args)
     encoder = getattr(Transformer, args.model)(
         size=args.hidden_size,
         num_layers=args.num_layers,

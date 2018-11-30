@@ -30,34 +30,6 @@ class Seq2SeqBase(nn.Module):
         aeq(data_length, data.size(1), time.size(1), day.size(1))
 
 
-class Seq2SeqRNN(Seq2SeqBase):
-    def forward(self, data, time, day, teach=0):
-        self._check_args(data, time, day)
-        his = self.history
-        # encoding
-        input = self.embedding(data[:, :his], time[:, :his], day[:, :his])
-        encoder_output, hidden = self.encoder(input)
-        # decoding
-        input = self._expand_input0(input)
-        output_i, hidden = self.decoder(input, hidden)
-        output = [output_i]
-        for idx in range(his, his + self.horizon - 1):
-            # data_i = data[:, [idx]] if random() < teach else output_i.detach()
-            data_i = output_i.detach()
-            input = self.embedding(data_i, time[:, [idx]], day[:, [idx]])
-            output_i, hidden = self.decoder(input, hidden)
-            output.append(output_i)
-        return torch.cat(output, 1)
-
-
-class Seq2SeqDCRNN(Seq2SeqRNN):
-    def forward(self, data, time, day, teach=0):
-        # embedding
-        data = data.unsqueeze(-1)
-        output = super().forward(data, time, day, teach)
-        return output.squeeze(-1)
-
-
 class Seq2SeqGARNN(Seq2SeqBase):
     def forward(self, data, time, day, teach=0):
         data = data.unsqueeze(-1)

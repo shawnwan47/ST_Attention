@@ -24,17 +24,11 @@ class RNN(nn.Module):
         return self.rnn(input, hidden)
 
 
-class RNNDecoder(RNN):
-    def __init__(self, rnn_type, size, output_size, num_layers, dropout=0):
-        super().__init__(rnn_type, size, num_layers, dropout)
-        self.linear_out = nn.Linear(size, output_size)
-        self.layer_norm = nn.LayerNorm(size)
-
-    def forward(self, input, hidden):
-        output, hidden = super().forward(input, hidden)
-        output = self.layer_norm(output)
-        output = self.linear_out(output)
-        return output, hidden
+class RNNSeq2Vec(Seq2VecBase):
+    def forward(self, data, time, day):
+        input = self.embedding(data, time, day)
+        output, _ = self.encoder(input)
+        return self.decoder(output)
 
 
 class RNNSeq2Seq(Seq2SeqBase):
@@ -52,6 +46,7 @@ class RNNSeq2Seq(Seq2SeqBase):
             # data_i = data[:, [idx]] if random() < teach else output_i.detach()
             data_i = output_i.detach()
             input = self.embedding(data_i, time[:, [idx]], day[:, [idx]])
-            output_i, hidden = self.decoder(input, hidden)
+            output_i, hidden = self.encoder(input, hidden)
+            output_i = decoder(output_i)
             output.append(output_i)
         return torch.cat(output, 1)

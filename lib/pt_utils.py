@@ -10,10 +10,10 @@ from lib.utils import aeq
 from constants import EPS
 
 
-def load_dataloaders(dataset, freq, history, horizon, batch_size):
+def load_dataloaders(dataset, freq, bday, start, end, history, horizon, batch_size):
     df = get_loader(dataset).load_ts(freq)
     data_train, data_valid, data_test, mean, std = IO.prepare_dataset(
-        df, history, horizon
+        df, bday, start, end, history, horizon
     )
     mean, std = numpy_to_torch(mean), numpy_to_torch(std)
 
@@ -22,12 +22,12 @@ def load_dataloaders(dataset, freq, history, horizon, batch_size):
         for data_tuple in (data_train, data_valid, data_test)
     )
 
-    dataloaders = (
+    loader_train, loader_valid, loader_test = (
         DataLoader(dataset=dataset, batch_size=batch_size, shuffle=i==0)
         for i, dataset in enumerate(datasets)
     )
 
-    return dataloaders, mean, std
+    return loader_train, loader_valid, loader_test, mean, std
 
 #
 # def load_dataset_od(dataset, freq, history, horizon):

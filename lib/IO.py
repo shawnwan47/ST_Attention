@@ -6,7 +6,7 @@ from constants import EPS
 from lib.utils import aeq
 
 
-def prepare_dataset(df, start, end, bday, history, horizon):
+def prepare_dataset(df, bday, start, end, history, horizon):
     df = _filter_df(df, start, end, bday)
     df_train, df_valid, df_test = _split_dataset(df)
     mean, std = df_train.mean().values, df_train.std().values
@@ -15,7 +15,7 @@ def prepare_dataset(df, start, end, bday, history, horizon):
     return data_train, data_valid, data_test, mean, std
 
 
-def _filter_df(df, start, end, bday):
+def _filter_df(df, bday, start, end):
     time_filter = (df.index.hour >= start) & (df.index.hour < end)
     bday_filter = df.index.weekday < 5
     if bday:
