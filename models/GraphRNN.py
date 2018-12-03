@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 
-class GRNN(nn.Module):
+class GraphRNN(nn.Module):
     def __init__(self, rnn_type, size, num_layers, num_nodes,
                  func=nn.Linear, **func_args):
         super().__init__()
@@ -11,7 +11,7 @@ class GRNN(nn.Module):
         self.size = size
         self.num_layers = num_layers
         self.layers = nn.ModuleList([
-            GRNNCell(rnn_type, size, func, **func_args)
+            GraphRNNCell(rnn_type, size, func, **func_args)
             for i in range(num_layers)
         ])
 
@@ -41,7 +41,7 @@ class GRNN(nn.Module):
         return output, hidden
 
 
-class GRNNCell(nn.Module):
+class GraphRNNCell(nn.Module):
     def __init__(self, rnn_type, size, func, **func_args):
         assert rnn_type in ['RNN', 'GRU']
         super().__init__()

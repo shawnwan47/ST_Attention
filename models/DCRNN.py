@@ -3,7 +3,8 @@ from random import random
 import torch
 import torch.nn as nn
 
-from models import GRNN
+from models.GraphRNN import GraphRNN
+from models.Framework import Seq2Seq
 
 
 class DiffusionConvolution(nn.Module):
@@ -33,9 +34,25 @@ class DiffusionConvolution(nn.Module):
         return output
 
 
-class DCRNN(GRNN.GRNN):
+class DCRNN(GraphRNN):
     def __init__(self, rnn_type, size, num_layers, num_nodes, adj, hops):
         super().__init__(rnn_type, size, num_layers, num_nodes,
                          func=DiffusionConvolution,
                          adj=adj,
                          hops=hops)
+
+
+class DCRNNDecoder(DCRNN):
+    def __init__(self, *args, **kw_args):
+        super().__init__(*args, **kw_args)
+        self.fc = nn.Linear(kw_args['size'], 1)
+
+    def forward(self, *args, **kw_args):
+        output, hidden = super().forward(*args, **kw_args)
+        return self.fc(output), hidden
+
+
+class DCRNNSeq2Seq(Seq2Seq):
+    def forward(self, data, time, weekday, teach=0):
+        output = super().forward(data, time, weekday, teach)
+        return output.squeeze(-1)

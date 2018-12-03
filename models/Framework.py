@@ -28,7 +28,8 @@ class Seq2Vec(nn.Module):
     def forward(self, data, time, day):
         input = self.embedding(data, time, day)
         output, _ = self.encoder(input)
-        return self.decoder(output[:, -1])
+        output = self.decoder(output[:, -1])
+        return output.transpose(-1, -2)
 
 class Seq2Seq(nn.Module):
     def __init__(self, embedding, encoder, decoder, history, horizon):
@@ -60,13 +61,13 @@ class Seq2Seq(nn.Module):
         input = self.embedding(data[:, :his], time[:, :his], day[:, :his])
         encoder_output, hidden = self.encoder(input)
         # decoding
-        input = self.expand_start(input)
-        output_i, hidden = self.encoder(input, hidden)
-        output = [self.decoder(output_i)]
+        input_i = self.expand_start(input)
+        output_i, hidden = self.decoder(input_i, hidden)
+        output = [output_i]
         for idx in range(his, his + self.horizon - 1):
             data_i = data[:, [idx]] if random() < teach else output_i
             input_i = self.embedding(data_i, time[:, [idx]], day[:, [idx]])
-            output_i, hidden = self.encoder(input_i, hidden)
-            output_i = self.decoder(output_i)
+            output_i, hidden = self.decoder(input_i, hidden)
             output.append(output_i)
-        return torch.cat(output, -1)
+        output = torch.cat(output, 1)
+        return output

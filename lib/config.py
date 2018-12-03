@@ -27,19 +27,24 @@ def add_data(args):
 def add_model(args):
     # framework and model
     args.add_argument('-model')
-    # general
+    args.add_argument('-paradigm', default='spatialtemporal',
+                      choices=['none', 'spatial', 'temporal', 'spatialtemporal'])
     args.add_argument('-framework', default='seq2seq',
                       choices=['seq2seq', 'seq2vec', 'vec2vec'])
+
+    # general
     args.add_argument('-hidden_size', type=int)
     args.add_argument('-output_size', type=int)
     args.add_argument('-num_layers', type=int, default=1)
     args.add_argument('-dropout', type=float, default=0.2)
+
     # Embedding
-    args.add_argument('-day_dim', type=int, default=16)
-    args.add_argument('-time_dim', type=int, default=16)
-    args.add_argument('-node_dim', type=int, default=16)
-    args.add_argument('-time_dist_dim', type=int, default=16)
-    args.add_argument('-node_dist_dim', type=int, default=16)
+    args.add_argument('-embedding_dim', type=int, default=16)
+    args.add_argument('-day_dim', type=int)
+    args.add_argument('-time_dim', type=int)
+    args.add_argument('-node_dim', type=int)
+    args.add_argument('-time_dist_dim', type=int)
+    args.add_argument('-node_dist_dim', type=int)
     # RNN
     args.add_argument('-rnn_type', default='GRU',
                       choices=['RNN', 'GRU', 'LSTM'])
@@ -102,11 +107,21 @@ def update_data(args):
 
 
 def update_model(args):
+    # paradigm
+    model = args.model
+    if model == ['MLP']:
+        args.paradigm = 'none'
+    if model in ['RNN', 'Transformer']:
+        args.paradigm = 'temporal'
+    elif model in ['GraphMLP', 'GraphAttention', 'DiffusionConvolution']:
+        args.paradigm = 'spatial'
+    else:
+        args.paradigm = 'spatialtemporal'
     # hidden_size
     if args.model == 'RNN':
-        set_args(args, 'hidden_size', 512)
+        set_args(args, 'hidden_size', 256)
     else:
-        set_args(args, 'hidden_size', 64)
+        set_args(args, 'hidden_size', 16)
     # output_size
     if args.model == 'RNN':
         args.output_size = args.num_nodes
@@ -114,7 +129,13 @@ def update_model(args):
         args.output_size = 1
     if args.framework is not 'seq2seq':
         args.output_size *= args.horizon
-    # model
+
+    # embedding dim
+    args.time_dim = args.embedding_dim
+    args.day_dim = args.embedding_dim
+    args.node_dim = args.embedding_dim
+
+    # model name
     name = args.model
     if 'RNN' in args.model:
         name += args.rnn_type
@@ -130,5 +151,4 @@ def update_model(args):
         name += 'Time'
     if args.del_day:
         name += 'Day'
-    name += args.freq
     args.path = MODEL_PATH + args.dataset + '/' + name

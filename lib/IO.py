@@ -6,13 +6,13 @@ from constants import EPS
 from lib.utils import aeq
 
 
-def prepare_dataset(df, bday, start, end, history, horizon, framework, model):
+def prepare_dataset(df, bday, start, end, history, horizon, framework, paradigm):
     df = _filter_df(df, bday, start, end)
     df_train, df_valid, df_test = _split_dataset(df)
     mean, std = df_train.mean().values, df_train.std().values
-    data_train = _df_to_io(df_train, history, horizon, mean, std, framework, model)
-    data_valid = _df_to_io(df_valid, history, horizon, mean, std, framework, model)
-    data_test = _df_to_io(df_test, history, horizon, mean, std, framework, model)
+    data_train = _df_to_io(df_train, history, horizon, mean, std, framework, paradigm)
+    data_valid = _df_to_io(df_valid, history, horizon, mean, std, framework, paradigm)
+    data_test = _df_to_io(df_test, history, horizon, mean, std, framework, paradigm)
     return data_train, data_valid, data_test, mean, std
 
 
@@ -56,7 +56,7 @@ def _split_dataset(df, train_ratio=0.7, test_ratio=0.2):
     return df_train, df_valid, df_test
 
 
-def _df_to_io(df, history, horizon, mean, std, framework, model):
+def _df_to_io(df, history, horizon, mean, std, framework, paradigm):
     # data
     data = (df.values - mean) / std
     data[np.isnan(data)] = 0
@@ -73,12 +73,12 @@ def _df_to_io(df, history, horizon, mean, std, framework, model):
     time = time.reshape(days, -1)
     weekday = weekday.reshape(days, -1)
 
-    # samples & length
+    # framework: samples & length & data shape
     daily_samples = data.shape[1] - history - horizon
     length = history + horizon - 1 if framework == 'seq2seq' else history
 
-    targets = _gen_daily_seqs(targets, daily_samples, horizon).transpose(0, 2, 1)
     data = _gen_daily_seqs(data, daily_samples, length)
+    targets = _gen_daily_seqs(targets, daily_samples, horizon)
     if framework == 'vec2vec':
         time = time[:, :daily_samples].reshape(-1)
         weekday = weekday[:, :daily_samples].reshape(-1)
@@ -86,14 +86,17 @@ def _df_to_io(df, history, horizon, mean, std, framework, model):
         time = _gen_daily_seqs(time, daily_samples, length)
         weekday = _gen_daily_seqs(weekday, daily_samples, length)
 
-    # model io
-    if model != 'RNN':
-        time = np.repeat(time, dim).reshape(-1, dim)
-        weekday = np.repeat(weekday, dim).reshape(-1, dim)
-    if model in ['MLP', 'GraphAttention', 'GraphAttentionFusion']:
+    # paradigm: io structure
+    if paradigm == 'none':
+        data = data.reshape(data.shape[0], -1)
+    elif paradigm == 'spatial':
         data = data.transpose(0, 2, 1)
-    elif model in ['GraphRNN', 'GraphAttentionRNN', 'GraphAttentionFusionRNN']:
-        data = np.expand_dimensions(data, -1)
+    elif paradigm == 'spatialtemporal':
+        data = np.expand_dims(data, -1)
+        time = np.repeat(time, dim).reshape(data.shape[0], -1, dim)
+        weekday = np.repeat(weekday, dim).reshape(data.shape[0], -1, dim)
+    else:
+        pass
 
     return data, time, weekday, targets
 

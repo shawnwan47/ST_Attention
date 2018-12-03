@@ -19,8 +19,8 @@ def load_loaders(args):
         end=args.end,
         history=args.history,
         horizon=args.horizon,
-        framework=args.framework,
-        model=args.model
+        paradigm=args.paradigm,
+        framework=args.framework
     )
     mean, std = numpy_to_torch(mean), numpy_to_torch(std)
 

@@ -7,7 +7,7 @@ class EmbeddingFusion(nn.Module):
         super().__init__()
         self.chain = nn.Sequential(
             nn.Embedding(num_embeddings, embedding_dim),
-            nn.Dropout(dropout, inplace=True),
+            nn.Dropout(dropout),
             nn.Linear(embedding_dim, output_size, bias=False)
         )
 
@@ -25,7 +25,6 @@ class Embedding1D(nn.Module):
         self.del_time = del_time
         self.del_day = del_day
         self.linear_data = nn.Linear(num_nodes, output_size)
-        self.dropout = nn.Dropout(dropout)
         if not del_time:
             self.embedding_time = EmbeddingFusion(num_times, time_dim, output_size, dropout)
         if not del_day:
@@ -33,7 +32,7 @@ class Embedding1D(nn.Module):
         self.layer_norm = nn.LayerNorm(output_size)
 
     def forward(self, data, time, weekday):
-        output = self.dropout(self.linear_data(data))
+        output = self.linear_data(data)
         if not self.del_time:
             output += self.embedding_time(time)
         if not self.del_day:

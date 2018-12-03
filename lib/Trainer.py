@@ -42,15 +42,14 @@ class Trainer:
             output = self.model(data, time, day, self.teach if train else 0)
             if isinstance(output, tuple):
                 output = output[0]
-            print(output.size())
             output = self.rescaler(output)
 
             error = error + self.loss(output, target)
             output, target = pt_utils.mask_target(output, target)
             if train:
-                crit = self.criterion(output, target)
+                criterion = self.criterion(output, target)
                 self.optimizer.zero_grad()
-                crit.backward()
+                criterion.backward()
                 clip_grad_norm_(self.model.parameters(), 1.)
                 self.optimizer.step()
             del output
