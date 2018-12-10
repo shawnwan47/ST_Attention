@@ -2,26 +2,21 @@ from collections import OrderedDict
 from constants import MODEL_PATH
 
 def add_data(args):
-    args.add_argument('-dataset', default='LA',
-                      choices=['LA', 'BJ_highway', 'BJ_metro'])
-
-    args.add_argument('-freq', type=int, default=5)
-    args.add_argument('-start', type=int, default=6)
-    args.add_argument('-end', type=int, default=22)
-    args.add_argument('-bday', action='store_true')
-    args.add_argument('-history', type=int, default=60)
-    args.add_argument('-horizon', type=int, default=60)
-
-    args.add_argument('-metrics', nargs='+', default=['mae'])
-    args.add_argument('-horizons', nargs='+', default=[5, 15, 30, 60])
-
-    args.add_argument('-num_days', type=int, default=7)
-    args.add_argument('-num_times', type=int)
+    args.add_argument('-dataset', default='LA', choices=['LA', 'BJ_highway', 'BJ_metro'])
     args.add_argument('-num_nodes', type=int)
 
-    args.add_argument('-del_time', action='store_true')
-    args.add_argument('-del_day', action='store_true')
-    args.add_argument('-del_node', action='store_true')
+    args.add_argument('-start', type=int, default=6)
+    args.add_argument('-end', type=int, default=22)
+    args.add_argument('-freq', type=int, default=5)
+    args.add_argument('-num_times', type=int)
+
+    args.add_argument('-history', type=int, default=60)
+    args.add_argument('-horizon', type=int, default=60)
+    args.add_argument('-horizons', nargs='+', default=[5, 15, 30, 60])
+
+    args.add_argument('-bday', action='store_true')
+
+    args.add_argument('-metrics', nargs='+', default=['mae'])
 
 
 def add_model(args):
@@ -75,7 +70,7 @@ def add_train(args):
     args.add_argument('-test', action='store_true')
     args.add_argument('-batch_size', type=int, default=64)
     args.add_argument('-epoches', type=int, default=100)
-    args.add_argument('-iterations', type=int, default=1000)
+    args.add_argument('-iterations', type=int, default=200)
 
 
 def set_args(args, key, value):
@@ -146,18 +141,7 @@ def update_model(args):
 
     # model name
     name = args.model
-    if 'RNN' in args.model:
-        name += args.rnn_type
-    if args.model in ['GRARNN', 'GARNN', 'Transformer', 'STTransformer']:
-        name += 'Head' + str(args.head_count)
-        name += 'Masked' if args.mask else ''
-    name += 'Hid' + str(args.hidden_size)
-    name += 'Lay' + str(args.num_layers)
-    # data
-    if args.del_node:
-        name += 'Node'
-    if args.del_time:
-        name += 'Time'
-    if args.del_day:
-        name += 'Day'
+    name += 'Hidden' + str(args.hidden_size)
+    name += 'Layer' + str(args.num_layers)
+    name += 'embedding' + str(args.embedding_dim)
     args.path = MODEL_PATH + args.dataset + '/' + name

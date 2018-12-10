@@ -1,56 +1,56 @@
+import math
+
 import torch
 import torch.nn as nn
 
 from lib.utils import aeq
-from lib.pt_utils import torch_to_numpy
+from lib import pt_utils
 
 
-class GAT(nn.Module):
-    def __init__(self, input_size, output_size, head_count, dropout, mask=None):
+class GlobalAttention(nn.Module):
+    def __init__(self, size, att_type, dropout=0.1):
         super().__init__()
-        self.attention = MultiAttention(
-            size=input_size,
-            head_count=head_count,
-            dropout=dropout,
-            output_size=output_size
-        )
-        self.linear_query = nn.Linear(input_size, output_size, bias=False)
-        self.register_buffer('mask', mask)
+        assert att_type in ['dot', 'general', 'mlp']
+        self.att_type = att_type
+        if att_type == 'mlp':
+            self.fc_query = nn.Linear(size, size, bias=False)
+            self.fc_context = nn.Linear(size, size)
+            self.fc_score = nn.Linear(size, 1)
+        elif att_type == 'general':
+            self.fc_context = nn.Linear(size, size, bias=False)
+        self.softmax = nn.Softmax(-1)
+        self.tanh = nn.Tanh()
+        self.fc_out_query = nn.Linear(size, size, False)
+        self.fc_out_context = nn.Linear(size, size, bias=att_type=='mlp')
 
-    def forward(self, input):
+    def forward(self, query, bank, mask=None):
         '''
-        input: batch_size x ... x node_count x input_size
+        query, bank: batch x num x size
+        att: batch x num_qry x num_key
         '''
-        context, attn = self.attention(input, input, input, self.mask)
-        output = self.linear_query(input) + context
+        score = self.score(query, bank)
+        if mask is not None:
+            score.data.masked_fill_(mask, -float('inf'))
+        attn = self.softmax(score)
+        context = torch.matmul(attn, bank)
+        output = self.fc_out_context(context) + self.fc_out_query(query)
         return output, attn
 
-
-class HighwayGAT(GAT):
-    def __init__(self, input_size, output_size, head_count, dropout, mask=None):
-        super().__init__(input_size, output_size, head_count, dropout, mask)
-        self.score_query = nn.Linear(input_size, 1)
-        self.score_context = nn.Linear(output_size, 1)
-        self.gate = nn.Sigmoid()
-        self.register_buffer('mask', mask)
-
-    def forward(self, input):
-        context, attn = self.attention(input, input, input, self.mask)
-        gate = self.gate(self.score_query(input), self.score_context(context))
-        output = self.linear_query(query) * gate + context * (1 - gate)
-        return output, gate, attn
-
-
-class GRAT(GAT):
-    def __init__(self, input_size, output_size, head_count, dropout, adj, mask=None):
-        super().__init__(input_size, output_size, head_count, dropout, mask)
-        self.attention = MultiRelativeAttention(
-            size=input_size,
-            head_count=head_count,
-            dropout=dropout,
-            adj=adj,
-            output_size=output_size
-        )
+    def score(self, query, context):
+        batch, len_q, size = query.size()
+        batch_, len_c, size_ = context.size()
+        aeq(batch, batch_)
+        aeq(size, size_)
+        if self.att_type in ['dot', 'general']:
+            if self.att_type == 'general':
+                context = self.fc_context(context)
+            score = torch.bmm(query, context.transpose(1, 2)) / math.sqrt(size)
+        else:
+            score_size = (batch, len_q, len_c, size)
+            sc1 = self.fc_query(query).unsqueeze(2).expand(score_size)
+            sc2 = self.fc_context(context).unsqueeze(1).expand(score_size)
+            score = self.fc_score(torch.tanh(sc1 + sc2))
+        return score.view(batch, len_q, len_c)
 
 
 class MultiAttention(nn.Module):
@@ -62,10 +62,10 @@ class MultiAttention(nn.Module):
         self.size = size
         self.head_count = head_count
         self.head_size = size // head_count
-        self.linear_key = nn.Linear(size, size)
-        self.linear_value = nn.Linear(size, size)
-        self.linear_query = nn.Linear(size, size)
-        self.linear_output = nn.Linear(size, output_size)
+        self.fc_key = nn.Linear(size, size)
+        self.fc_value = nn.Linear(size, size)
+        self.fc_query = nn.Linear(size, size)
+        self.fc_output = nn.Linear(size, output_size)
         self.softmax = nn.Softmax(-1)
         self.dropout = nn.Dropout(dropout)
 
@@ -102,16 +102,16 @@ class MultiAttention(nn.Module):
     def forward(self, key, value, query, mask=None):
         self._check_args(key, value, query, mask=mask)
 
-        key = self._shape(self.linear_key(key))
-        value = self._shape(self.linear_value(value))
-        query = self._shape(self.linear_query(query))
+        key = self._shape(self.fc_key(key))
+        value = self._shape(self.fc_value(value))
+        query = self._shape(self.fc_query(query))
 
         scores = self._score(key, query)
         if mask is not None:
             scores.masked_fill_(mask, -float('inf'))
         attn = self.softmax(scores)
         output = self._pool(attn, value)
-        output = self.linear_output(output)
+        output = self.fc_output(output)
         return output, torch_to_numpy(attn)
 
 

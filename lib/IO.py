@@ -18,8 +18,8 @@ def prepare_dataset(df, bday, start, end, history, horizon, framework, paradigm)
 
 def _filter_df(df, bday, start, end):
     time_filter = (df.index.hour >= start) & (df.index.hour < end)
-    bday_filter = df.index.weekday < 5
     if bday:
+        bday_filter = df.index.weekday < 5
         return df[time_filter & bday_filter]
     else:
         return df[time_filter]
@@ -35,8 +35,7 @@ def _filter_df(df, bday, start, end):
 
 
 def _get_days(df):
-    date_s, date_e = df.index[0], df.index[-1]
-    days = (date_e - date_s).days + 1
+    days = len(np.unique(df.index.date))
     assert (df.shape[0] % days) == 0
     return days
 

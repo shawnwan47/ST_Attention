@@ -23,8 +23,6 @@ class Trainer:
         else:
             self.float_type = torch.FloatTensor
             self.long_type = torch.LongTensor
-        self.teach = 1
-        self.teach_annealing = 0.01 ** (1 / epoches)
 
     def run_epoch(self, dataloader, train=False):
         if train:
@@ -40,10 +38,7 @@ class Trainer:
             day = day.type(self.long_type)
             target = target.type(self.float_type)
 
-            if self.framework == 'seq2seq':
-                output = self.model(data, time, day, self.teach if train else 0)
-            else:
-                output = self.model(data, time, day)
+            output = self.model(data, time, day)
 
             if isinstance(output, tuple):
                 output = output[0]
@@ -67,6 +62,4 @@ class Trainer:
             print(f'Epoch: {epoch}',
                   f'train: {error_train}',
                   f'valid: {error_eval}',
-                  f'teach ratio: {self.teach}',
                   sep='\n')
-            self.teach *= self.teach_annealing

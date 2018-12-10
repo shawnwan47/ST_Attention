@@ -2,7 +2,7 @@ from math import sqrt, ceil
 import torch.nn as nn
 
 
-class Layer(nn.Module):
+class Perceptron(nn.Module):
     def __init__(self, input_size, output_size, dropout):
         super().__init__()
         self.sequential = nn.Sequential(
@@ -20,9 +20,9 @@ class MLPEncoder(nn.Module):
     def __init__(self, input_size, output_size, num_layers=2, dropout=0.2):
         assert num_layers > 1
         super().__init__()
-        self.fc_input = Layer(input_size, output_size, dropout)
+        self.fc_input = Perceptron(input_size, output_size, dropout)
         self.fc_hidden = nn.Sequential(
-            *[Layer(output_size, output_size, dropout)
+            *[Perceptron(output_size, output_size, dropout)
               for _ in range(num_layers - 1)]
         )
 
@@ -35,10 +35,10 @@ class MLP(nn.Module):
         assert num_layers > 1
         hidden_size = ceil(sqrt(input_size * output_size))
         super().__init__()
-        self.fc_input = Layer(input_size, hidden_size, dropout)
+        self.fc_input = Perceptron(input_size, hidden_size, dropout)
         self.fc_output = nn.Linear(hidden_size, output_size)
         self.fc_hidden = nn.Sequential(
-            *[Layer(hidden_size, hidden_size)
+            *[Perceptron(hidden_size, hidden_size)
               for _ in range(num_layers - 2)]
         )
 

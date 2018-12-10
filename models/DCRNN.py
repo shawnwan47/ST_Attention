@@ -8,8 +8,8 @@ from models import Framework
 
 
 class DCRNN(SpatialRNN.SpatialRNN):
-    def __init__(self, rnn_type, size, num_layers, num_nodes, adj, hops):
-        super().__init__(rnn_type, size, num_layers, num_nodes,
+    def __init__(self, rnn_type, features, num_layers, num_nodes, adj, hops):
+        super().__init__(rnn_type, features, num_layers, num_nodes,
                          func=_DiffusionConvolution,
                          adj=adj,
                          hops=hops)
@@ -18,7 +18,7 @@ class DCRNN(SpatialRNN.SpatialRNN):
 class DCRNNDecoder(DCRNN):
     def __init__(self, *args, **kw_args):
         super().__init__(*args, **kw_args)
-        self.fc = nn.Linear(kw_args['size'], 1)
+        self.fc = nn.Linear(self.features, 1)
 
     def forward(self, *args, **kw_args):
         output, hidden = super().forward(*args, **kw_args)
@@ -29,14 +29,18 @@ class DCRNNSeq2Seq(SpatialRNN.SpatialRNNSeq2Seq):
     pass
 
 
+class DCRNNSeq2Vec(SpatialRNN.SpatialRNNSeq2Vec):
+    pass
+
+
 class _DiffusionConvolution(nn.Module):
-    def __init__(self, input_size, output_size, adj, hops):
+    def __init__(self, in_features, out_features, adj, hops):
         super().__init__()
         self.filters = self._gen_adj_hops(adj, hops)
         self.filters += self._gen_adj_hops(adj.t(), hops)
-        self.linear = nn.Linear(input_size, output_size)
+        self.linear = nn.Linear(in_features, out_features)
         self.linears = nn.ModuleList([
-            nn.Linear(input_size, output_size, bias=False)
+            nn.Linear(in_features, out_features, bias=False)
             for _ in self.filters
         ])
 

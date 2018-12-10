@@ -5,15 +5,15 @@ from models import Framework
 
 
 class SpatialRNN(nn.Module):
-    def __init__(self, rnn_type, size, num_layers, num_nodes,
+    def __init__(self, rnn_type, features, num_layers, num_nodes,
                  func=nn.Linear, **func_args):
         super().__init__()
         self.rnn_type = rnn_type
         self.num_nodes = num_nodes
-        self.size = size
+        self.features = features
         self.num_layers = num_layers
         self.layers = nn.ModuleList([
-            _SpatialRNNCell(rnn_type, size, func, **func_args)
+            _SpatialRNNCell(rnn_type, features, func, **func_args)
             for i in range(num_layers)
         ])
 
@@ -30,7 +30,7 @@ class SpatialRNN(nn.Module):
 
     def _init_hidden(self, batch_size):
         weight = next(self.parameters())
-        shape = (batch_size, self.num_layers, self.num_nodes, self.size)
+        shape = (batch_size, self.num_layers, self.num_nodes, self.features)
         if self.rnn_type == 'LSTM':
             return (weight.new_zeros(shape), weight.new_zeros(shape))
         else:
@@ -48,7 +48,7 @@ class SpatialRNN(nn.Module):
 class SpatialRNNDecoder(SpatialRNN):
     def __init__(self, *args, **kw_args):
         super().__init__(*args, **kw_args)
-        self.fc = nn.Linear(kw_args['size'], 1)
+        self.fc = nn.Linear(self.features, 1)
 
     def forward(self, *args, **kw_args):
         output, hidden = super().forward(*args, **kw_args)
@@ -62,18 +62,24 @@ class SpatialRNNSeq2Seq(Framework.Seq2Seq):
         return output.squeeze(-1)
 
 
+class SpatialRNNSeq2Vec(Framework.Seq2Vec):
+    def forward(self, *args, **kw_args):
+        output = super().forward(*args, **kw_args)
+        return output.transpose(1, 2)
+
+
 class _SpatialRNNCell(nn.Module):
-    def __init__(self, rnn_type, size, func, **func_args):
+    def __init__(self, rnn_type, features, func, **func_args):
         assert rnn_type in ['RNN', 'GRU']
         super().__init__()
         self.rnn_type = rnn_type
-        gate_size = size
+        gate_size = features
         if self.rnn_type == 'RNN': self.activation = nn.Tanh()
         elif self.rnn_type == 'RNNReLU': self.activation = nn.ReLU()
         elif self.rnn_type == 'GRU': gate_size *= 3
-        self.func_i = func(input_size=size, output_size=gate_size, **func_args)
-        self.func_h = func(input_size=size, output_size=gate_size, **func_args)
-        self.layer_norm = nn.LayerNorm(size)
+        self.func_i = func(features, gate_size, **func_args)
+        self.func_h = func(features, gate_size, **func_args)
+        self.layer_norm = nn.LayerNorm(features)
 
     def forward(self, input, hidden):
         if self.rnn_type in ['RNN', 'RNNReLU']:

@@ -37,7 +37,7 @@ class Seq2Vec(nn.Module):
 class Seq2Seq(nn.Module):
     def __init__(self, embedding, encoder, decoder, history, horizon):
         super().__init__()
-        self.hidden_size = embedding.output_size
+        self.hidden_size = embedding.features
         self.embedding = embedding
         self.encoder = encoder
         self.decoder = decoder
