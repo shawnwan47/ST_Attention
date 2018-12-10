@@ -65,21 +65,22 @@ def _df_to_io(df, history, horizon, mean, std, framework, paradigm):
     weekday = np.array(df.index.weekday)
 
     # split days
-    days = _get_days(df)
-    dim = df.shape[1]
+    num_days = _get_days(df)
+    num_nodes = df.shape[1]
 
-    data = data.reshape(days, -1, dim)
-    targets = targets.reshape(days, -1, dim)[:, history:]
-    time = time.reshape(days, -1)
-    weekday = weekday.reshape(days, -1)
+    data = data.reshape(num_days, -1, num_nodes)
+    targets = targets.reshape(num_days, -1, num_nodes)[:, history:]
+    time = time.reshape(num_days, -1)
+    weekday = weekday.reshape(num_days, -1)
 
     # framework: samples & length & data shape
     daily_samples = data.shape[1] - history - horizon
+    num_samples = daily_samples * num_days
     length = history + horizon - 1 if framework == 'seq2seq' else history
 
     data = _gen_daily_seqs(data, daily_samples, length)
     targets = _gen_daily_seqs(targets, daily_samples, horizon)
-    if framework == 'vec2vec':
+    if framework in ['none', 'vec2vec']:
         time = time[:, :daily_samples].reshape(-1)
         weekday = weekday[:, :daily_samples].reshape(-1)
     else:
@@ -88,13 +89,15 @@ def _df_to_io(df, history, horizon, mean, std, framework, paradigm):
 
     # paradigm: io structure
     if paradigm == 'none':
-        data = data.reshape(data.shape[0], -1)
+        data = data.reshape(num_samples, -1)
     elif paradigm == 'spatial':
         data = data.transpose(0, 2, 1)
+        time = np.repeat(time, num_nodes).reshape(num_samples, num_nodes)
+        weekday = np.repeat(weekday, num_nodes).reshape(num_samples, num_nodes)
     elif paradigm == 'spatialtemporal':
         data = np.expand_dims(data, -1)
-        time = np.repeat(time, dim).reshape(data.shape[0], -1, dim)
-        weekday = np.repeat(weekday, dim).reshape(data.shape[0], -1, dim)
+        time = np.repeat(time, num_nodes, 1).reshape(num_samples, length, num_nodes)
+        weekday = np.repeat(weekday, num_nodes, 1).reshape(num_samples, length, num_nodes)
     else:
         pass
 

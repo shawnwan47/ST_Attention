@@ -1,8 +1,10 @@
 import torch
 import torch.nn as nn
 
+from models import Framework
 
-class GraphRNN(nn.Module):
+
+class SpatialRNN(nn.Module):
     def __init__(self, rnn_type, size, num_layers, num_nodes,
                  func=nn.Linear, **func_args):
         super().__init__()
@@ -11,7 +13,7 @@ class GraphRNN(nn.Module):
         self.size = size
         self.num_layers = num_layers
         self.layers = nn.ModuleList([
-            GraphRNNCell(rnn_type, size, func, **func_args)
+            _SpatialRNNCell(rnn_type, size, func, **func_args)
             for i in range(num_layers)
         ])
 
@@ -35,13 +37,32 @@ class GraphRNN(nn.Module):
             return weight.new_zeros(shape)
 
     def _forward_tick(self, output, hidden):
+        hidden_new = []
         for ilay, layer in enumerate(self.layers):
-            hidden[:, ilay] = layer(output, hidden[:, ilay])
-            output = hidden[:, ilay]
+            output = layer(output, hidden[:, ilay])
+            hidden_new.append(output)
+        hidden_new = torch.stack(hidden_new, 1)
+        return output, hidden_new
+
+
+class SpatialRNNDecoder(SpatialRNN):
+    def __init__(self, *args, **kw_args):
+        super().__init__(*args, **kw_args)
+        self.fc = nn.Linear(kw_args['size'], 1)
+
+    def forward(self, *args, **kw_args):
+        output, hidden = super().forward(*args, **kw_args)
+        output = self.fc(output)
         return output, hidden
 
 
-class GraphRNNCell(nn.Module):
+class SpatialRNNSeq2Seq(Framework.Seq2Seq):
+    def forward(self, *args, **kw_args):
+        output = super().forward(*args, **kw_args)
+        return output.squeeze(-1)
+
+
+class _SpatialRNNCell(nn.Module):
     def __init__(self, rnn_type, size, func, **func_args):
         assert rnn_type in ['RNN', 'GRU']
         super().__init__()
@@ -67,6 +88,6 @@ class GraphRNNCell(nn.Module):
         h_r, h_i, h_n = self.func_h(hidden).chunk(chunks=3, dim=-1)
         resetgate = torch.sigmoid(i_r + h_r)
         inputgate = torch.sigmoid(i_i + h_i)
-        newgate = torch.tanh(i_n + resetgate * h_n)
-        output = newgate + inputgate * (hidden - newgate)
+        newhidden = torch.tanh(i_n + resetgate * h_n)
+        output = newhidden + inputgate * (hidden - newhidden)
         return output

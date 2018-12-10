@@ -1,11 +1,11 @@
 import torch
 import torch.nn as nn
 
-from models.GraphRNN import GraphRNN
+from models.SpatialRNN import SpatialRNN
 from models.Attention import MultiAttention
 
 
-class GraphAttentionRNN(GraphRNN):
+class SpatialAttentionRNN(SpatialRNN):
     def __init__(self, rnn_type, num_nodes, size, num_layers, dropout, gc_kwargs):
         super().__init__(rnn_type, num_nodes, size, num_layers, dropout,
                          func=MultiAttention,

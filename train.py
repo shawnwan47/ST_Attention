@@ -22,8 +22,10 @@ config.add_data(args)
 config.add_model(args)
 config.add_train(args)
 args = args.parse_args()
+
 config.update_data(args)
 config.update_model(args)
+print(args)
 
 # CUDA
 args.cuda = args.cuda and torch.cuda.is_available()
@@ -60,6 +62,7 @@ optimizer = optim.Adam(model.parameters(), weight_decay=args.weight_decay)
 # TRAINER
 trainer = Trainer.Trainer(
     model=model,
+    framework=args.framework,
     rescaler=rescaler,
     criterion=criterion,
     loss=loss,

@@ -29,17 +29,16 @@ def add_model(args):
     args.add_argument('-model')
     args.add_argument('-paradigm', default='spatialtemporal',
                       choices=['none', 'spatial', 'temporal', 'spatialtemporal'])
-    args.add_argument('-framework', default='seq2seq',
-                      choices=['seq2seq', 'seq2vec', 'vec2vec'])
+    args.add_argument('-framework', choices=['seq2seq', 'seq2vec', 'vec2vec'])
 
     # general
     args.add_argument('-hidden_size', type=int)
     args.add_argument('-output_size', type=int)
-    args.add_argument('-num_layers', type=int, default=1)
+    args.add_argument('-num_layers', type=int, default=2)
     args.add_argument('-dropout', type=float, default=0.2)
 
     # Embedding
-    args.add_argument('-embedding_dim', type=int, default=16)
+    args.add_argument('-embedding_dim', type=int)
     args.add_argument('-day_dim', type=int)
     args.add_argument('-time_dim', type=int)
     args.add_argument('-node_dim', type=int)
@@ -74,9 +73,9 @@ def add_train(args):
 
     # run
     args.add_argument('-test', action='store_true')
-    args.add_argument('-batch_size', type=int, default=128)
+    args.add_argument('-batch_size', type=int, default=64)
     args.add_argument('-epoches', type=int, default=100)
-    args.add_argument('-iterations', type=int, default=100)
+    args.add_argument('-iterations', type=int, default=1000)
 
 
 def set_args(args, key, value):
@@ -108,20 +107,30 @@ def update_data(args):
 
 def update_model(args):
     # paradigm
-    model = args.model
-    if model == ['MLP']:
+    if args.model == 'MLP':
         args.paradigm = 'none'
-    if model in ['RNN', 'Transformer']:
+    if args.model in ['RNN', 'TemporalAttention']:
         args.paradigm = 'temporal'
-    elif model in ['GraphMLP', 'GraphAttention', 'DiffusionConvolution']:
+    elif args.model in ['SpatialMLP', 'SpatialAttention']:
         args.paradigm = 'spatial'
     else:
         args.paradigm = 'spatialtemporal'
+    # framework
+    if args.model in ['MLP', 'SpatialMLP', 'SpatialAttention']:
+        args.framework = 'vec2vec'
+    elif args.model in ['RNN', 'SpatialRNN', 'DCRNN', 'TemporalAttention']:
+        set_args(args, 'framework', 'seq2seq')
+
     # hidden_size
-    if args.model == 'RNN':
+    if args.paradigm == 'temporal':
         set_args(args, 'hidden_size', 256)
-    else:
-        set_args(args, 'hidden_size', 16)
+        set_args(args, 'embedding_dim', 64)
+    elif args.paradigm == 'spatial':
+        set_args(args, 'hidden_size', 64)
+        set_args(args, 'embedding_dim', 32)
+    elif args.paradigm == 'spatialtemporal':
+        set_args(args, 'hidden_size', 32)
+        set_args(args, 'embedding_dim', 16)
     # output_size
     if args.model == 'RNN':
         args.output_size = args.num_nodes

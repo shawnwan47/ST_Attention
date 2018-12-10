@@ -5,44 +5,58 @@ import torch.nn as nn
 
 from lib import pt_utils
 
-from models.Framework import Seq2Seq, Seq2Vec
-from models.Embedding import Embedding1D, Embedding2D
-from models.MLP import MLP
-from models.RNN import RNN, RNNDecoder
-from models.DCRNN import DCRNN, DCRNNDecoder, DCRNNSeq2Seq
-
+from models import Embedding
+from models import MLP
+from models import RNN
+from models import SpatialRNN
+from models import DCRNN
 
 
 def build_model(args):
     framework, model = args.framework, args.model
     history, horizon = args.history, args.horizon
-    if model == 'MLP':
-        pass
+    if model == 'SpatialMLP':
+        embedding = build_STEmbedding(args)
+        mlp = build_SpatialMLP(args)
+        model = MLP.MLPVec2Vec(embedding, mlp)
     elif model == 'RNN':
-        embedding = build_Embedding1D(args)
+        embedding = build_TemporalEmbedding(args)
         encoder = build_RNN(args)
-        if framework == 'Seq2Vec':
-            decoder = MLP(args.hidden_size, args.output_size)
-            model = Seq2Vec(embedding, encoder, decoder)
+        if framework == 'seq2vec':
+            decoder = build_vector_decoder(args)
+            model = RNN.RNNSeq2Vec(embedding, encoder, decoder)
         else:
             decoder = build_RNNDecoder(args)
-            model = Seq2Seq(embedding, encoder, decoder, history, horizon)
+            model = RNN.RNNSeq2Seq(embedding, encoder, decoder, history, horizon)
+    elif model == 'SpatialRNN':
+        embedding = build_STEmbedding(args)
+        encoder = build_SpatialRNN(args)
+        if framework == 'seq2vec':
+            decoder = build_vector_decoder(args)
+            model = SpatialRNN.SpatialRNNSeq2Vec(embedding, encoder, decoder)
+        else:
+            decoder = build_SpatialRNNDecoder(args)
+            model = SpatialRNN.SpatialRNNSeq2Seq(embedding, encoder, decoder, history, horizon)
     elif model == 'DCRNN':
-        embedding = build_Embedding2D(args)
+        embedding = build_STEmbedding(args)
         encoder = build_DCRNN(args)
-        if framework == 'Seq2Vec':
-            decoder = MLP(args.hidden_size, args.output_size)
-            model = Seq2Vec(embedding, encoder, decoder)
+        if framework == 'seq2vec':
+            decoder = MLP.MLP(args.hidden_size, args.output_size)
+            model = DCRNN.DCRNNSeq2Vec(embedding, encoder, decoder)
         else:
             decoder = build_DCRNNDecoder(args)
-            model = DCRNNSeq2Seq(embedding, encoder, decoder, history, horizon)
+            model = DCRNN.DCRNNSeq2Seq(embedding, encoder, decoder, history, horizon)
+    elif model == 'GAT':
+        pass
+    elif model == 'GATRNN':
+        pass
     else:
         raise Exception('model unspecified!')
     return model
 
 
-def build_Embedding1D(args):
-    return Embedding1D(
+def build_TemporalEmbedding(args):
+    return Embedding.TemporalEmbedding(
         num_nodes=args.num_nodes,
         del_time=args.del_time,
         num_times=args.num_times, time_dim=args.time_dim,
@@ -52,9 +66,9 @@ def build_Embedding1D(args):
     )
 
 
-def build_Embedding2D(args):
+def build_STEmbedding(args):
     data_size = args.history if args.framework is 'vec2vec' else 1
-    return Embedding2D(
+    return Embedding.STEmbedding(
         data_size=data_size,
         del_node=args.del_node,
         num_nodes=args.num_nodes, node_dim=args.node_dim,
@@ -66,16 +80,21 @@ def build_Embedding2D(args):
     )
 
 
-def build_MLP(args):
-    assert args.framework is 'vec2vec'
-    embedding = build_Embedding1D(args)
-    mlp = MLP(input_size=args.hidden_size, output_size=args.output_size)
-    model = nn.Sequential(embedding, mlp)
-    return model
+def build_vector_decoder(args):
+    return MLP.MLP(args.hidden_size, args.output_size)
+
+
+def build_SpatialMLP(args):
+    return MLP.MLP(
+        input_size=args.hidden_size,
+        output_size=args.output_size,
+        num_layers=args.num_layers,
+        dropout=args.dropout
+    )
 
 
 def build_RNN(args):
-    return RNN(
+    return RNN.RNN(
         rnn_type=args.rnn_type,
         size=args.hidden_size,
         num_layers=args.num_layers,
@@ -84,10 +103,30 @@ def build_RNN(args):
 
 
 def build_RNNDecoder(args):
-    return RNNDecoder(
+    return RNN.RNNDecoder(
         rnn_type=args.rnn_type,
         size=args.hidden_size,
-        output_size=args.output_size,
+        output_size=args.num_nodes,
+        num_layers=args.num_layers,
+        dropout=args.dropout
+    )
+
+
+def build_SpatialRNN(args):
+    return SpatialRNN.SpatialRNN(
+        rnn_type=args.rnn_type,
+        size=args.hidden_size,
+        num_nodes=args.num_nodes,
+        num_layers=args.num_layers,
+        dropout=args.dropout
+    )
+
+
+def build_SpatialRNNDecoder(args):
+    return SpatialRNN.SpatialRNNDecoder(
+        rnn_type=args.rnn_type,
+        size=args.hidden_size,
+        num_nodes=args.num_nodes,
         num_layers=args.num_layers,
         dropout=args.dropout
     )
@@ -95,7 +134,7 @@ def build_RNNDecoder(args):
 
 def build_DCRNN(args):
     adj = pt_utils.load_adj(args.dataset)
-    encoder = DCRNN(
+    encoder = DCRNN.DCRNN(
         rnn_type=args.rnn_type,
         num_nodes=args.num_nodes,
         size=args.hidden_size,
@@ -108,7 +147,7 @@ def build_DCRNN(args):
 
 def build_DCRNNDecoder(args):
     adj = pt_utils.load_adj(args.dataset)
-    decoder = DCRNNDecoder(
+    decoder = DCRNN.DCRNNDecoder(
         rnn_type=args.rnn_type,
         num_nodes=args.num_nodes,
         size=args.hidden_size,
@@ -172,7 +211,7 @@ def build_GARNN(args):
 
 
 def build_Transformer(args):
-    embedding = build_Embedding1D(args)
+    embedding = build_TemporalEmbedding(args)
     encoder = getattr(Transformer, args.model)(
         size=args.hidden_size,
         num_layers=args.num_layers,

@@ -15,7 +15,7 @@ class EmbeddingFusion(nn.Module):
         return self.chain(input)
 
 
-class Embedding1D(nn.Module):
+class TemporalEmbedding(nn.Module):
     def __init__(self, num_nodes,
                  del_time, num_times, time_dim,
                  del_day, num_days, day_dim,
@@ -40,7 +40,7 @@ class Embedding1D(nn.Module):
         return self.layer_norm(output)
 
 
-class Embedding2D(nn.Module):
+class STEmbedding(nn.Module):
     def __init__(self, data_size,
                  del_node, num_nodes, node_dim,
                  del_time, num_times, time_dim,
@@ -52,21 +52,21 @@ class Embedding2D(nn.Module):
         self.del_time = del_time
         self.del_day = del_day
         self.linear_data = nn.Linear(data_size, output_size)
-        self.layer_norm = nn.LayerNorm(output_size)
         if not del_node:
+            self.register_buffer('nodes', torch.arange(num_nodes))
             self.embedding_node = EmbeddingFusion(num_nodes, node_dim, output_size, dropout)
         if not del_time:
             self.embedding_time = EmbeddingFusion(num_times, time_dim, output_size, dropout)
         if not del_day:
             self.embedding_day = EmbeddingFusion(num_days, day_dim, output_size, dropout)
-        self.register_buffer('nodes', torch.arange(num_nodes))
+        self.layer_norm = nn.LayerNorm(output_size)
 
     def forward(self, data, time, weekday):
         output = self.linear_data(data)
-        if self.del_node:
+        if not self.del_node:
             output += self.embedding_node(time.new_tensor(self.nodes))
-        if self.del_time:
+        if not self.del_time:
             output += self.embedding_time(time)
-        if self.del_day:
+        if not self.del_day:
             output += self.embedding_day(weekday)
         return self.layer_norm(output)

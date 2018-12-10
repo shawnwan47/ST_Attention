@@ -3,6 +3,8 @@ from random import random
 import torch
 import torch.nn as nn
 
+from models import Framework
+
 
 class RNN(nn.Module):
     def __init__(self, rnn_type, size, num_layers, dropout=0):
@@ -31,3 +33,7 @@ class RNNDecoder(RNN):
     def forward(self, input, hidden):
         output, hidden = super().forward(input, hidden)
         return self.fc(output), hidden
+
+
+class RNNSeq2Seq(Framework.Seq2Seq):
+    pass

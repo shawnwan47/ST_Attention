@@ -7,9 +7,10 @@ from lib import pt_utils
 
 
 class Trainer:
-    def __init__(self, model, rescaler, criterion, loss,
+    def __init__(self, model, framework, rescaler, criterion, loss,
                  optimizer, epoches, iterations, cuda):
         self.model = model
+        self.framework = framework
         self.rescaler = rescaler
         self.criterion = criterion
         self.loss = loss
@@ -39,7 +40,11 @@ class Trainer:
             day = day.type(self.long_type)
             target = target.type(self.float_type)
 
-            output = self.model(data, time, day, self.teach if train else 0)
+            if self.framework == 'seq2seq':
+                output = self.model(data, time, day, self.teach if train else 0)
+            else:
+                output = self.model(data, time, day)
+
             if isinstance(output, tuple):
                 output = output[0]
             output = self.rescaler(output)
@@ -58,7 +63,7 @@ class Trainer:
     def run(self, data_train, data_eval):
         for epoch in range(self.epoches):
             error_train = self.run_epoch(data_train, train=True)
-            error_eval = self.run_epoch(data_eval)
+            error_eval = self.run_epoch(data_eval, train=False)
             print(f'Epoch: {epoch}',
                   f'train: {error_train}',
                   f'valid: {error_eval}',
