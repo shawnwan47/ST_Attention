@@ -1,12 +1,9 @@
-import argparse
-import pickle
-
 import numpy as np
 
 import torch
 import torch.optim as optim
 
-from lib import config
+from config import Args
 from lib import utils
 from lib import pt_utils
 from lib import Loss
@@ -14,17 +11,7 @@ from lib import Trainer
 
 from models import builder
 
-# run with "python train.py -cuda -model=GARNN"
-
-
-args = argparse.ArgumentParser()
-config.add_data(args)
-config.add_model(args)
-config.add_train(args)
-args = args.parse_args()
-
-config.update_data(args)
-config.update_model(args)
+args = Args()
 print(args)
 
 # CUDA
@@ -39,13 +26,9 @@ else:
 
 # DATA
 loader_train, loader_valid, loader_test, mean, std = pt_utils.load_loaders(args)
-if args.cuda:
-    mean, std = mean.cuda(), std.cuda()
-rescaler = utils.Rescaler(mean, std)
-
 
 # MODEL
-model = builder.build_model(args)
+model = builder.build_model(args, mean, std)
 if args.test:
     model.load_state_dict(torch.load(args.path + '.pt'))
 if args.cuda:
@@ -79,3 +62,8 @@ if not args.test:
 
 error_test = trainer.run_epoch(loader_test)
 print(f'{args.path}:\n{error_test}')
+
+
+if __name__ == '__main__':
+    import fire
+    fire.Fire()

@@ -48,5 +48,5 @@ class HighwaySpatialAttn(SpatialAttn):
     def forward(self, input):
         context, attn = super().forward(input)
         gate = self.gate(self.score_query(input) + self.score_context(context))
-        output = gate * self.fc_query(query) + (1 - gate) * context
+        output = (1 - gate) * self.fc_query(query) + gate * context
         return output

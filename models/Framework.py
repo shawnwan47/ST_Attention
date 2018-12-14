@@ -47,8 +47,7 @@ class Seq2Seq(nn.Module):
 
     def _init_start(self):
         start = nn.Parameter(torch.FloatTensor(self.hidden_size))
-        stdv = 1. / math.sqrt(self.hidden_size)
-        start.data.uniform_(-stdv, stdv)
+        nn.init.xavier_normal_(start.data)
         return start
 
     def _check_args(self, data, time, day):

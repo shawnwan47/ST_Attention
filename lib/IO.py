@@ -56,7 +56,7 @@ def _split_dataset(df, train_ratio=0.7, test_ratio=0.2):
 
 
 def _df_to_io(df, history, horizon, mean, std, framework, paradigm):
-    # data
+    # extract data
     data = (df.values - mean) / std
     data[np.isnan(data)] = 0
     targets = df.values
@@ -72,33 +72,39 @@ def _df_to_io(df, history, horizon, mean, std, framework, paradigm):
     time = time.reshape(num_days, -1)
     weekday = weekday.reshape(num_days, -1)
 
-    # framework: samples & length & data shape
+    # generate samples
+    assert framework in ['vec2vec', 'seq2vec', 'seq2seq']
+
     daily_samples = data.shape[1] - history - horizon
     num_samples = daily_samples * num_days
     length = history + horizon - 1 if framework == 'seq2seq' else history
 
     data = _gen_daily_seqs(data, daily_samples, length)
     targets = _gen_daily_seqs(targets, daily_samples, horizon)
-    if framework in ['none', 'vec2vec']:
+    if framework == 'vec2vec':
         time = time[:, :daily_samples].reshape(-1)
         weekday = weekday[:, :daily_samples].reshape(-1)
     else:
         time = _gen_daily_seqs(time, daily_samples, length)
         weekday = _gen_daily_seqs(weekday, daily_samples, length)
+    aeq(data.shape[0], targets.shape[0], time.shape[0], weekday.shape[0])
 
     # paradigm: io structure
-    if paradigm == 'none':
-        data = data.reshape(num_samples, -1)
-    elif paradigm == 'spatial':
-        data = data.transpose(0, 2, 1)
-        time = np.repeat(time, num_nodes).reshape(num_samples, num_nodes)
-        weekday = np.repeat(weekday, num_nodes).reshape(num_samples, num_nodes)
-    elif paradigm == 'spatialtemporal':
-        data = np.expand_dims(data, -1)
-        time = np.repeat(time, num_nodes, 1).reshape(num_samples, length, num_nodes)
-        weekday = np.repeat(weekday, num_nodes, 1).reshape(num_samples, length, num_nodes)
-    else:
+    assert paradigm in ['temporal', 'spatial', 'st']
+    if paradigm == 'temporal':
         pass
+    else:
+        time = np.expand_dims(time, -1)
+        weekday = np.expand_dims(weekday, -1)
+        if paradigm == 'spatial':
+            data = data.transpose(0, 2, 1)
+            targets = targets.transpose(0, 2, 1)
+        elif paradigm == 'st':
+            data = np.expand_dims(data, -1)
+            if framework is 'seq2vec':
+                targets = targets.transpose(0, 2, 1)
+            else:
+                targets = np.expand_dims(targets, -1)
 
     return data, time, weekday, targets
 
@@ -111,4 +117,4 @@ def _gen_daily_seqs(arr, samples, length):
     elif len(seqs.shape) is 4:
         return seqs.reshape(-1, length, arr.shape[-1])
     else:
-        raise(Exception('seqs not right.'))
+        raise(Exception('seqs invalid.'))

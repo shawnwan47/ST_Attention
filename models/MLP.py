@@ -8,8 +8,7 @@ class Perceptron(nn.Module):
         self.sequential = nn.Sequential(
             nn.Linear(input_size, output_size),
             nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.LayerNorm(output_size)
+            nn.Dropout(dropout)
         )
 
     def forward(self, input):

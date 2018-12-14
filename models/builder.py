@@ -10,83 +10,48 @@ from models import MLP
 from models import RNN
 from models import SpatialRNN
 from models import DCRNN
+from models import Vec2Vec, Seq2Vec, Seq2Seq
 
 
 def build_model(args):
     history, horizon = args.history, args.horizon
-    if args.paradigm == 'temporal':
-        embedding = build_TemporalEmbedding(args)
-        if args.model == 'RNN':
-            encoder = build_RNN(args)
-            if args.framework == 'seq2vec':
-                decoder = build_vector_decoder(args)
-                model = RNN.RNNSeq2Vec(embedding, encoder, decoder)
-            else:
-                decoder = build_RNNDecoder(args)
-                model = RNN.RNNSeq2Seq(embedding, encoder, decoder, history, horizon)
-        elif args.model == 'DCRNN':
-            encoder = build_DCRNN(args)
-            if args.framework == 'seq2vec':
-                decoder = build_vector_decoder(args)
-                model = DCRNN.DCRNNSeq2Vec(embedding, encoder, decoder)
-            else:
-                decoder = build_DCRNNDecoder(args)
-                model = DCRNN.DCRNNSeq2Seq(embedding, encoder, decoder, history, horizon)
+    embedding = build_embedding(args)
+    encoder = build_encoder(args)
+    decoder = build_decoder(args)
+    if args.framework == 'vec2vec':
+        model = build_vec2vec(embedding, encoder, decoder)
+    elif args.framework == 'seq2vec':
+        model = build_seq2vec(embedding, encoder, decoder)
     else:
-        embedding = build_STEmbedding(args)
-    if args.model == 'SpatialMLP':
-        embedding = build_STEmbedding(args)
-        mlp = build_SpatialMLP(args)
-        model = MLP.MLPVec2Vec(embedding, mlp)
-    elif args.model == 'SpatialRNN':
-        embedding = build_STEmbedding(args)
-        encoder = build_SpatialRNN(args)
-        if args.framework == 'seq2vec':
-            decoder = build_vector_decoder(args)
-            model = SpatialRNN.SpatialRNNSeq2Vec(embedding, encoder, decoder)
-        else:
-            decoder = build_SpatialRNNDecoder(args)
-            model = SpatialRNN.SpatialRNNSeq2Seq(embedding, encoder, decoder, history, horizon)
-    elif args.model == 'DCRNN':
-        embedding = build_STEmbedding(args)
-        encoder = build_DCRNN(args)
-        if args.framework == 'seq2vec':
-            decoder = MLP.MLP(args.hidden_size, args.output_size)
-            model = DCRNN.DCRNNSeq2Vec(embedding, encoder, decoder)
-        else:
-            decoder = build_DCRNNDecoder(args)
-            model = DCRNN.DCRNNSeq2Seq(embedding, encoder, decoder, history, horizon)
-    elif args.model == 'GAT':
-        pass
-    elif args.model == 'GATRNN':
-        pass
+        model = build_seq2seq(embedding, encoder, decoder, history, horizon)
+
+
+def build_embedding(args):
+    if args.paradigm == 'spatialtemporal':
+        data_size = args.history if args.framework is 'vec2vec' else 1
+        embedding = Embedding.STEmbedding(
+            data_size=data_size,
+            num_nodes=args.num_nodes,
+            num_times=args.num_times,
+            bday=args.bday,
+            embedding_dim=args.embedding_dim,
+            features=args.hidden_size,
+            dropout=args.dropout
+        )
     else:
-        raise Exception('model unspecified!')
-    return model
+        embedding = Embedding.TemporalEmbedding(
+            data_size=args.num_nodes,
+            num_times=args.num_times,
+            bday=args.bday,
+            embedding_dim=args.embedding_dim,
+            features=args.hidden_size,
+            dropout=args.dropout
+        )
+    return embedding
 
 
-def build_TemporalEmbedding(args):
-    return Embedding.TemporalEmbedding(
-        data_size=args.num_nodes,
-        num_times=args.num_times,
-        bday=args.bday,
-        embedding_dim=args.embedding_dim,
-        features=args.hidden_size,
-        dropout=args.dropout
-    )
-
-
-def build_STEmbedding(args):
-    data_size = args.history if args.framework is 'vec2vec' else 1
-    return Embedding.STEmbedding(
-        data_size=data_size,
-        num_nodes=args.num_nodes,
-        num_times=args.num_times,
-        bday=args.bday,
-        embedding_dim=args.embedding_dim,
-        features=args.hidden_size,
-        dropout=args.dropout
-    )
+def build_encoder(args):
+    return
 
 
 def build_vector_decoder(args):
