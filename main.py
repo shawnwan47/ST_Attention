@@ -2,6 +2,7 @@ import numpy as np
 
 import torch
 import torch.optim as optim
+import fire
 
 from config import Args
 from lib import utils
@@ -14,26 +15,34 @@ from models import builder
 args = Args()
 print(args)
 
-# CUDA
-args.cuda = args.cuda and torch.cuda.is_available()
-if args.cuda:
-    torch.cuda.set_device(args.gpuid)
-    torch.cuda.manual_seed(args.seed)
-    print(f'Using GPU: {args.gpuid}')
-else:
-    torch.manual_seed(args.seed)
-    print('Using CPU')
+class Main:
+    def __init__(self, *args):
+        self.config = Args(*args)
+        # CUDA
+        self.config.cuda &= torch.cuda.is_available()
+        if self.config.cuda:
+            torch.cuda.set_device(self.config.gpuid)
+            print(f'Using GPU: {self.config.gpuid}')
+        else:
+            print('Using CPU')
+        if self.config.seed is not None:
+            if self.config.cuda:
+                torch.cuda.manual_seed(self.config.seed)
+            else:
+                torch.manual_seed(self.config.seed)
 
-# DATA
-loader_train, loader_valid, loader_test, mean, std = pt_utils.load_loaders(args)
+        self.loader_train, self.loader_valid, self.loader_test, mean, std = pt_utils.load_loaders(self.config)
 
-# MODEL
-model = builder.build_model(args, mean, std)
-if args.test:
-    model.load_state_dict(torch.load(args.path + '.pt'))
-if args.cuda:
-    model.cuda()
-print(f'{args.path} parameters: {pt_utils.count_parameters(model)}')
+        self.model = builder.build(args, mean, std)
+        print(f'{args.path} parameters: {pt_utils.count_parameters(model)}')
+        if args.cuda:
+            self.model.cuda()
+        self.criterion = getattr(torch.nn, args.criterion)()
+
+    @torch.no_grad()
+    def test():
+        model.load_state_dict(torch.load(args.path))
+        self.model.eval()
 
 # criterion, loss
 criterion = getattr(torch.nn, args.criterion)()
@@ -65,5 +74,4 @@ print(f'{args.path}:\n{error_test}')
 
 
 if __name__ == '__main__':
-    import fire
     fire.Fire()
