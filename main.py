@@ -12,62 +12,39 @@ from lib import Trainer
 
 from models import builder
 
+
 args = Args()
-print(args)
+loader_train, loader_valid, loader_test, mean, std = pt_utils.load_loaders(args)
 
-class Main:
-    def __init__(self, *args):
-        self.config = Args(*args)
-        # CUDA
-        self.config.cuda &= torch.cuda.is_available()
-        if self.config.cuda:
-            torch.cuda.set_device(self.config.gpuid)
-            print(f'Using GPU: {self.config.gpuid}')
-        else:
-            print('Using CPU')
-        if self.config.seed is not None:
-            if self.config.cuda:
-                torch.cuda.manual_seed(self.config.seed)
-            else:
-                torch.manual_seed(self.config.seed)
+model = builder.build(args, mean, std)
+print(f'{args.path} parameters: {pt_utils.count_parameters(model)}')
+if args.cuda:
+    model.cuda()
 
-        self.loader_train, self.loader_valid, self.loader_test, mean, std = pt_utils.load_loaders(self.config)
-
-        self.model = builder.build(args, mean, std)
-        print(f'{args.path} parameters: {pt_utils.count_parameters(model)}')
-        if args.cuda:
-            self.model.cuda()
-        self.criterion = getattr(torch.nn, args.criterion)()
-
-    @torch.no_grad()
-    def test():
-        model.load_state_dict(torch.load(args.path))
-        self.model.eval()
-
-# criterion, loss
 criterion = getattr(torch.nn, args.criterion)()
 loss = Loss.Loss(metrics=args.metrics, horizons=args.horizons)
-
-# optimizer, scheduler
 optimizer = optim.Adam(model.parameters(), weight_decay=args.weight_decay)
 
-# TRAINER
-trainer = Trainer.Trainer(
-    model=model,
-    framework=args.framework,
-    rescaler=rescaler,
-    criterion=criterion,
-    loss=loss,
-    optimizer=optimizer,
-    epoches=args.epoches,
-    iterations=args.iterations,
-    cuda=args.cuda
-)
+def test():
+    model.load_state_dict(torch.load(args.path))
+    model.eval()
+
+def train( dataloader):
+    error = Loss.MetricDict()
+    for data in dataloader:
+        if args.cuda:
+            data = (d.cuda() for d in data)
+        output = model(*data)
+        error = error + loss(output, target)
+        criterion = criterion(output, target)
+        optimizer.zero_grad()
+        criterion.backward()
+        clip_grad_norm_(model.parameters(), 1.)
+        optimizer.step()
+    return error
 
 
-if not args.test:
-    trainer.run(loader_train, loader_valid)
-    torch.save(trainer.model.state_dict(), args.path + '.pt')
+torch.save(trainer.model.state_dict(), args.path + '.pt')
 
 error_test = trainer.run_epoch(loader_test)
 print(f'{args.path}:\n{error_test}')

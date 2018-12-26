@@ -1,6 +1,7 @@
 import argparse
 from collections import OrderedDict
 from constants import MODEL_PATH
+import torch
 
 
 class Args(argparse.ArgumentParser):
@@ -10,6 +11,7 @@ class Args(argparse.ArgumentParser):
         self._add_model()
         self._add_optim()
         self.parse_args(*args)
+        self._update_cuda()
         self._update_data()
         self._update_model()
 
@@ -83,6 +85,20 @@ class Args(argparse.ArgumentParser):
     def _set_args(self, key, value):
         if getattr(self, key) is None:
             setattr(self, key, value)
+
+
+    def _update_cuda(self):
+        self.config.cuda &= torch.cuda.is_available()
+        if self.config.cuda:
+            torch.cuda.set_device(self.config.gpuid)
+            print(f'Using GPU: {self.config.gpuid}')
+        else:
+            print('Using CPU')
+        if self.config.seed is not None:
+            if self.config.cuda:
+                torch.cuda.manual_seed(self.config.seed)
+            else:
+                torch.manual_seed(self.config.seed)
 
 
     def _update_data(self):
