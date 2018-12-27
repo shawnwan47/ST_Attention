@@ -1,16 +1,9 @@
 import numpy as np
-
 import torch
 import torch.nn as nn
 
-from lib import pt_utils
-
+from lib import IO
 from models import Embedding
-from models import MLP
-from models import RNN
-from models import SpatialRNN
-from models import DCRNN
-from models import Vec2Vec, Seq2Vec, Seq2Seq
 
 
 def build_model(args):
@@ -111,7 +104,7 @@ def build_SpatialRNNDecoder(args):
 
 
 def build_DCRNN(args):
-    adj = pt_utils.load_adj(args.dataset)
+    adj = IO.load_adj(args.dataset)
     encoder = DCRNN.DCRNN(
         rnn_type=args.rnn_type,
         num_nodes=args.num_nodes,
@@ -124,7 +117,7 @@ def build_DCRNN(args):
 
 
 def build_DCRNNDecoder(args):
-    adj = pt_utils.load_adj(args.dataset)
+    adj = IO.load_adj(args.dataset)
     decoder = DCRNN.DCRNNDecoder(
         rnn_type=args.rnn_type,
         num_nodes=args.num_nodes,

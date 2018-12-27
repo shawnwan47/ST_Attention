@@ -4,8 +4,9 @@ from constants import MODEL_PATH
 import torch
 
 
-class Config:
+class Args(argparse.ArgumentParser):
     def __init__(self, *args):
+        super().__init__()
         self._add_data()
         self._add_model()
         self._add_optim()
@@ -15,53 +16,70 @@ class Config:
         self._update_model()
 
     def _add_data(self):
-        self.dataset = 'LA'
-        self.num_nodes = None
-        self.start = 6
-        self.end = 22
-        self.freq = 5
-        self.num_times = None
-        self.history = 60
-        self.horizon = 60
-        self.horizons = [0, 15, 30, 60]
-        self.bday = False
+        self.add_argument('-dataset', default='LA', choices=['LA', 'BJ_highway', 'BJ_metro'])
+        self.add_argument('-num_nodes', type=int)
+
+        self.add_argument('-start', type=int, default=6)
+        self.add_argument('-end', type=int, default=22)
+        self.add_argument('-freq', type=int, default=5)
+        self.add_argument('-num_times', type=int)
+
+        self.add_argument('-history', type=int, default=60)
+        self.add_argument('-horizon', type=int, default=60)
+        self.add_argument('-horizons', nargs='+', default=[5, 15, 30, 60])
+
+        self.add_argument('-bday', action='store_true')
+
+        self.add_argument('-metrics', nargs='+', default=['mae'])
 
 
     def _add_model(self):
         # framework and model
-        self.model = None
-        self.framework = None
+        self.add_argument('-model')
+        self.add_argument('-encoder')
+        self.add_argument('-decoder')
+        self.add_argument('-paradigm', choices=['spatial', 'temporal', 'st'])
+        self.add_argument('-framework', choices=['seq2seq', 'seq2vec', 'vec2vec'])
 
         # general
-        self.hidden_size = None
-        self.output_size = None
-        self.num_layers = 2
-        self.dropout = 0.2)
+        self.add_argument('-hidden_size', type=int)
+        self.add_argument('-output_size', type=int)
+        self.add_argument('-num_layers', type=int, default=2)
+        self.add_argument('-dropout', type=float, default=0.2)
 
         # Embedding
-        self.embedding_dim =
-        self.rnn_type = RNN', 'GRU', 'LSTM'])
+        self.add_argument('-embedding_dim', type=int)
+        # RNN
+        self.add_argument('-rnn_type', default='GRU',
+                          choices=['RNN', 'GRU', 'LSTM'])
         # Attention
-        self.attn_type = dot', 'general', 'mlp'])
-        self.head_count = 4)
-        self.mask =
-        self.hops = 3)
+        self.add_argument('-attn_type', default='dot',
+                          choices=['dot', 'general', 'mlp'])
+        self.add_argument('-head_count', type=int, default=4)
+        self.add_argument('-mask', action='store_true')
+        # DCRNN
+        self.add_argument('-hops', type=int, default=3)
         # Save path
-        self.path = ):
+        self.add_argument('-path')
+
+
+    def _add_optim(self):
         # device
-        self.cuda = gpuid = 3)
-        self.seed = 47)
+        self.add_argument('-cuda', action='store_true')
+        self.add_argument('-gpuid', type=int, default=3)
+        self.add_argument('-seed', type=int, default=47)
         # optimization
-        self.criterion = L1Loss', 'MSELoss', 'SmoothL1Loss'])
-        self.optim = SGD', 'Adam'])
-        self.lr = 0.001)
-        self.min_lr = 1e-6)
-        self.weight_decay = 1e-5)
+        self.add_argument('-criterion', default='SmoothL1Loss',
+                          choices=['L1Loss', 'MSELoss', 'SmoothL1Loss'])
+        self.add_argument('-optim', default='Adam', choices=['SGD', 'Adam'])
+        self.add_argument('-lr', type=float, default=0.001)
+        self.add_argument('-min_lr', type=float, default=1e-6)
+        self.add_argument('-weight_decay', type=float, default=1e-5)
 
         # run
-        self.batch_size = 64)
-        self.epoches = 100)
-        self.iterations = 200)
+        self.add_argument('-batch_size', type=int, default=64)
+        self.add_argument('-epoches', type=int, default=100)
+        self.add_argument('-iterations', type=int, default=200)
 
 
     def _set_args(self, key, value):

@@ -84,8 +84,3 @@ def load_adj_long(dataset):
     adj = torch.LongTensor(adj)
     mask = torch.ByteTensor(mask.astype(int))
     return adj, mask
-
-
-def mask_target(output, target):
-    mask = ~torch.isnan(target)
-    return output.masked_select(mask), target.masked_select(mask)

@@ -1,32 +1,28 @@
 import numpy as np
-
 import torch
-import torch.optim as optim
-import fire
+import torch.nn as nn
+from torch.optim import Adam
 
-from config import Args
-from lib import utils
-from lib import pt_utils
-from lib import Loss
-from lib import Trainer
+from config import Config
+from lib.Loss import Loss
 
 from models import builder
 
 
-args = Args()
-data_train, data_validation, data_test, mean, std = pt_utils.load_data(args)
-model = builder.build_model(args, mean, std)
-criterion = getattr(torch.nn, args.criterion)()
-loss = Loss.Loss(metrics=args.metrics, horizons=args.horizons)
-optimizer = optim.Adam(model.parameters(), weight_decay=args.weight_decay)
+config = Config()
+data_train, data_validation, data_test, mean, std = pt_utils.load_data(config)
+model = builder.build_model(config, mean, std)
+criterion = getattr(nn, config.criterion)()
+loss = Loss(metrics=config.metrics, horizons=config.horizons)
+optimizer = Adam(model.parameters(), weight_decay=config.weight_decay)
 
 
 def test(dataloader):
-    model.load_state_dict(torch.load(args.path))
+    model.load_state_dict(torch.load(config.path))
     model.eval()
     error = Loss.MetricDict()
     for data in dataloader:
-        if args.cuda:
+        if config.cuda:
             data = (d.cuda() for d in data)
         output = model(*data)
         error = error + loss(output, target)
@@ -35,9 +31,9 @@ def test(dataloader):
 
 def train():
     error = Loss.MetricDict()
-    for epoch in args.epoches:
+    for epoch in config.epoches:
         for data in loader_train:
-            if args.cuda:
+            if config.cuda:
                 data = (d.cuda() for d in data)
             output = model(*data)
             error = error + loss(output, target)
@@ -47,9 +43,10 @@ def train():
             clip_grad_norm_(model.parameters(), 1.)
             optimizer.step()
 
-    torch.save(model.state_dict(), args.path)
+    torch.save(model.state_dict(), config.path)
     return error
 
 
 if __name__ == '__main__':
+    import fire
     fire.Fire()

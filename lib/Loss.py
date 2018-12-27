@@ -3,7 +3,6 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 from constants import EPS
-from lib.pt_utils import mask_target
 
 
 def get_loss(output, target, metric):
@@ -21,6 +20,11 @@ def get_loss(output, target, metric):
     else:
         loss = Metric(loss.item(), target.numel())
     return loss
+
+
+def mask_target(output, target):
+    mask = ~torch.isnan(target)
+    return output.masked_select(mask), target.masked_select(mask)
 
 
 class Metric:
