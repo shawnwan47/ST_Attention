@@ -25,6 +25,12 @@ def build_model(args):
     else:
         model = build_seq2seq(embedding, encoder, decoder, history, horizon)
 
+    num_params = sum(p.numel() for p in model.parameters())
+    print(f'{args.path} parameters: {num_params}')
+    if args.cuda:
+        model.cuda()
+
+    return model
 
 def build_embedding(args):
     if args.paradigm == 'spatialtemporal':

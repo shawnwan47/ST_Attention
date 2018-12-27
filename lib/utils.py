@@ -19,18 +19,3 @@ def minute_str(minute):
         return str(t) if t >= 10 else '0' + str(t)
     hour, minute = divmod(minute, 60)
     return time_str(hour) + ':' + time_str(minute)
-
-
-def select_index(index, start, end):
-    assert isinstance(start, datetime.time)
-    assert isinstance(end, datetime.time)
-    return index[(index.time >= start) & (index.time < end)]
-
-
-class Rescaler:
-    def __init__(self, mean, std):
-        self.mean = mean
-        self.std = std
-
-    def __call__(self, input):
-        return (input * (self.std + EPS)) + self.mean

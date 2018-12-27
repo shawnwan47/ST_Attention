@@ -1,19 +1,29 @@
-import datetime
 import numpy as np
 import pandas as pd
+import torch
+from torch.utils.data import DataLoader
 
-from constants import EPS
-from lib.utils import aeq
+from lib.Loader import get_loader
+from lib.Dataset import TimeSeries
 
 
-def prepare_dataset(df, bday, start, end):
-    df = _filter_df(df, bday, start, end)
-    df_train, df_valid, df_test = _split_dataset(df)
+def load_data(args):
+    df = get_loader(args.dataset).load_ts(args.freq)
+    df = _filter_df(df, args.bday, args.start, args.end)
+    df_train, df_validation, df_test = _split_dataset(df)
     mean, std = df_train.mean().values, df_train.std().values
-    data_train = _df_to_io((df_train - mean) / (std + EPS))
-    data_valid = _df_to_io((df_valid - mean) / (std + EPS))
-    data_test = _df_to_io((df_test - mean) / (std + EPS))
-    return data_train, data_valid, data_test, mean, std
+
+    dataset_train, dataset_valid, dataset_test = (
+        TimeSeries(df, mean, std, args.history, args.horizon)
+        for df in (df_train, df_validation, df_test)
+    )
+
+    data_train = DataLoader(dataset_train, args.batch_size, True)
+    data_validation = DataLoader(dataset_valid, args.batch_size)
+    data_test = DataLoader(dataset_test, args.batch_size)
+    mean, std = torch.FloatTensor(mean), torch.FloatTensor(std)
+
+    return data_train, data_validation, data_test, mean, std
 
 
 def _filter_df(df, bday, start, end):
@@ -35,6 +45,47 @@ def _split_dataset(df, train_ratio=0.7, test_ratio=0.2):
     # select df
     dateindex = df.index.date
     df_train = df[dateindex < date_train]
-    df_valid = df[(dateindex >= date_train) & (dateindex < date_test)]
+    df_validation = df[(dateindex >= date_train) & (dateindex < date_test)]
     df_test = df[dateindex >= date_test]
-    return df_train, df_valid, df_test
+    return df_train, df_validation, df_test
+
+
+def load_adj(dataset):
+    loader = get_loader(dataset)
+    if dataset == 'LA':
+        adj = loader.load_adj()
+    else:
+        dist = loader.load_dist().values
+        od = loader.load_od().values
+        dist = graph.calculate_dist_adj(dist)
+        od, do = graph.calculate_od_adj(od)
+        adj0 = np.hstack((dist, od))
+        adj1 = np.hstack((do, dist))
+        adj = np.vstack((adj0, adj1))
+    return torch.FloatTensor(adj)
+
+
+def load_adj_long(dataset):
+    loader = get_loader(dataset)
+    dist = loader.load_dist().values
+    dist = graph.digitize_dist(dist)
+    if dataset.startswith('BJ'):
+        od = loader.load_od().values
+        od, do = graph.digitize_od(od)
+        od += dist.max() + 1
+        do += od.max() + 1
+        adj0 = np.hstack((dist, od))
+        adj1 = np.hstack((do, dist))
+        adj = np.vstack((adj0, adj1))
+        mask = (adj == dist.max()) | (adj == od.min()) | (adj == do.min())
+    else:
+        adj = dist
+        mask = dist == dist.max()
+    adj = torch.LongTensor(adj)
+    mask = torch.ByteTensor(mask.astype(int))
+    return adj, mask
+
+
+def mask_target(output, target):
+    mask = ~torch.isnan(target)
+    return output.masked_select(mask), target.masked_select(mask)
