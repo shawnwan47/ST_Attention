@@ -1,0 +1,63 @@
+---
+data:
+  task:
+    flow:
+      freq: 15
+      history: 8
+      horizon: 8
+      horizons: [0, 1, 3, 7]
+      metrics: [mae, rmse, wape]
+    speed:
+      freq: 5
+      history: 12
+      horizon: 12
+      horizons: [0, 2, 5, 11]
+      metrics: [mae, rmse, mape]
+  dataset:
+    LA:
+      task: speed
+      batch_size: 64
+      num_nodes: 207
+    BJ_highway:
+      task: flow
+      batch_size: 64
+      num_nodes: 264
+    BJ_metro:
+      task: flow
+      batch_size: 16
+      num_nodes: 536
+model:
+  paradigm:
+    spatial:
+      model_dim: 128
+      weekday_dim: 16
+      time_dim: 32
+      node_dim: 64
+    temporal:
+      model_dim: 256
+      weekday_dim: 16
+      time_dim: 32
+    spatialtemporal:
+      model_dim: 64
+      weekday_dim: 8
+      time_dim: 16
+      node_dim: 32
+  model:
+    STTransformer:
+      paradigm: spatialtemporal
+      encoder_layers: 3
+      decoder_layers: 3
+      heads: 4
+    TTransformer:
+      paradigm: temporal
+      encoder_layers: 3
+      decoder_layers: 3
+      heads: 4
+    STransformer:
+      paradigm: spatial
+      num_layers: 3
+    DCRNN:
+      paradigm: spatialtemporal
+      num_layers: 2
+      hops: 2
+      inverse: True

@@ -1,11 +1,12 @@
-from math import sqrt, ceil
+from math import sqrt
+import torch
 import torch.nn as nn
 
 
 class MLP(nn.Module):
     def __init__(self, input_size, output_size, dropout):
         super().__init__()
-        hidden_size = round(math.sqrt(input_size * output_size))
+        hidden_size = round(sqrt(input_size * output_size))
         self.sequential = nn.Sequential(
             nn.Linear(input_size, hidden_size),
             nn.ReLU(),
@@ -34,6 +35,6 @@ class ResMLP(nn.Module):
 
 
 def bias(model_dim):
-    bias = nn.Parameter(torch.FloatTensor(model_dim))
+    bias = nn.Parameter(torch.zeros(model_dim))
     nn.init.xavier_normal_(bias.data)
     return bias

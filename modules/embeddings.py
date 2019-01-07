@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from modules import bias, MLP, ResMLP
+from modules.utils import bias, MLP, ResMLP
 
 
 class Embedding(nn.Module):
@@ -62,13 +62,10 @@ class EmbeddingFusion(nn.Module):
         super().__init__()
         self.embedding_data = embedding_data
         self.embedding = embedding
-        self.resmlp = ResMLP(model_dim, dorpout)
+        self.resmlp = ResMLP(model_dim, dropout)
         self.nan = bias(model_dim)
 
     def forward(self, data, time, weekday):
-        if data is None:
-            output = self.nan
-        else:
-            output = self.embedding_data(data)
-        output += self.embedding(time, weekday)
+        output = self.embedding(time, weekday)
+        output += self.nan if data is None else self.embedding_data(data)
         return self.resmlp(output)

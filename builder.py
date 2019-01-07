@@ -2,128 +2,151 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from lib import IO
-from models import Embedding
+from modules import MLP
+from modules import EmbeddingFusion, TemporalEmbedding, STEmbedding
 
 
-def build_model(args):
-    history, horizon = args.history, args.horizon
-    embedding = build_embedding(args)
-    encoder = build_encoder(args)
-    decoder = build_decoder(args)
-    if args.framework == 'vec2vec':
-        model = build_vec2vec(embedding, encoder, decoder)
-    elif args.framework == 'seq2vec':
-        model = build_seq2vec(embedding, encoder, decoder)
+class Framework(nn.Module):
+    def __init__(self, model, mean, std):
+        super().__init__()
+        self.model = model
+        self.mean, self.std = mean, std
+
+    def forward(self, *data):
+        output = self.model(*data)
+        return output * (self.std + EPS) + self.mean
+
+def build_model(config, mean, std):
+    embedding = build_embedding(config)
+    if config.model == 'STTransformer':
+        model = build_sttransformer(config, embedding)
     else:
-        model = build_seq2seq(embedding, encoder, decoder, history, horizon)
-
+        raise KeyError('Model note implemented!')
     num_params = sum(p.numel() for p in model.parameters())
-    print(f'{args.path} parameters: {num_params}')
-    if args.cuda:
-        model.cuda()
+    print(f'{config.path} parameters: {num_params}')
+    framework = Framework(model, mean, std)
+    if config.cuda:
+        framework.cuda()
+    return framework
 
-    return model
 
-def build_embedding(args):
-    if args.paradigm == 'spatialtemporal':
-        data_size = args.history if args.framework is 'vec2vec' else 1
-        embedding = Embedding.STEmbedding(
-            data_size=data_size,
-            num_nodes=args.num_nodes,
-            num_times=args.num_times,
-            bday=args.bday,
-            embedding_dim=args.embedding_dim,
-            features=args.hidden_size,
-            dropout=args.dropout
+def build_embedding(config):
+    model_dim = config.model_dim
+    dropout = config.dropout
+
+    def build_stembedding():
+        return STEmbedding(
+            model_dim, dropout,
+            num_times=config.num_times,
+            time_dim=config.time_dim,
+            weekday_dim=config.weekday_dim,
+            num_nodes=config.num_nodes,
+            node_dim=config.node_dim
         )
+
+    def build_tembedding():
+        return TEmbedding(
+            model_dim, dropout,
+            num_times=config.num_times,
+            time_dim=config.time_dim,
+            weekday_dim=config.weekday_dim
+        )
+
+    if config.paradigm == 'temporal':
+        embedding = build_tembedding()
+        embedding_data = MLP(config.num_nodes, model_dim, dropout)
+    elif config.paradigm == 'spatial':
+        embedding = build_stembedding()
+        embedding_data = MLP(config.history, model_dim, dropout)
     else:
-        embedding = Embedding.TemporalEmbedding(
-            data_size=args.num_nodes,
-            num_times=args.num_times,
-            bday=args.bday,
-            embedding_dim=args.embedding_dim,
-            features=args.hidden_size,
-            dropout=args.dropout
-        )
-    return embedding
+        embedding = build_stembedding()
+        embedding_data = MLP(1, model_dim, dropout)
+    return EmbeddingFusion(embedding_data, embedding, model_dim, dropout)
 
 
-def build_encoder(args):
-    return
+def build_sttransformer(config, embedding):
+    return STTransformer(
+        embedding=embedding,
+        model_dim=config.model_dim,
+        dropout=config.dropout,
+        encoder_layers=config.encoder_layers,
+        decoder_layers=config.decoder_layers,
+        heads=config.heads,
+        horizon=config.horizon
+    )
 
 
-def build_vector_decoder(args):
-    return MLP.MLP(args.hidden_size, args.output_size)
+def build_vector_decoder(config):
+    return MLP.MLP(config.hidden_size, config.output_size)
 
 
-def build_SpatialMLP(args):
+def build_SpatialMLP(config):
     return MLP.MLP(
-        input_size=args.hidden_size,
-        output_size=args.output_size,
-        num_layers=args.num_layers,
-        dropout=args.dropout
+        input_size=config.hidden_size,
+        output_size=config.output_size,
+        num_layers=config.num_layers,
+        dropout=config.dropout
     )
 
 
-def build_RNN(args):
+def build_RNN(config):
     return RNN.RNN(
-        rnn_type=args.rnn_type,
-        features=args.hidden_size,
-        num_layers=args.num_layers,
-        dropout=args.dropout
+        rnn_type=config.rnn_type,
+        features=config.hidden_size,
+        num_layers=config.num_layers,
+        dropout=config.dropout
     )
 
 
-def build_RNNDecoder(args):
+def build_RNNDecoder(config):
     return RNN.RNNDecoder(
-        rnn_type=args.rnn_type,
-        features=args.hidden_size,
-        output_size=args.num_nodes,
-        num_layers=args.num_layers,
-        dropout=args.dropout
+        rnn_type=config.rnn_type,
+        features=config.hidden_size,
+        output_size=config.num_nodes,
+        num_layers=config.num_layers,
+        dropout=config.dropout
     )
 
 
-def build_SpatialRNN(args):
+def build_SpatialRNN(config):
     return SpatialRNN.SpatialRNN(
-        rnn_type=args.rnn_type,
-        features=args.hidden_size,
-        num_nodes=args.num_nodes,
-        num_layers=args.num_layers
+        rnn_type=config.rnn_type,
+        features=config.hidden_size,
+        num_nodes=config.num_nodes,
+        num_layers=config.num_layers
     )
 
 
-def build_SpatialRNNDecoder(args):
+def build_SpatialRNNDecoder(config):
     return SpatialRNN.SpatialRNNDecoder(
-        rnn_type=args.rnn_type,
-        features=args.hidden_size,
-        num_nodes=args.num_nodes,
-        num_layers=args.num_layers
+        rnn_type=config.rnn_type,
+        features=config.hidden_size,
+        num_nodes=config.num_nodes,
+        num_layers=config.num_layers
     )
 
 
-def build_DCRNN(args):
-    adj = IO.load_adj(args.dataset)
+def build_DCRNN(config):
+    adj = IO.load_adj(config.dataset)
     encoder = DCRNN.DCRNN(
-        rnn_type=args.rnn_type,
-        num_nodes=args.num_nodes,
-        features=args.hidden_size,
-        num_layers=args.num_layers,
-        adj=adj.cuda() if args.cuda else adj,
-        hops=args.hops
+        rnn_type=config.rnn_type,
+        num_nodes=config.num_nodes,
+        features=config.hidden_size,
+        num_layers=config.num_layers,
+        adj=adj.cuda() if config.cuda else adj,
+        hops=config.hops
     )
     return encoder
 
 
-def build_DCRNNDecoder(args):
-    adj = IO.load_adj(args.dataset)
+def build_DCRNNDecoder(config):
+    adj = IO.load_adj(config.dataset)
     decoder = DCRNN.DCRNNDecoder(
-        rnn_type=args.rnn_type,
-        num_nodes=args.num_nodes,
-        features=args.hidden_size,
-        num_layers=args.num_layers,
-        adj=adj.cuda() if args.cuda else adj,
-        hops=args.hops
+        rnn_type=config.rnn_type,
+        num_nodes=config.num_nodes,
+        features=config.hidden_size,
+        num_layers=config.num_layers,
+        adj=adj.cuda() if config.cuda else adj,
+        hops=config.hops
     )
     return decoder
