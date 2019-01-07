@@ -19,7 +19,7 @@ class TimeSeries(Dataset):
         day, t = divmod(index, self.daily_samples)
         data = self.data[day, t:t+self.history]
         time = self.time[day, t:t+self.history]
-        weekday = self.weekday[day, t]
+        weekday = self.weekday[day]
         target = self.target[day, t+self.history:t+self.horizon]
         return data, time, day, target
 

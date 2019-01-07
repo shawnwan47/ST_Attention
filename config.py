@@ -5,71 +5,66 @@ import torch
 
 
 class Config:
-    def __init__(self, *args):
+    def __init__(self, **kwargs):
         self._add_data()
         self._add_model()
         self._add_optim()
-        self.parse_args(*args)
-        self._update_cuda()
-        self._update_data()
-        self._update_model()
+        self.set_kwargs(**kwargs)
+
+    def set_kwargs(self, **kwargs):
+        for k, v in kwargs:
+            setattr(self, k, v)
+        self._set_data()
+        self._set_model()
+        self._set_cuda()
 
     def _add_data(self):
+        # data
         self.dataset = 'LA'
-        self.num_nodes = None
-        self.start = 6
-        self.end = 22
-        self.freq = 5
-        self.num_times = None
+        self.bday = False
+        self.start = 0
+        self.end = 24
         self.history = 60
         self.horizon = 60
-        self.horizons = [0, 15, 30, 60]
-        self.bday = False
-
+        self.num_nodes = None
+        self.freq = None
+        self.num_times = None
+        self.horizons = []
+        self.metrics = ['mae']
 
     def _add_model(self):
-        # framework and model
-        self.model = None
-        self.framework = None
-
+        # model
+        self.path = MODEL_PATH
+        self.model = 'Transformer'
         # general
-        self.hidden_size = None
-        self.output_size = None
+        self.model_dim = None
         self.num_layers = 2
-        self.dropout = 0.2)
-
+        self.dropout = 0.2
         # Embedding
-        self.embedding_dim =
-        self.rnn_type = RNN', 'GRU', 'LSTM'])
+        self.weekday_dim = 8
+        self.time_dim = 16
+        self.node_dim = 32
+        # RNN
+        self.rnn_type = 'GRU'
         # Attention
-        self.attn_type = dot', 'general', 'mlp'])
-        self.head_count = 4)
-        self.mask =
-        self.hops = 3)
-        # Save path
-        self.path = ):
+        self.head_count = 4
+        self.mask = False
+        # GCN
+        self.hops = 3
+
+    def _add_optim(self):
         # device
-        self.cuda = gpuid = 3)
-        self.seed = 47)
+        self.cuda = False
+        self.seed = 47
         # optimization
-        self.criterion = L1Loss', 'MSELoss', 'SmoothL1Loss'])
-        self.optim = SGD', 'Adam'])
-        self.lr = 0.001)
-        self.min_lr = 1e-6)
-        self.weight_decay = 1e-5)
-
+        self.criterion = 'SmoothL1Loss'
+        self.lr = 0.001
+        self.weight_decay = 1e-5
         # run
-        self.batch_size = 64)
-        self.epoches = 100)
-        self.iterations = 200)
+        self.batch_size = 64
+        self.epoches = 100
 
-
-    def _set_args(self, key, value):
-        if getattr(self, key) is None:
-            setattr(self, key, value)
-
-
-    def _update_cuda(self):
+    def _set_cuda(self):
         self.config.cuda &= torch.cuda.is_available()
         if self.config.cuda:
             torch.cuda.set_device(self.config.gpuid)
@@ -82,78 +77,32 @@ class Config:
             else:
                 torch.manual_seed(self.config.seed)
 
-
-    def _update_data(self):
-        self.num_times = 1440 // self.freq
+    def _set_data(self):
         if self.dataset == 'BJ_metro':
+            self.freq = 15
             self.num_nodes = 536
             self.metrics.append('wape')
         elif self.dataset == 'BJ_highway':
+            self.freq = 15
             self.num_nodes = 264
             self.metrics.append('wape')
         elif self.dataset == 'LA':
+            self.freq = 5
             self.num_nodes = 207
             self.metrics.append('mape')
 
+        self.num_times = (self.end - self.start) * 60 // self.freq
         self.history //= self.freq
         self.horizon //= self.freq
-        horizons = [max(0, t // self.freq - 1) for t in self.horizons]
-        self.horizons = list(OrderedDict.fromkeys(horizons))
+        if self.horizon == 4:
+            self.horizons = [0, 1, 2, 3]
+        else:
+            self.horizons = [0, 2, 5, 11]
         self.freq = str(self.freq) + 'min'
 
-        if self.bday:
-            self.del_day = True
-
-
-    def _update_model(self):
-        assert self.encoder is not None
-        self._set_args('encoder', self.model)
-        self._set_args('decoder', self.encoder)
-
-        # paradigm
-        if self.model in ['RNN', 'TemporalAttention']:
-            self.paradigm = 'temporal'
-        elif self.model in ['MLP', 'SpatialAttention']:
-            self.paradigm = 'spatial'
-        else:
-            self.paradigm = 'st'
-
-        # framework
-        if self.encoder in ['MLP', 'SpatialAttention']:
-            self.framework = 'vec2vec'
-        else:
-            if self.decoder in ['MLP', 'SpatialAttention', 'DiffusionConvolution']:
-                self.framework = 'seq2vec'
-            else:
-                self.framework = 'seq2seq'
-
-        # hidden_size
-        if self.paradigm == 'temporal':
-            self.output_size = self.num_nodes
-            self._set_args('hidden_size', 256)
-            self._set_args('embedding_dim', 64)
-        elif self.paradigm == 'spatial':
-            self.output_size = self.horizon
-            self._set_args('hidden_size', 64)
-            self._set_args('embedding_dim', 32)
-        elif self.paradigm == 'st':
-            self.output_size = 1
-            self._set_args('hidden_size', 32)
-            self._set_args('embedding_dim', 16)
-
-        if self.framework == 'seq2vec':
-            self.output_size *= self.horizon
-            self.hiddon_size *= 2
-
-        # embedding dim
-        self.time_dim = self.embedding_dim
-        self.day_dim = self.embedding_dim
-        self.node_dim = self.embedding_dim
-
+    def _set_model(self):
         # model name
-        name = self.encoder + '2' + self.decoder
-        name += 'BDay' if self.bday else ''
-        name += 'Lay' + str(self.num_layers)
-        name += 'Hid' + str(self.hidden_size)
-        name += 'Emb' + str(self.embedding_dim)
-        self.path = MODEL_PATH + self.dataset + '/' + name
+        self.path += self.dataset + '/'
+        self.path += 'BDay' if self.bday else ''
+        self.path += 'Lay' + str(self.num_layers)
+        self.path += 'Dim' + str(self.model_dim)

@@ -3,8 +3,7 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
-from lib.Loader import get_loader
-from lib.Dataset import TimeSeries
+from lib import get_loader, TimeSeries
 
 
 def load_data(args):
