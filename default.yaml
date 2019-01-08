@@ -28,36 +28,36 @@ data:
       num_nodes: 536
 model:
   paradigm:
-    spatial:
+    s:
       model_dim: 128
       weekday_dim: 16
       time_dim: 32
       node_dim: 64
-    temporal:
+    t:
       model_dim: 256
       weekday_dim: 16
       time_dim: 32
-    spatialtemporal:
+    st:
       model_dim: 64
       weekday_dim: 8
       time_dim: 16
       node_dim: 32
   model:
     STTransformer:
-      paradigm: spatialtemporal
+      paradigm: st
       encoder_layers: 3
       decoder_layers: 2
       heads: 4
     TTransformer:
-      paradigm: temporal
+      paradigm: t
       encoder_layers: 3
       decoder_layers: 3
       heads: 4
     STransformer:
-      paradigm: spatial
+      paradigm: s
       num_layers: 3
     DCRNN:
-      paradigm: spatialtemporal
+      paradigm: st
       num_layers: 2
       hops: 2
       inverse: True

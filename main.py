@@ -12,6 +12,7 @@ from builder import build_model
 def train(**kwargs):
     print(kwargs)
     config = Config(**kwargs)
+    _cuda(config)
     loader_train, loader_validation, loader_test, mean, std = load_data(config)
     model = build_model(config, mean, std)
     criterion = getattr(nn, config.criterion)()
@@ -42,12 +43,27 @@ def train(**kwargs):
 
 def test(**kwargs):
     config = Config(**kwargs)
+    _cuda(config)
     _, _, dataloader, mean, std = load_data(config)
     model = build_model(config, mean, std)
     model.load_state_dict(torch.load(config.path))
     loss = Loss(metrics=config.metrics, horizons=config.horizons)
     error = _eval(model, dataloader, loss, config.cuda)
     print(error)
+
+
+def _cuda(config):
+    config.cuda &= torch.cuda.is_available()
+    if config.cuda:
+        torch.cuda.set_device(config.gpuid)
+        print(f'Using GPU: {config.gpuid}')
+    else:
+        print('Using CPU')
+    if config.seed is not None:
+        if config.cuda:
+            torch.cuda.manual_seed(config.seed)
+        else:
+            torch.manual_seed(config.seed)
 
 
 def _eval(model, dataloader, loss, cuda):

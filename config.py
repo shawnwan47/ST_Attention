@@ -1,6 +1,5 @@
 import yaml
 from constants import MODEL_PATH
-import torch
 
 
 class Config:
@@ -9,7 +8,6 @@ class Config:
         for k, v in kwargs.items():
             setattr(self, k, v)
         default = yaml.load(open('default.yaml'))
-        self.set_cuda()
         self.set_data(default['data'])
         self.set_model(default['model'])
 
@@ -28,6 +26,15 @@ class Config:
         self.path = MODEL_PATH
         self.model = 'STTransformer'
         self.dropout = 0.2
+
+        self.batch_size = None
+        self.paradigm = None
+        self.hidden_size = None
+        self.num_layers = None
+        self.encoder_layers = None
+        self.decoder_layers = None
+        self.heads = None
+        self.mask = None
         # cuda
         self.cuda = False
         self.gpuid = 3
@@ -37,19 +44,6 @@ class Config:
         self.lr = 0.001
         self.weight_decay = 1e-5
         self.epoches = 20
-
-    def set_cuda(self):
-        self.cuda &= torch.cuda.is_available()
-        if self.cuda:
-            torch.cuda.set_device(self.gpuid)
-            print(f'Using GPU: {self.gpuid}')
-        else:
-            print('Using CPU')
-        if self.seed is not None:
-            if self.cuda:
-                torch.cuda.manual_seed(self.seed)
-            else:
-                torch.manual_seed(self.seed)
 
     def set_data(self, default):
         self.set_config(default['dataset'][self.dataset])

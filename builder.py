@@ -2,10 +2,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from modules import Framework
 from modules import MLP
-from modules import EmbeddingFusion, TemporalEmbedding, STEmbedding
+from modules import EmbeddingFusion, TEmbedding, STEmbedding
 
-from models import Framework
 from models import STTransformer
 
 
@@ -21,7 +21,7 @@ def build_model(config, mean, std):
     model = Framework(model, config.paradigm, mean, std)
     if config.cuda:
         model.cuda()
-        
+
     return model
 
 
@@ -49,15 +49,17 @@ def build_embedding(config):
             weekday_dim=config.weekday_dim
         )
 
-    if config.paradigm == 'temporal':
+    if config.paradigm == 't':
         embedding = build_tembedding()
         data_mlp = MLP(config.num_nodes, model_dim, dropout)
-    elif config.paradigm == 'spatial':
+    elif config.paradigm == 's':
         embedding = build_stembedding()
         data_mlp = MLP(config.history, model_dim, dropout)
-    else:
+    elif config.paradigm == 'st':
         embedding = build_stembedding()
         data_mlp = MLP(1, model_dim, dropout)
+    else:
+        raise KeyError(config.paradigm)
     return EmbeddingFusion(data_mlp, embedding, model_dim, dropout)
 
 

@@ -1,6 +1,16 @@
 from math import sqrt
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+
+
+def bias(*sizes):
+    assert len(sizes) > 0
+    if len(sizes) == 1:
+        sizes = (1, sizes[0])
+    bias = nn.Parameter(torch.empty(*sizes))
+    nn.init.xavier_normal_(bias.data)
+    return bias
 
 
 class MLP(nn.Module):
@@ -19,25 +29,16 @@ class MLP(nn.Module):
 
 
 class ResMLP(nn.Module):
-    def __init__(self, size, dropout):
+    def __init__(self, model_dim, dropout):
         super().__init__()
-        self.sequential = nn.Sequential(
-            nn.LayerNorm(size),
-            nn.Linear(size, size),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(size, size),
-            nn.Dropout(dropout)
-        )
+        self.w_1 = nn.Linear(model_dim, model_dim)
+        self.w_2 = nn.Linear(model_dim, model_dim)
+        self.layer_norm = nn.LayerNorm(model_dim, eps=1e-6)
+        self.dropout_1 = nn.Dropout(dropout)
+        self.relu = nn.ReLU()
+        self.dropout_2 = nn.Dropout(dropout)
 
     def forward(self, input):
-        return input + self.sequential(input)
-
-
-def bias(*sizes):
-    assert len(sizes) > 0
-    if len(sizes) == 1:
-        sizes = (1, sizes[0])
-    bias = nn.Parameter(torch.empty(*sizes))
-    nn.init.xavier_normal_(bias.data)
-    return bias
+        inter = self.dropout_1(self.relu(self.w_1(self.layer_norm(input))))
+        output = self.dropout_2(self.w_2(inter))
+        return output + input

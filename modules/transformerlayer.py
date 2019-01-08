@@ -12,19 +12,18 @@ class TransformerLayer(nn.Module):
 
     def forward(self, input, bank, mask):
         query = self.layer_norm(input)
-        context = self.attn(query, bank, mask)
-        output = input + self.drop(context)
-        return self.mlp(output)
+        output = self.drop(self.attn(query, bank, mask))
+        return self.mlp(input + output)
 
 
-class SpatialTransformerLayer(TransformerLayer):
+class STransformerLayer(TransformerLayer):
     pass
 
 
-class TemporalTransformerLayer(TransformerLayer):
+class TTransformerLayer(TransformerLayer):
     def forward(self, input, bank, mask):
         input_t, bank_t = input.transpose(1, 2), bank.transpose(1, 2)
-        output = super().forward(input_t, bank_t)
+        output = super().forward(input_t, bank_t, mask)
         return output.transpose(1, 2)
 
 
@@ -32,11 +31,11 @@ class TemporalTransformerLayer(TransformerLayer):
 class STTransformerLayer(nn.Module):
     def __init__(self, model_dim, heads, dropout):
         super().__init__()
-        self.layer_t = TemporalTransformerLayer(model_dim, heads, dropout)
-        self.layer_s = SpatialTransformerLayer(model_dim, heads, dropout)
+        self.layer_t = TTransformerLayer(model_dim, heads, dropout)
+        self.layer_s = STransformerLayer(model_dim, heads, dropout)
 
-    def forward(self, input, bank, mask=None):
-        input_s = self.layer_t(input, bank)
+    def forward(self, input, bank, mask):
+        input_s = self.layer_t(input, bank, mask)
         return self.layer_s(input_s, input_s, mask)
 
 

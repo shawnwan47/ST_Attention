@@ -18,7 +18,7 @@ class STTransformer(nn.Module):
             heads=heads,
             dropout=dropout
         )
-        self.encoder = STTransformerDecoder(
+        self.decoder = STTransformerDecoder(
             model_dim=model_dim,
             num_layers=decoder_layers,
             heads=heads,
@@ -29,10 +29,10 @@ class STTransformer(nn.Module):
 
     def forward(self, data, time, weekday):
         input = self.embedding(data, time, weekday)
-        bank = self.encoder(input, mask)
+        bank = self.encoder(input, self.mask)
         time = self.gen_time(time[:, -1])
         input = self.embedding(None, time, weekday)
-        output = self.decoder(input, bank, mask)
+        output = self.decoder(input, bank, self.mask)
         return output
 
     def gen_time(self, time):
@@ -50,7 +50,7 @@ class STTransformerEncoder(nn.Module):
 
     def forward(self, input, mask):
         for layer in self.layers:
-            input = layer(input, mask)
+            input = layer(input, input, mask)
         return self.layer_norm(input)
 
 

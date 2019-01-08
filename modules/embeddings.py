@@ -17,7 +17,7 @@ class Embedding(nn.Module):
         return self.sequential(input)
 
 
-class TemporalEmbedding(nn.Module):
+class TEmbedding(nn.Module):
     def __init__(self, model_dim, dropout,
                  num_times, time_dim, weekday_dim):
         super().__init__()
@@ -29,7 +29,7 @@ class TemporalEmbedding(nn.Module):
         return self.time(time) + output
 
 
-class STEmbedding(TemporalEmbedding):
+class STEmbedding(TEmbedding):
     def __init__(self, model_dim, dropout,
                  num_times, time_dim, weekday_dim,
                  num_nodes, node_dim):
@@ -38,9 +38,9 @@ class STEmbedding(TemporalEmbedding):
         self.embedding_node = Embedding(num_nodes, node_dim, model_dim, dropout)
 
     def forward(self, time, weekday):
-        output = super().forward(time, weekday).unsqueeze(-2)
-        output += self.embedding_node(self.nodes)
-        return output
+        t = super().forward(time, weekday).unsqueeze(-2)
+        s = self.embedding_node(self.nodes)
+        return s + t
 
 
 class EmbeddingFusion(nn.Module):
