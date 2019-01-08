@@ -49,7 +49,7 @@ class EmbeddingFusion(nn.Module):
         self.data_mlp = data_mlp
         self.embedding = embedding
         self.resmlp = ResMLP(model_dim, dropout)
-        self.nan = bias(model_dim)
+        self.register_parameter('nan', bias(model_dim))
 
     def forward(self, data, time, weekday):
         output = self.nan if data is None else self.data_mlp(data)

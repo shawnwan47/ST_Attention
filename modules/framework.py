@@ -30,7 +30,6 @@ class Framework(nn.Module):
 
     def forward(self, data, time, weekday):
         data, time, weekday = self.pre_forward(data, time, weekday)
-        print(data.size(), time.size(), weekday.size())
         output = self.model(data, time, weekday)
         output = self.post_forward(output)
         return output * (self.std + EPS) + self.mean

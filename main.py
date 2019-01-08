@@ -10,10 +10,9 @@ from builder import build_model
 
 
 def train(**kwargs):
-    print(kwargs)
     config = Config(**kwargs)
     _cuda(config)
-    loader_train, loader_validation, loader_test, mean, std = load_data(config)
+    loader_train, loader_val, loader_test, mean, std = load_data(config)
     model = build_model(config, mean, std)
     criterion = getattr(nn, config.criterion)()
     loss = Loss(metrics=config.metrics, horizons=config.horizons)
@@ -34,7 +33,7 @@ def train(**kwargs):
             criterion.backward()
             clip_grad_norm_(model.parameters(), 1.)
             optimizer.step()
-        error_validation = _eval(model, loader_validation, loss, config.cuda)
+        error_validation = _eval(model, loader_val, loss, config.cuda)
         print(error, error_validation)
         torch.save(model.state_dict(), config.path)
     error_test = _eval(model, loader_test, loss, config.cuda)

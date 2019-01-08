@@ -22,7 +22,8 @@ class STransformerLayer(TransformerLayer):
 
 class TTransformerLayer(TransformerLayer):
     def forward(self, input, bank, mask):
-        input_t, bank_t = input.transpose(1, 2), bank.transpose(1, 2)
+        input_t = input.transpose(1, 2).contiguous()
+        bank_t = bank.transpose(1, 2).contiguous()
         output = super().forward(input_t, bank_t, mask)
         return output.transpose(1, 2)
 
