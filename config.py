@@ -55,5 +55,4 @@ class Config:
         self.set_config(default['model'][self.model])
         self.set_config(default['paradigm'][self.paradigm])
         # model name
-        self.path += self.dataset + '/'
-        self.path += 'BDay' if self.bday else ''
+        self.path += self.dataset + '/' + self.model
