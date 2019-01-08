@@ -46,7 +46,7 @@ model:
     STTransformer:
       paradigm: spatialtemporal
       encoder_layers: 3
-      decoder_layers: 3
+      decoder_layers: 2
       heads: 4
     TTransformer:
       paradigm: temporal

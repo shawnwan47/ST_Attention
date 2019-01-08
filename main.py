@@ -18,13 +18,15 @@ def train(**kwargs):
     loss = Loss(metrics=config.metrics, horizons=config.horizons)
     optimizer = Adam(model.parameters(), weight_decay=config.weight_decay)
 
-    for epoch in config.epoches:
+    for epoch in range(config.epoches):
         model.train()
         error = MetricDict()
         for data in loader_train:
+            print(len(data))
             if config.cuda:
                 data = (d.cuda() for d in data)
-            output = model(*data)
+            data, time, weekday, target = data
+            output = model(data, time, weekday)
             error = error + loss(output, target)
             criterion = criterion(output, target)
             optimizer.zero_grad()
@@ -54,7 +56,8 @@ def _eval(model, dataloader, loss, cuda):
     for data in dataloader:
         if cuda:
             data = (d.cuda() for d in data)
-        output = model(*data)
+        data, time, weekday, target = data
+        output = model(data, time, weekday)
         error = error + loss(output, target)
     return error
 

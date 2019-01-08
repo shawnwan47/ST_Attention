@@ -3,26 +3,26 @@ import torch
 import torch.nn as nn
 
 from modules import bias, MLP
-from modules import STTransformerLayer
+from modules import STTransformerLayer, STTransformerDecoderLayer
 
 
 class STTransformer(nn.Module):
-    def __init__(self, embedding, model_dim, dropout,
+    def __init__(self, embedding, model_dim,
                  encoder_layers, decoder_layers, heads,
                  horizon, dropout, mask=None):
         super().__init__()
         self.embedding = embedding
         self.encoder = STTransformerEncoder(
             model_dim=model_dim,
-            dropout=dropout,
             num_layers=encoder_layers,
-            heads=heads
+            heads=heads,
+            dropout=dropout
         )
         self.encoder = STTransformerDecoder(
             model_dim=model_dim,
-            dropout=dropout,
             num_layers=decoder_layers,
-            heads=heads
+            heads=heads,
+            dropout=dropout
         )
         self.horizon = horizon
         self.register_buffer('mask', mask)
@@ -36,14 +36,14 @@ class STTransformer(nn.Module):
         return output
 
     def gen_time(self, time):
-        return torch.stack(time + i + 1 for i in range(self.horizon), -1)
+        return torch.stack((time + i + 1 for i in range(self.horizon)), -1)
 
 
 class STTransformerEncoder(nn.Module):
     def __init__(self, model_dim, num_layers, heads, dropout):
         super().__init__()
-        self.layers = nn.Modules([
-            STTransformerEncoderLayer(model_dim, heads, dropout)
+        self.layers = nn.ModuleList([
+            STTransformerLayer(model_dim, heads, dropout)
             for _ in range(num_layers)
         ])
         self.layer_norm = nn.LayerNorm(model_dim)
@@ -54,10 +54,10 @@ class STTransformerEncoder(nn.Module):
         return self.layer_norm(input)
 
 
-class STTransformerDecoder(nn.module):
+class STTransformerDecoder(nn.Module):
     def __init__(self, model_dim, num_layers, heads, dropout):
         super().__init__()
-        self.layers = nn.Modules([
+        self.layers = nn.ModuleList([
             STTransformerDecoderLayer(model_dim, heads, dropout)
             for _ in range(num_layers)
         ])

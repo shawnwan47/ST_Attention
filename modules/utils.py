@@ -34,7 +34,10 @@ class ResMLP(nn.Module):
         return input + self.sequential(input)
 
 
-def bias(model_dim):
-    bias = nn.Parameter(torch.zeros(model_dim))
+def bias(*sizes):
+    assert len(sizes) > 0
+    if len(sizes) == 1:
+        sizes = (1, sizes[0])
+    bias = nn.Parameter(torch.empty(*sizes))
     nn.init.xavier_normal_(bias.data)
     return bias
