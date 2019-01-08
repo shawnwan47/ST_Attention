@@ -28,7 +28,7 @@ class MultiHeadedAttention(nn.Module):
 
         def unshape(x):
             y = x.transpose(-2, -3).contiguous()
-            return y.view(*y.size()[:-2], self.size)
+            return y.view(*y.size()[:-2], self.model_dim)
 
         query = shape(self.linear_query(query))
         key = shape(self.linear_key(bank)).transpose(-1, -2).contiguous()
