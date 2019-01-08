@@ -16,15 +16,15 @@ data:
   dataset:
     LA:
       task: speed
-      batch_size: 64
+      batch_size: 16
       num_nodes: 207
     BJ_highway:
       task: flow
-      batch_size: 64
+      batch_size: 16
       num_nodes: 264
     BJ_metro:
       task: flow
-      batch_size: 16
+      batch_size: 4
       num_nodes: 536
 model:
   paradigm:
