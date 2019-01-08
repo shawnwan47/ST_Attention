@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.optim import Adam
+from torch.nn.utils import clip_grad_norm_
 
 from config import Config
 from lib.metric import Loss, MetricDict
@@ -22,15 +23,14 @@ def train(**kwargs):
         model.train()
         error = MetricDict()
         for data in loader_train:
-            print(len(data))
             if config.cuda:
                 data = (d.cuda() for d in data)
             data, time, weekday, target = data
             output = model(data, time, weekday)
             error = error + loss(output, target)
-            criterion = criterion(output, target)
+            crit = criterion(output, target)
             optimizer.zero_grad()
-            criterion.backward()
+            crit.backward()
             clip_grad_norm_(model.parameters(), 1.)
             optimizer.step()
         error_validation = _eval(model, loader_val, loss, config.cuda)

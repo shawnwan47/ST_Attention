@@ -6,8 +6,7 @@ from torch.utils.data import Dataset
 class TimeSeries(Dataset):
     def __init__(self, df, mean, std, history, horizon):
         super().__init__()
-        self.data, self.time, self.weekday, self.target = self._df_to_io(
-            df, mean, std)
+        self.data, self.time, self.weekday, self.target = self._df_to_io(df, mean, std)
         self.history = history
         self.horizon = horizon
         self.days = self.data.size(0)
@@ -17,12 +16,12 @@ class TimeSeries(Dataset):
         return self.days * self.daily_samples
 
     def __getitem__(self, index):
-        day, t = divmod(index, self.daily_samples)
-        data = self.data[day, t:t+self.history]
-        time = self.time[day, t:t+self.history]
-        weekday = self.weekday[day]
-        target = self.target[day, t+self.history:t+self.horizon]
-        return data, time, day, target
+        d, t = divmod(index, self.daily_samples)
+        data = self.data[d, t:t+self.history]
+        time = self.time[d, t:t+self.history]
+        weekday = self.weekday[d]
+        target = self.target[d, t+self.history:t+self.history+self.horizon]
+        return data, time, weekday, target
 
     @staticmethod
     def _df_to_io(df, mean, std):

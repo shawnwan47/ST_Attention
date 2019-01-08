@@ -7,8 +7,8 @@ class Framework(nn.Module):
         assert paradigm in ['t', 's', 'st']
         self.paradigm = paradigm
         self.model = model
-        self.mean = mean
-        self.std = std
+        self.register_buffer('mean', mean)
+        self.register_buffer('std', std)
 
     def pre_forward(self, data, time, weekday):
         if self.paradigm == 'st':
@@ -32,4 +32,4 @@ class Framework(nn.Module):
         data, time, weekday = self.pre_forward(data, time, weekday)
         output = self.model(data, time, weekday)
         output = self.post_forward(output)
-        return output * (self.std + EPS) + self.mean
+        return output * (self.std + 1e-8) + self.mean

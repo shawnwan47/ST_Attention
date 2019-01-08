@@ -10,12 +10,12 @@ from lib.loaders import get_loader
 def load_data(args):
     df = get_loader(args.dataset).load_ts(args.freq)
     df = _filter_df(df, args.bday, args.start, args.end)
-    df_train, df_validation, df_test = _split_dataset(df)
+    df_train, df_val, df_test = _split_dataset(df)
     mean, std = df_train.mean().values, df_train.std().values
 
     dataset_train, dataset_valid, dataset_test = (
         TimeSeries(df, mean, std, args.history, args.horizon)
-        for df in (df_train, df_validation, df_test)
+        for df in (df_train, df_val, df_test)
     )
 
     data_train = DataLoader(dataset_train, args.batch_size, True)
@@ -45,9 +45,9 @@ def _split_dataset(df, train_ratio=0.7, test_ratio=0.2):
     # select df
     dateindex = df.index.date
     df_train = df[dateindex < date_train]
-    df_validation = df[(dateindex >= date_train) & (dateindex < date_test)]
+    df_val = df[(dateindex >= date_train) & (dateindex < date_test)]
     df_test = df[dateindex >= date_test]
-    return df_train, df_validation, df_test
+    return df_train, df_val, df_test
 
 
 def load_adj(dataset):

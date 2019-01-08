@@ -52,6 +52,6 @@ class EmbeddingFusion(nn.Module):
         self.register_parameter('nan', bias(model_dim))
 
     def forward(self, data, time, weekday):
-        output = self.nan if data is None else self.data_mlp(data)
-        output += self.embedding(time, weekday)
-        return self.resmlp(output)
+        data = self.nan if data is None else self.data_mlp(data)
+        temp = self.embedding(time, weekday)
+        return self.resmlp(data + temp)

@@ -36,7 +36,7 @@ class STTransformer(nn.Module):
         return output
 
     def gen_time(self, time):
-        return torch.stack((time + i + 1 for i in range(self.horizon)), -1)
+        return torch.stack([time + i + 1 for i in range(self.horizon)], -1)
 
 
 class STTransformerEncoder(nn.Module):
