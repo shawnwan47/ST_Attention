@@ -25,16 +25,17 @@ class Config:
         # model
         self.path = MODEL_PATH
         self.model = 'STTransformer'
-        self.dropout = 0.2
+        self.dropout = 0.1
+        self.mask = False
 
         self.batch_size = None
+        self.model_dim = None
         self.paradigm = None
         self.hidden_size = None
         self.num_layers = None
         self.encoder_layers = None
         self.decoder_layers = None
         self.heads = None
-        self.mask = None
         # cuda
         self.cuda = False
         self.gpuid = 3
@@ -43,7 +44,7 @@ class Config:
         self.criterion = 'SmoothL1Loss'
         self.lr = 0.001
         self.weight_decay = 1e-5
-        self.epoches = 20
+        self.epoches = 10
 
     def set_data(self, default):
         self.set_config(default['dataset'][self.dataset])

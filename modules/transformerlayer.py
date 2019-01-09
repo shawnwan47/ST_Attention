@@ -10,7 +10,7 @@ class TransformerLayer(nn.Module):
         self.drop = nn.Dropout(dropout)
         self.mlp = ResMLP(model_dim, dropout)
 
-    def forward(self, input, bank, mask):
+    def forward(self, input, bank, mask=None):
         query = self.layer_norm(input)
         output = self.drop(self.attn(query, bank, mask))
         return self.mlp(input + output)
@@ -21,12 +21,11 @@ class STransformerLayer(TransformerLayer):
 
 
 class TTransformerLayer(TransformerLayer):
-    def forward(self, input, bank, mask):
+    def forward(self, input, bank):
         input_t = input.transpose(1, 2).contiguous()
         bank_t = bank.transpose(1, 2).contiguous()
-        output = super().forward(input_t, bank_t, mask)
+        output = super().forward(input_t, bank_t)
         return output.transpose(1, 2)
-
 
 
 class STTransformerLayer(nn.Module):
@@ -36,7 +35,7 @@ class STTransformerLayer(nn.Module):
         self.layer_s = STransformerLayer(model_dim, heads, dropout)
 
     def forward(self, input, bank, mask):
-        input_s = self.layer_t(input, bank, mask)
+        input_s = self.layer_t(input, bank)
         return self.layer_s(input_s, input_s, mask)
 
 

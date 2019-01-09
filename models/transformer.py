@@ -46,12 +46,12 @@ class STTransformerEncoder(nn.Module):
             STTransformerLayer(model_dim, heads, dropout)
             for _ in range(num_layers)
         ])
-        self.layer_norm = nn.LayerNorm(model_dim)
+        # self.layer_norm = nn.LayerNorm(model_dim)
 
     def forward(self, input, mask):
         for layer in self.layers:
             input = layer(input, input, mask)
-        return self.layer_norm(input)
+        return input
 
 
 class STTransformerDecoder(nn.Module):
@@ -61,13 +61,13 @@ class STTransformerDecoder(nn.Module):
             STTransformerDecoderLayer(model_dim, heads, dropout)
             for _ in range(num_layers)
         ])
-        self.layer_norm = nn.LayerNorm(model_dim)
+        # self.layer_norm = nn.LayerNorm(model_dim)
         self.mlp = MLP(model_dim, 1, dropout)
 
     def forward(self, input, bank, mask):
         for layer in self.layers:
             input = layer(input, bank, mask)
-        return self.mlp(self.layer_norm(input))
+        return self.mlp(input)
 
 
 def gen_temporal_mask(size=24):

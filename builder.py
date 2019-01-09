@@ -7,6 +7,7 @@ from modules import MLP
 from modules import EmbeddingFusion, TEmbedding, STEmbedding
 
 from models import STTransformer
+from lib.io import load_mask, load_adj
 
 
 def build_model(config, mean, std):
@@ -64,6 +65,7 @@ def build_embedding(config):
 
 
 def build_sttransformer(config, embedding):
+    mask = load_mask(config.dataset) if config.mask else None
     return STTransformer(
         embedding=embedding,
         model_dim=config.model_dim,
@@ -71,5 +73,6 @@ def build_sttransformer(config, embedding):
         encoder_layers=config.encoder_layers,
         decoder_layers=config.decoder_layers,
         heads=config.heads,
-        horizon=config.horizon
+        horizon=config.horizon,
+        mask=mask
     )

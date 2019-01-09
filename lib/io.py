@@ -50,6 +50,12 @@ def _split_dataset(df, train_ratio=0.7, test_ratio=0.2):
     return df_train, df_val, df_test
 
 
+def load_mask(dataset):
+    adj = load_adj(dataset)
+    mask = adj == 0
+    return mask
+
+
 def load_adj(dataset):
     loader = get_loader(dataset)
     if dataset == 'LA':
