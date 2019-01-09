@@ -5,6 +5,11 @@ from torch.nn import functional as F
 from constants import EPS
 
 
+def mask_target(output, target):
+    mask = ~torch.isnan(target)
+    return output.masked_select(mask), target.masked_select(mask)
+
+
 class Loss:
     def __init__(self, metrics, horizons):
         self.metrics = metrics
@@ -40,11 +45,6 @@ class Loss:
         else:
             loss = Metric(loss.item(), target.numel())
         return loss
-
-
-def mask_target(output, target):
-    mask = ~torch.isnan(target)
-    return output.masked_select(mask), target.masked_select(mask)
 
 
 class Metric:

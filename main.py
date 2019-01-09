@@ -5,7 +5,7 @@ from torch.optim import Adam
 from torch.nn.utils import clip_grad_norm_
 
 from config import Config
-from lib.metric import Loss, MetricDict
+from lib.metric import Loss, MetricDict, mask_target
 from lib.io import load_data
 from builder import build_model
 
@@ -28,11 +28,13 @@ def train(**kwargs):
             data, time, weekday, target = data
             output = model(data, time, weekday)
             error = error + loss(output, target)
+            output, target = mask_target(output, target)
             crit = criterion(output, target)
             optimizer.zero_grad()
             crit.backward()
             clip_grad_norm_(model.parameters(), 1.)
             optimizer.step()
+            del output
         error_val = _eval(model, loader_val, loss, config.cuda)
         print(f'Epoch: {epoch}\nTrain: {error}\nVal: {error_val}')
         torch.save(model.state_dict(), config.path)
