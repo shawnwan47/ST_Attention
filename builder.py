@@ -7,6 +7,7 @@ from modules import MLP
 from modules import EmbeddingFusion, TEmbedding, STEmbedding
 
 from models import STTransformer
+from models import RNNSeq2Seq, RNNAttnSeq2Seq
 from lib.io import load_mask, load_adj
 
 
@@ -14,6 +15,10 @@ def build_model(config, mean, std):
     embedding = build_embedding(config)
     if config.model == 'STTransformer':
         model = build_sttransformer(config, embedding)
+    elif config.model == 'RNN':
+        model = build_rnn(config, embedding)
+    elif config.model == 'RNNAttn':
+        model = build_rnnattn(config, embedding)
     else:
         raise KeyError('Model note implemented!')
     num_params = sum(p.numel() for p in model.parameters())
@@ -75,4 +80,29 @@ def build_sttransformer(config, embedding):
         heads=config.heads,
         horizon=config.horizon,
         mask=mask
+    )
+
+
+def build_rnn(config, embedding):
+    return RNNSeq2Seq(
+        embedding=embedding,
+        rnn_type=config.rnn_type,
+        model_dim=config.model_dim,
+        num_layers=config.num_layers,
+        out_dim=config.num_nodes,
+        dropout=config.dropout,
+        horizon=config.horizon
+    )
+
+
+def build_rnnattn(config, embedding):
+    return RNNAttnSeq2Seq(
+        embedding=embedding,
+        rnn_type=config.rnn_type,
+        model_dim=config.model_dim,
+        num_layers=config.num_layers,
+        heads=config.heads,
+        out_dim=config.num_nodes,
+        dropout=config.dropout,
+        horizon=config.horizon
     )

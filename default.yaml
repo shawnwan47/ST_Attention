@@ -31,16 +31,16 @@ model:
     s:
       model_dim: 128
       weekday_dim: 16
-      time_dim: 32
+      time_dim: 64
       node_dim: 64
     t:
       model_dim: 256
       weekday_dim: 16
-      time_dim: 32
+      time_dim: 64
     st:
       model_dim: 64
       weekday_dim: 8
-      time_dim: 16
+      time_dim: 32
       node_dim: 32
   model:
     STTransformer:
@@ -56,6 +56,15 @@ model:
     STransformer:
       paradigm: s
       num_layers: 3
+    RNN:
+      paradigm: t
+      rnn_type: GRU
+      num_layers: 2
+    RNNAttn:
+      paradigm: t
+      rnn_type: GRU
+      num_layers: 2
+      heads: 4
     DCRNN:
       paradigm: st
       num_layers: 2

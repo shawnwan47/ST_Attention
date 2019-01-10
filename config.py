@@ -44,7 +44,7 @@ class Config:
         self.criterion = 'SmoothL1Loss'
         self.lr = 0.001
         self.weight_decay = 1e-5
-        self.epoches = 10
+        self.epoches = 20
 
     def set_data(self, default):
         self.set_config(default['dataset'][self.dataset])

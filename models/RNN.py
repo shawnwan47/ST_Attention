@@ -3,22 +3,21 @@ from random import random
 import torch
 import torch.nn as nn
 
-from models import Framework
+from modules import bias
+from modules import TransformerLayer
 
 
 class RNN(nn.Module):
-    def __init__(self, rnn_type, size, num_layers, dropout=0):
-        assert rnn_type in ('RNN', 'RNNReLU', 'GRU', 'LSTM')
+    def __init__(self, rnn_type, model_dim, num_layers, dropout):
+        assert rnn_type in ('RNN', 'GRU', 'LSTM')
         super().__init__()
         kwargs = {
-            'input_size': size,
-            'hidden_size': size,
+            'input_size': model_dim,
+            'hidden_size': model_dim,
             'num_layers': num_layers,
             'batch_first': True,
             'dropout': dropout
         }
-        if rnn_type == 'RNNReLU':
-            kwargs['nonlinearity'] = 'relu'
         self.rnn = getattr(nn, rnn_type)(**kwargs)
 
     def forward(self, input, hidden=None):
@@ -26,48 +25,87 @@ class RNN(nn.Module):
 
 
 class RNNDecoder(RNN):
-    def __init__(self, rnn_type, size, output_size, num_layers, dropout=0):
-        super().__init__(rnn_type, size, num_layers, dropout)
-        self.fc = nn.Linear(size, output_size)
+    def __init__(self, rnn_type, model_dim, num_layers, out_dim, dropout):
+        super().__init__(rnn_type, model_dim, num_layers, dropout)
+        self.linear = nn.Linear(model_dim, out_dim)
 
     def forward(self, input, hidden):
-        output, hidden = super().forward(input, hidden)
-        return self.fc(output), hidden
+        out, hidden = self.rnn(input, hidden)
+        return self.linear(out), hidden
+
+
+class RNNAttnDecoder(RNNDecoder):
+    def __init__(self, rnn_type, model_dim, heads, out_dim, num_layers, dropout):
+        super().__init__(rnn_type, model_dim, num_layers, dropout)
+        self.attn = TransformerLayer(model_dim, heads, dropout)
+
+    def forward(self, input, hidden, bank):
+        query, hidden = self.rnn(input, hidden)
+        out = self.attn(query, bank)
+        return self.linear(out), hidden
 
 
 class RNNSeq2Seq(nn.Module):
-    def __init__(self, embedding, encoder, decoder, history, horizon):
+    def __init__(self, embedding, rnn_type, model_dim, num_layers, out_dim,
+                 dropout, horizon):
         super().__init__()
-        self.hidden_size = embedding.features
         self.embedding = embedding
-        self.encoder = encoder
-        self.decoder = decoder
-        self.history = history
         self.horizon = horizon
-        self.start = self._init_start()
+        self.encoder = RNN(
+            rnn_type=rnn_type,
+            model_dim=model_dim,
+            num_layers=num_layers,
+            dropout=dropout
+        )
+        self.decoder = RNNDecoder(
+            rnn_type=rnn_type,
+            model_dim=model_dim,
+            num_layers=num_layers,
+            out_dim=out_dim,
+            dropout=dropout
+        )
 
-    def _init_start(self):
-        start = nn.Parameter(torch.FloatTensor(self.hidden_size))
-        nn.init.xavier_normal_(start.data)
-        return start
-
-    def start_decoding(self, input):
-        return self.start.expand_as(input[:, [0]])
-
-    def forward(self, data, time, day, teach=0):
-        self._check_args(data, time, day)
-        his = self.history
+    def forward(self, data, time, weekday):
         # encoding
-        input = self.embedding(data[:, :his], time[:, :his], day[:, :his])
-        encoder_output, hidden = self.encoder(input)
+        input = self.embedding(data, time, weekday)
+        _, hidden = self.encoder(input)
         # decoding
-        input_i = self.start_decoding(input)
-        output_i, hidden = self.decoder(input_i, hidden)
-        output = [output_i]
-        for idx in range(his, his + self.horizon - 1):
-            data_i = data[:, [idx]] if random() < teach else output_i.detach()
-            input_i = self.embedding(data_i, time[:, [idx]], day[:, [idx]])
-            output_i, hidden = self.decoder(input_i, hidden)
-            output.append(output_i)
-        output = torch.cat(output, 1)
-        return output
+        data = data[:, [-1]]
+        time = time[:, [-1]]
+        out = []
+        for idx in range(self.horizon):
+            input = self.embedding(data.detach(), time, weekday)
+            res, hidden = self.decoder(input, hidden)
+            out.append(res + data)
+            data = data + res
+            time = time + 1
+        return torch.cat(out, 1)
+
+
+class RNNAttnSeq2Seq(RNNSeq2Seq):
+    def __init__(self, embedding, rnn_type, model_dim, num_layers, heads, dropout, horizon):
+        super().__init__(self, embedding, rnn_type, model_dim, num_layers, dropout, horizon)
+        self.decoder = RNNAttnDecoder(
+            rnn_type=rnn_type,
+            model_dim=model_dim,
+            heads=heads,
+            out_dim=out_dim,
+            num_layers=num_layers,
+            dropout=dropout
+        )
+
+    def forward(self, data, time, weekday):
+        # encoding
+        input = self.embedding(data, time, weekday)
+        bank, hidden = self.encoder(input)
+        # decoding
+        data = data[:, [-1]]
+        time = time[:, [-1]]
+        out = []
+        for idx in range(self.horizon):
+            input = self.embedding(data, time, weekday)
+            res, hidden = self.decoder(input, hidden, bank)
+            data += res
+            time += 1
+            out.append(data)
+        return torch.cat(out, 1)

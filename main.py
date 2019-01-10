@@ -10,6 +10,20 @@ from lib.io import load_data
 from builder import build_model
 
 
+def _cuda(config):
+    config.cuda &= torch.cuda.is_available()
+    if config.cuda:
+        torch.cuda.set_device(config.gpuid)
+        print(f'Using GPU: {config.gpuid}')
+    else:
+        print('Using CPU')
+    if config.seed is not None:
+        if config.cuda:
+            torch.cuda.manual_seed(config.seed)
+        else:
+            torch.manual_seed(config.seed)
+
+
 def train(**kwargs):
     config = Config(**kwargs)
     _cuda(config)
@@ -53,20 +67,6 @@ def test(**kwargs):
     print(error)
 
 
-def _cuda(config):
-    config.cuda &= torch.cuda.is_available()
-    if config.cuda:
-        torch.cuda.set_device(config.gpuid)
-        print(f'Using GPU: {config.gpuid}')
-    else:
-        print('Using CPU')
-    if config.seed is not None:
-        if config.cuda:
-            torch.cuda.manual_seed(config.seed)
-        else:
-            torch.manual_seed(config.seed)
-
-
 def _eval(model, dataloader, loss, cuda):
     model.eval()
     error = MetricDict()
@@ -76,6 +76,7 @@ def _eval(model, dataloader, loss, cuda):
         data, time, weekday, target = data
         output = model(data, time, weekday)
         error = error + loss(output, target)
+        del output
     return error
 
 
