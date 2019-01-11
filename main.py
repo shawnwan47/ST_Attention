@@ -53,7 +53,7 @@ def train(**kwargs):
         print(f'Epoch: {epoch}\nTrain: {error}\nVal: {error_val}')
         torch.save(model.state_dict(), config.path)
     error_test = _eval(model, loader_test, loss, config.cuda)
-    print(error_test)
+    print(f'Test:{error_test}')
 
 
 def test(**kwargs):

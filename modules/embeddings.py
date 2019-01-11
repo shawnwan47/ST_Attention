@@ -25,8 +25,9 @@ class TEmbedding(nn.Module):
         self.weekday = Embedding(7, weekday_dim, model_dim, dropout)
 
     def forward(self, time, weekday):
-        output = self.weekday(weekday).unsqueeze(-2)
-        return self.time(time) + output
+        weekday = self.weekday(weekday).unsqueeze(-2)
+        time = self.time(time)
+        return weekday + time
 
 
 class STEmbedding(TEmbedding):
@@ -53,5 +54,5 @@ class EmbeddingFusion(nn.Module):
 
     def forward(self, data, time, weekday):
         data = self.nan if data is None else self.data_mlp(data)
-        temp = self.embedding(time, weekday)
-        return self.resmlp(data + temp)
+        emb = self.embedding(time, weekday)
+        return self.resmlp(data + emb)

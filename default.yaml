@@ -48,14 +48,15 @@ model:
       encoder_layers: 3
       decoder_layers: 2
       heads: 4
-    TTransformer:
+    Transformer:
       paradigm: t
       encoder_layers: 3
-      decoder_layers: 3
+      decoder_layers: 2
       heads: 4
     STransformer:
       paradigm: s
-      num_layers: 3
+      num_layers: 4
+      heads: 8
     RNN:
       paradigm: t
       rnn_type: GRU

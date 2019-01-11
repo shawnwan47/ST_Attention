@@ -14,7 +14,7 @@ class Framework(nn.Module):
         if self.paradigm == 'st':
             data = data.unsqueeze(-1)
         elif self.paradigm == 's':
-            data = data.transpose(-1, -2)
+            data = data.transpose(1, 2)
             time = time[:, -1]
         else:
             pass
@@ -24,7 +24,7 @@ class Framework(nn.Module):
         if self.paradigm == 'st':
             return output.squeeze(-1)
         elif self.paradigm == 's':
-            return output.transpose(-1, -2)
+            return output.transpose(1, 2)
         else:
             return output
 

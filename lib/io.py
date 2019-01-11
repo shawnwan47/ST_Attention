@@ -93,7 +93,7 @@ def load_adj_long(dataset):
 
 
 def gen_time(time, length):
-    return torch.stack([time + i + 1 for i in range(length)], -1)
+    return torch.stack([time + i + 1 for i in range(length)], 1)
 
 
 def gen_temporal_mask(length=24):

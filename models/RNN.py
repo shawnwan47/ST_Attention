@@ -36,7 +36,7 @@ class RNNDecoder(RNN):
 
 class RNNAttnDecoder(RNNDecoder):
     def __init__(self, rnn_type, model_dim, heads, out_dim, num_layers, dropout):
-        super().__init__(rnn_type, model_dim, num_layers, dropout)
+        super().__init__(rnn_type, model_dim, num_layers, out_dim, dropout)
         self.attn = TransformerLayer(model_dim, heads, dropout)
 
     def forward(self, input, hidden, bank):
@@ -67,24 +67,23 @@ class RNNSeq2Seq(nn.Module):
 
     def forward(self, data, time, weekday):
         # encoding
-        input = self.embedding(data, time, weekday)
-        _, hidden = self.encoder(input)
+        _, hidden = self.encoder(self.embedding(data, time, weekday))
         # decoding
-        data = data[:, [-1]]
-        time = time[:, [-1]]
+        data_i = data[:, [-1]]
+        time_i = time[:, [-1]]
         out = []
-        for idx in range(self.horizon):
-            input = self.embedding(data.detach(), time, weekday)
+        for _ in range(self.horizon):
+            input = self.embedding(data_i.detach(), time_i, weekday)
             res, hidden = self.decoder(input, hidden)
-            out.append(res + data)
-            data = data + res
-            time = time + 1
+            data_i += res
+            time_i += 1
+            out.append(data_i)
         return torch.cat(out, 1)
 
 
 class RNNAttnSeq2Seq(RNNSeq2Seq):
-    def __init__(self, embedding, rnn_type, model_dim, num_layers, heads, dropout, horizon):
-        super().__init__(self, embedding, rnn_type, model_dim, num_layers, dropout, horizon)
+    def __init__(self, embedding, rnn_type, model_dim, num_layers, out_dim, heads, dropout, horizon):
+        super().__init__(embedding, rnn_type, model_dim, num_layers, out_dim, dropout, horizon)
         self.decoder = RNNAttnDecoder(
             rnn_type=rnn_type,
             model_dim=model_dim,
@@ -102,10 +101,10 @@ class RNNAttnSeq2Seq(RNNSeq2Seq):
         data = data[:, [-1]]
         time = time[:, [-1]]
         out = []
-        for idx in range(self.horizon):
+        for _ in range(self.horizon):
             input = self.embedding(data, time, weekday)
             res, hidden = self.decoder(input, hidden, bank)
-            data += res
+            data += res.detach()
             time += 1
             out.append(data)
         return torch.cat(out, 1)

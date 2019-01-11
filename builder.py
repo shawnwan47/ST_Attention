@@ -6,7 +6,7 @@ from modules import Framework
 from modules import MLP
 from modules import EmbeddingFusion, TEmbedding, STEmbedding
 
-from models import STTransformer
+from models import STTransformer, Transformer, STransformer
 from models import RNNSeq2Seq, RNNAttnSeq2Seq
 from lib.io import load_mask, load_adj
 
@@ -15,12 +15,16 @@ def build_model(config, mean, std):
     embedding = build_embedding(config)
     if config.model == 'STTransformer':
         model = build_sttransformer(config, embedding)
+    elif config.model =='Transformer':
+        model = build_transformer(config, embedding)
+    elif config.model == 'STransformer':
+        model = build_stransformer(config, embedding)
     elif config.model == 'RNN':
         model = build_rnn(config, embedding)
     elif config.model == 'RNNAttn':
         model = build_rnnattn(config, embedding)
     else:
-        raise KeyError('Model note implemented!')
+        raise KeyError('Model not implemented!')
     num_params = sum(p.numel() for p in model.parameters())
     print(f'{config.path} parameters: {num_params}')
 
@@ -80,6 +84,29 @@ def build_sttransformer(config, embedding):
         heads=config.heads,
         horizon=config.horizon,
         mask=mask
+    )
+
+
+def build_transformer(config, embedding):
+    return Transformer(
+        embedding=embedding,
+        model_dim=config.model_dim,
+        out_dim=config.num_nodes,
+        encoder_layers=config.encoder_layers,
+        decoder_layers=config.decoder_layers,
+        heads=config.heads,
+        dropout=config.dropout,
+        horizon=config.horizon
+    )
+
+def build_stransformer(config, embedding):
+    return STransformer(
+        embedding=embedding,
+        model_dim=config.model_dim,
+        out_dim=config.horizon,
+        num_layers=config.num_layers,
+        heads=config.heads,
+        dropout=config.dropout
     )
 
 
