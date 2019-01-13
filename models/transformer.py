@@ -30,7 +30,8 @@ class STransformer(TransformerEncoder):
     def forward(self, data, time, weekday):
         emb = self.embedding(data, time, weekday)
         input = super().forward(emb)
-        return self.mlp_out(input)
+        output = self.mlp_out(input)
+        return output
 
 
 class TransformerDecoder(nn.Module):

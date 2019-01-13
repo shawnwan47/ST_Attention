@@ -4,7 +4,7 @@ import torch.nn as nn
 
 from modules import Framework
 from modules import MLP
-from modules import EmbeddingFusion, TEmbedding, STEmbedding
+from modules import EmbeddingFusion, SEmbedding, TEmbedding, STEmbedding
 
 from models import STTransformer, Transformer, STransformer
 from models import RNNSeq2Seq, RNNAttnSeq2Seq
@@ -36,40 +36,49 @@ def build_model(config, mean, std):
 
 
 def build_embedding(config):
+    paradigm = config.paradigm
     model_dim = config.model_dim
     dropout = config.dropout
+    num_times = config.num_times
+    time_dim = config.time_dim
+    num_nodes = config.num_nodes
+    weekday_dim = config.weekday_dim
+    node_dim = config.node_dim
+    history = config.history
 
-    def build_stembedding():
-        return STEmbedding(
+    if paradigm == 't':
+        data_mlp = MLP(num_nodes, model_dim, dropout)
+        embedding = TEmbedding(
             model_dim=model_dim,
             dropout=dropout,
-            num_times=config.num_times,
-            time_dim=config.time_dim,
-            weekday_dim=config.weekday_dim,
-            num_nodes=config.num_nodes,
-            node_dim=config.node_dim
+            num_times=num_times,
+            time_dim=time_dim,
+            weekday_dim=weekday_dim
         )
-
-    def build_tembedding():
-        return TEmbedding(
+    elif paradigm == 's':
+        data_mlp = MLP(history, model_dim, dropout)
+        embedding = SEmbedding(
             model_dim=model_dim,
             dropout=dropout,
-            num_times=config.num_times,
-            time_dim=config.time_dim,
-            weekday_dim=config.weekday_dim
+            num_times=num_times,
+            time_dim=time_dim,
+            weekday_dim=weekday_dim,
+            num_nodes=num_nodes,
+            node_dim=node_dim
         )
-
-    if config.paradigm == 't':
-        embedding = build_tembedding()
-        data_mlp = MLP(config.num_nodes, model_dim, dropout)
-    elif config.paradigm == 's':
-        embedding = build_stembedding()
-        data_mlp = MLP(config.history, model_dim, dropout)
-    elif config.paradigm == 'st':
-        embedding = build_stembedding()
+    elif paradigm == 'st':
         data_mlp = MLP(1, model_dim, dropout)
+        embedding = STEmbedding(
+            model_dim=model_dim,
+            dropout=dropout,
+            num_times=num_times,
+            time_dim=time_dim,
+            weekday_dim=weekday_dim,
+            num_nodes=num_nodes,
+            node_dim=node_dim
+        )
     else:
-        raise KeyError(config.paradigm)
+        raise KeyError(paradigm)
     return EmbeddingFusion(data_mlp, embedding, model_dim, dropout)
 
 

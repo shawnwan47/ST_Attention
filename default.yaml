@@ -11,37 +11,40 @@ data:
       freq: 5
       history: 12
       horizon: 12
-      horizons: [0, 2, 5, 11]
+      horizons: [2, 5, 11]
       metrics: [mae, rmse, mape]
   dataset:
     LA:
       task: speed
-      batch_size: 16
       num_nodes: 207
     BJ_highway:
       task: flow
-      batch_size: 16
       num_nodes: 264
     BJ_metro:
       task: flow
-      batch_size: 4
       num_nodes: 536
 model:
   paradigm:
     s:
+      batch_size: 64
+      epoches: 100
       model_dim: 128
-      weekday_dim: 16
-      time_dim: 64
       node_dim: 64
-    t:
-      model_dim: 256
-      weekday_dim: 16
       time_dim: 64
+      weekday_dim: 16
+    t:
+      batch_size: 256
+      epoches: 200
+      model_dim: 256
+      time_dim: 64
+      weekday_dim: 16
     st:
+      epoches: 50
+      batch_size: 8
       model_dim: 64
-      weekday_dim: 8
-      time_dim: 32
       node_dim: 32
+      time_dim: 32
+      weekday_dim: 8
   model:
     STTransformer:
       paradigm: st

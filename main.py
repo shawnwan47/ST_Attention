@@ -35,13 +35,13 @@ def train(**kwargs):
 
     for epoch in range(config.epoches):
         model.train()
-        error = MetricDict()
+        error_train = MetricDict()
         for data in loader_train:
             if config.cuda:
                 data = (d.cuda() for d in data)
             data, time, weekday, target = data
             output = model(data, time, weekday)
-            error = error + loss(output, target)
+            error_train = error_train + loss(output, target)
             output, target = mask_target(output, target)
             crit = criterion(output, target)
             optimizer.zero_grad()
@@ -50,7 +50,7 @@ def train(**kwargs):
             optimizer.step()
             del output
         error_val = _eval(model, loader_val, loss, config.cuda)
-        print(f'Epoch: {epoch}\nTrain: {error}\nVal: {error_val}')
+        print(f'Epoch: {epoch}\nTrain: {error_train}\nVal: {error_val}')
         torch.save(model.state_dict(), config.path)
     error_test = _eval(model, loader_test, loss, config.cuda)
     print(f'Test:{error_test}')

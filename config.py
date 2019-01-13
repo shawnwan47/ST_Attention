@@ -28,9 +28,11 @@ class Config:
         self.dropout = 0.1
         self.mask = False
 
-        self.batch_size = None
-        self.model_dim = None
         self.paradigm = None
+        self.time_dim = None
+        self.weekday_dim = None
+        self.node_dim = None
+        self.model_dim = None
         self.hidden_size = None
         self.num_layers = None
         self.encoder_layers = None
@@ -44,7 +46,8 @@ class Config:
         self.criterion = 'SmoothL1Loss'
         self.lr = 0.001
         self.weight_decay = 1e-5
-        self.epoches = 20
+        self.batch_size = None
+        self.epoches = None
 
     def set_data(self, default):
         self.set_config(default['dataset'][self.dataset])

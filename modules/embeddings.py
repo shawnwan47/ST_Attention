@@ -17,17 +17,33 @@ class Embedding(nn.Module):
         return self.sequential(input)
 
 
+class SEmbedding(nn.Module):
+    def __init__(self, model_dim, dropout,
+                 num_nodes, node_dim,
+                 num_times, time_dim, weekday_dim):
+        super().__init__()
+        self.register_buffer('nodes', torch.arange(num_nodes))
+        self.embedding_time = Embedding(num_times, time_dim, model_dim, dropout)
+        self.embedding_weekday = Embedding(7, weekday_dim, model_dim, dropout)
+        self.embedding_node = Embedding(num_nodes, node_dim, model_dim, dropout)
+
+    def forward(self, time, weekday):
+        emb_s = self.embedding_node(self.nodes)
+        emb_t = self.embedding_time(time) + self.embedding_weekday(weekday)
+        return emb_s + emb_t.unsqueeze(-2)
+
+
 class TEmbedding(nn.Module):
     def __init__(self, model_dim, dropout,
                  num_times, time_dim, weekday_dim):
         super().__init__()
-        self.time = Embedding(num_times, time_dim, model_dim, dropout)
-        self.weekday = Embedding(7, weekday_dim, model_dim, dropout)
+        self.embedding_time = Embedding(num_times, time_dim, model_dim, dropout)
+        self.embedding_weekday = Embedding(7, weekday_dim, model_dim, dropout)
 
     def forward(self, time, weekday):
-        weekday = self.weekday(weekday).unsqueeze(-2)
-        time = self.time(time)
-        return weekday + time
+        emb_weekday = self.embedding_weekday(weekday).unsqueeze(-2)
+        emb_time = self.embedding_time(time)
+        return emb_weekday + emb_time
 
 
 class STEmbedding(TEmbedding):
