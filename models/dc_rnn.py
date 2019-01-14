@@ -3,17 +3,14 @@ from random import random
 import torch
 import torch.nn as nn
 
-from modules import GraphRNN, GraphRNNCell
+from modules import GraphGRU
 
 
-class DCRNN(GraphRNN):
-    def __init__(self, rnn_type, model_dim, num_layers, num_nodes, adj, hops):
-        super().__init__(rnn_type, model_dim, num_layers, num_nodes)
-
-
-class DCRNNCell(GraphRNNCell):
-    def build_func(self, input_size, output_size):
-        return DiffusionConvolution(input_size, output_size)
+class DCRNN(GraphGRU):
+    def __init__(self, rnn_type, model_dim, num_layers, adj, hops=3):
+        super().__init__(rnn_type, model_dim, num_layers,
+                         func=DiffusionConvolution,
+                         adj=adj)
 
 
 class DiffusionConvolution(nn.Module):

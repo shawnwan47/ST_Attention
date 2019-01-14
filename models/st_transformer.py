@@ -65,4 +65,4 @@ class STTransformer(nn.Module):
         time = gen_time(time[:, -1], self.horizon)
         input = self.embedding(None, time, weekday)
         output = self.decoder(input, bank, self.mask)
-        return output + data[:, [-1]]
+        return output

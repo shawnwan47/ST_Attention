@@ -39,8 +39,8 @@ model:
       time_dim: 64
       weekday_dim: 16
     st:
+      batch_size: 16
       epoches: 50
-      batch_size: 8
       model_dim: 64
       node_dim: 32
       time_dim: 32
@@ -48,12 +48,12 @@ model:
   model:
     STTransformer:
       paradigm: st
-      encoder_layers: 3
+      encoder_layers: 2
       decoder_layers: 2
       heads: 4
     Transformer:
       paradigm: t
-      encoder_layers: 3
+      encoder_layers: 2
       decoder_layers: 2
       heads: 4
     STransformer:
