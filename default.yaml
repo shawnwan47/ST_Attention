@@ -35,7 +35,7 @@ model:
     t:
       batch_size: 256
       epoches: 200
-      model_dim: 256
+      model_dim: 128
       time_dim: 64
       weekday_dim: 16
     st:
@@ -58,8 +58,9 @@ model:
       heads: 4
     STransformer:
       paradigm: s
-      num_layers: 4
-      heads: 8
+      num_layers: 3
+      heads: 4
+      mask: True
     RNN:
       paradigm: t
       rnn_type: GRU

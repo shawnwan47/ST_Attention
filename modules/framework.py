@@ -4,20 +4,23 @@ import torch.nn as nn
 class Framework(nn.Module):
     def __init__(self, model, paradigm, mean, std):
         super().__init__()
-        assert paradigm in ['t', 's', 'st']
+        assert paradigm in ('s', 't', 'st')
         self.paradigm = paradigm
         self.model = model
         self.register_buffer('mean', mean)
         self.register_buffer('std', std)
 
     def pre_forward(self, data, time, weekday):
-        if self.paradigm == 'st':
-            data = data.unsqueeze(-1)
-        elif self.paradigm == 's':
+        if self.paradigm == 's':
             data = data.transpose(1, 2)
-            time = time[:, -1]
+            time = time[:, [-1]]
+            weekday = weekday.unsqueeze(-1)
+        elif self.paradigm == 't':
+            weekday = weekday.unsqueeze(-1)
         else:
-            pass
+            data = data.unsqueeze(-1)
+            time = time.unsqueeze(-1)
+            weekday = weekday.unsqueeze(-1).unsqueeze(-1)
         return data, time, weekday
 
     def post_forward(self, output):
