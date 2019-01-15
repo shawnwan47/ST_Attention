@@ -8,7 +8,7 @@ from modules import EmbeddingFusion, TEmbedding, STEmbedding
 
 from models import STTransformer, Transformer, STransformer
 from models import RNNSeq2Seq, RNNAttnSeq2Seq
-from lib.io import load_mask, load_adj
+from lib.io import load_adj, load_distant_mask,gen_subsequent_mask
 
 
 def build_model(config, mean, std):
@@ -63,7 +63,7 @@ def build_embedding(config):
 
 
 def build_sttransformer(config, embedding):
-    mask = load_mask(config.dataset) if config.mask else None
+    mask_s = load_distant_mask(config.dataset) if config.mask else None
     return STTransformer(
         embedding=embedding,
         model_dim=config.model_dim,
@@ -72,7 +72,7 @@ def build_sttransformer(config, embedding):
         decoder_layers=config.decoder_layers,
         heads=config.heads,
         horizon=config.horizon,
-        mask=mask
+        mask_s=mask_s
     )
 
 
@@ -95,7 +95,8 @@ def build_stransformer(config, embedding):
         out_dim=config.horizon,
         num_layers=config.num_layers,
         heads=config.heads,
-        dropout=config.dropout
+        dropout=config.dropout,
+        mask=load_distant_mask(config.dataset) if config.mask else None
     )
 
 

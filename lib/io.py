@@ -50,12 +50,6 @@ def _split_dataset(df, train_ratio=0.7, test_ratio=0.2):
     return df_train, df_val, df_test
 
 
-def load_mask(dataset):
-    adj = load_adj(dataset)
-    mask = adj == 0
-    return mask
-
-
 def load_adj(dataset):
     loader = get_loader(dataset)
     if dataset == 'LA':
@@ -92,10 +86,16 @@ def load_adj_long(dataset):
     return adj, mask
 
 
-def gen_time(time, length):
+def gen_subsequent_time(time, length):
     return torch.stack([time + i + 1 for i in range(length)], 1)
 
 
-def gen_temporal_mask(length=24):
+def gen_subsequent_mask(length=24):
     mask = np.triu(np.ones((length, length)), k=1).astype('uint8')
     return torch.from_numpy(mask)
+
+
+def load_distant_mask(dataset):
+    adj = load_adj(dataset)
+    mask = adj == 0
+    return mask

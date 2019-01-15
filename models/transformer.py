@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from modules import TransformerLayer, TransformerDecoderLayer
 from modules import MLP
-from lib.io import gen_time
+from lib.io import gen_subsequent_time
 
 
 class TransformerEncoder(nn.Module):
@@ -73,6 +73,6 @@ class Transformer(nn.Module):
 
     def forward(self, data, time, weekday):
         bank = self.encoder(self.embedding(data, time, weekday))
-        time = gen_time(time[:, -1], self.horizon)
+        time = gen_subsequent_time(time[:, -1], self.horizon)
         residual = self.decoder(self.embedding(None, time, weekday), bank)
         return residual + data[:, [-1]]
