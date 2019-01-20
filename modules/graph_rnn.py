@@ -20,7 +20,8 @@ class GraphGRUSeq2Vec(nn.Module):
     def forward(self, data, time, weekday):
         input = self.embedding(data, time, weekday)
         output, _ = self.rnn(input)
-        return self.mlp(output[:, [-1]]).transpose(1, -1)
+        res = self.mlp(output[:, [-1]]).transpose(1, -1)
+        return data[:, [-1]] + res
 
 
 class GraphGRUAttnSeq2Vec(GraphGRUSeq2Vec):
@@ -47,7 +48,7 @@ class GraphGRUAttnSeq2Vec(GraphGRUSeq2Vec):
         output_mlp = self.mlp(output[:, [-1]])
         output_context = self.attn(output[:, [-1]], output)
         output = output_mlp + output_context
-        return output.transpose(1, -1)
+        return data[:, [-1]] + res.transpose(1, -1)
 
 
 class GraphGRUSeq2Seq(nn.Module):
