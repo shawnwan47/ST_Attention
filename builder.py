@@ -164,10 +164,10 @@ def build_gatrnn(config, embedding):
     kwargs = {
         'embedding': embedding,
         'model_dim': config.model_dim,
+        'heads': config.heads,
         'num_layers': config.num_layers,
         'horizon': config.horizon,
         'dropout': config.dropout,
-        'adj': config.heads,
         'mask': mask
     }
     if config.rnn_attn:

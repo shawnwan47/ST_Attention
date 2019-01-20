@@ -11,6 +11,7 @@ from modules import GraphGRUSeq2Vec, GraphGRUAttnSeq2Vec
 class GATRNNSeq2Vec(GraphGRUSeq2Vec):
     def __init__(self, embedding, model_dim, num_layers, dropout, horizon, heads, mask=None):
         super().__init__(
+            embedding=embedding,
             model_dim=model_dim,
             horizon=horizon,
             num_layers=num_layers,
@@ -23,6 +24,7 @@ class GATRNNSeq2Vec(GraphGRUSeq2Vec):
 class GATRNNAttnSeq2Vec(GraphGRUAttnSeq2Vec):
     def __init__(self, embedding, model_dim, num_layers, heads, dropout, horizon, mask=None):
         super().__init__(
+            embedding=embedding,
             model_dim=model_dim,
             horizon=horizon,
             num_layers=num_layers,
@@ -36,6 +38,7 @@ class GATRNNAttnSeq2Vec(GraphGRUAttnSeq2Vec):
 class GATRNNSeq2Seq(GraphGRUSeq2Seq):
     def __init__(self, embedding, model_dim, num_layers, horizon, dropout, heads, mask=None):
         super().__init__(
+            embedding=embedding,
             model_dim=model_dim,
             num_layers=num_layers,
             horizon=horizon,
@@ -48,6 +51,7 @@ class GATRNNSeq2Seq(GraphGRUSeq2Seq):
 class GATRNNAttnSeq2Seq(GraphGRUSeq2Seq):
     def __init__(self, embedding, model_dim, num_layers, horizon, dropout, heads, mask=None):
         super().__init__(
+            embedding=embedding,
             model_dim=model_dim,
             num_layers=num_layers,
             heads=heads,

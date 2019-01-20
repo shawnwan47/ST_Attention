@@ -81,5 +81,5 @@ model:
       paradigm: st
       framework: seq2seq
       rnn_attn: False
-      num_layers: 1
+      num_layers: 2
       heads: 4

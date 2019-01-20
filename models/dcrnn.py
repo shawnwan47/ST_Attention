@@ -10,6 +10,7 @@ from modules import GraphGRUSeq2Vec, GraphGRUAttnSeq2Vec
 class DCRNNSeq2Vec(GraphGRUSeq2Vec):
     def __init__(self, embedding, model_dim, num_layers, dropout, horizon, adj, hops):
         super().__init__(
+            embedding=embedding,
             model_dim=model_dim,
             horizon=horizon,
             num_layers=num_layers,
@@ -22,6 +23,7 @@ class DCRNNSeq2Vec(GraphGRUSeq2Vec):
 class DCRNNAttnSeq2Vec(GraphGRUAttnSeq2Vec):
     def __init__(self, embedding, model_dim, num_layers, heads, dropout, horizon, adj, hops):
         super().__init__(
+            embedding=embedding,
             model_dim=model_dim,
             horizon=horizon,
             num_layers=num_layers,
