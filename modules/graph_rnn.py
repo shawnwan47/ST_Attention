@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from modules import MLP, MultiHeadedAttention
 
@@ -77,16 +76,16 @@ class GraphGRUSeq2Seq(nn.Module):
         input = self.embedding(data, time, weekday)
         _, hidden = self.encoder(input)
         # init
-        data_i = None
+        data_i = data[:, [-1]]
         time_i = time[:, [-1]]
         out = []
         # decoding
         for _ in range(self.horizon):
-            input_i = self.embedding(data_i, time_i, weekday)
+            input_i = self.embedding(data_i.detach(), time_i, weekday)
             res, hidden = self.decoder(input_i, hidden)
-            out.append(res + (data_i if data_i else data[:, [-1]]))
-            data_i = out[-1].detach()
-            time_i.add_(1)
+            data_i = data_i + res
+            time_i = time_i + 1
+            out.append(data_i)
         return torch.cat(out, 1)
 
 
@@ -117,16 +116,16 @@ class GraphGRUAttnSeq2Seq(GraphGRUSeq2Seq):
         input = self.embedding(data, time, weekday)
         bank, hidden = self.encoder(input)
         # init
-        data_i = None
+        data_i = data[:, [-1]]
         time_i = time[:, [-1]]
         out = []
         # decoding
         for _ in range(self.horizon):
-            input_i = self.embedding(data_i, time_i, weekday)
+            input_i = self.embedding(data_i.detach(), time_i, weekday)
             res, hidden = self.decoder(input_i, hidden, bank)
-            out.append(res + (data_i if data_i else data[:, [-1]]))
-            data_i = out[-1].detach()
+            data_i.add_(res)
             time_i.add_(1)
+            out.append(data_i)
         return torch.cat(out, 1)
 
 
@@ -145,7 +144,7 @@ class GraphGRU(nn.Module):
         ])
 
     def forward(self, input, hidden=None):
-        if hidden == None:
+        if hidden is None:
             hidden = self.init_hidden(input)
         output = []
         for idx in range(input.size(1)):
@@ -173,7 +172,7 @@ class GraphGRUDecoder(GraphGRU):
 
     def forward(self, input, hidden):
         output, hidden = super().forward(input, hidden)
-        return self.mlp(output)
+        return self.mlp(output), hidden
 
 
 class GraphGRUAttnDecoder(GraphGRU):
@@ -184,7 +183,7 @@ class GraphGRUAttnDecoder(GraphGRU):
 
     def forward(self, input, hidden, bank):
         output, hidden = super().forward(input, hidden)
-        return self.mlp(output) + self.attn(output, bank)
+        return self.mlp(output) + self.attn(output, bank), hidden
 
 
 class GraphGRUCell(nn.Module):
@@ -201,9 +200,9 @@ class GraphGRUCell(nn.Module):
     def gru(self, input, hidden):
         i_r, i_i, i_n = self.func_i(input).chunk(chunks=3, dim=-1)
         h_r, h_i, h_n = self.func_h(hidden).chunk(chunks=3, dim=-1)
-        gate_r = F.sigmoid(i_r + h_r)
-        gate_i = F.sigmoid(i_i + h_i)
-        i_new = F.tanh(i_n + gate_r * h_n)
+        gate_r = torch.sigmoid(i_r + h_r)
+        gate_i = torch.sigmoid(i_i + h_i)
+        i_new = torch.tanh(i_n + gate_r * h_n)
         return i_new + gate_i * (hidden - i_new)
 
 
