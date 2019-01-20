@@ -51,7 +51,7 @@ model:
       encoder_layers: 2
       decoder_layers: 2
       heads: 4
-      mask: True
+      mask: False
     Transformer:
       paradigm: t
       encoder_layers: 2
@@ -61,7 +61,7 @@ model:
       paradigm: s
       num_layers: 3
       heads: 4
-      mask: True
+      mask: False
     RNN:
       paradigm: t
       rnn_type: GRU
@@ -73,6 +73,13 @@ model:
       heads: 4
     DCRNN:
       paradigm: st
+      framework: seq2seq
+      rnn_attn: False
       num_layers: 2
       hops: 2
-      inverse: True
+    GATRNN:
+      paradigm: st
+      framework: seq2seq
+      rnn_attn: False
+      num_layers: 1
+      heads: 4

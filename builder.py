@@ -6,8 +6,13 @@ from modules import Framework
 from modules import MLP
 from modules import EmbeddingFusion, TEmbedding, STEmbedding
 
-from models import STTransformer, Transformer, STransformer
+from models import Transformer, STransformer, STTransformer
 from models import RNNSeq2Seq, RNNAttnSeq2Seq
+from models import DCRNNSeq2Seq, DCRNNAttnSeq2Seq
+from models import DCRNNSeq2Vec, DCRNNAttnSeq2Vec
+from models import GATRNNSeq2Seq, GATRNNAttnSeq2Seq
+from models import GATRNNSeq2Vec, GATRNNAttnSeq2Vec
+
 from lib.io import load_adj, load_distant_mask,gen_subsequent_mask
 
 
@@ -23,6 +28,10 @@ def build_model(config, mean, std):
         model = build_rnn(config, embedding)
     elif config.model == 'RNNAttn':
         model = build_rnnattn(config, embedding)
+    elif config.model == 'DCRNN':
+        model = build_dcrnn(config, embedding)
+    elif config.model == 'GATRNN':
+        model = build_gatrnn(config, embedding)
     else:
         raise KeyError('Model not implemented!')
     num_params = sum(p.numel() for p in model.parameters())
@@ -88,6 +97,7 @@ def build_transformer(config, embedding):
         horizon=config.horizon
     )
 
+
 def build_stransformer(config, embedding):
     return STransformer(
         embedding=embedding,
@@ -123,3 +133,50 @@ def build_rnnattn(config, embedding):
         dropout=config.dropout,
         horizon=config.horizon
     )
+
+
+def build_dcrnn(config, embedding):
+    adj = load_adj(config.dataset)
+    kwargs = {
+        'embedding': embedding,
+        'model_dim': config.model_dim,
+        'num_layers': config.num_layers,
+        'horizon': config.horizon,
+        'dropout': config.dropout,
+        'adj': adj,
+        'hops': config.hops
+    }
+    if config.rnn_attn:
+        kwargs['heads'] = config.heads
+        if config.framework == 'seq2seq':
+            return DCRNNAttnSeq2Seq(**kwargs)
+        else:
+            return DCRNNAttnSeq2Vec(**kwargs)
+    else:
+        if config.framework == 'seq2seq':
+            return DCRNNSeq2Seq(**kwargs)
+        else:
+            return DCRNNSeq2Vec(**kwargs)
+
+
+def build_gatrnn(config, embedding):
+    mask = load_distant_mask(config.dataset) if config.mask else None
+    kwargs = {
+        'embedding': embedding,
+        'model_dim': config.model_dim,
+        'num_layers': config.num_layers,
+        'horizon': config.horizon,
+        'dropout': config.dropout,
+        'adj': config.heads,
+        'mask': mask
+    }
+    if config.rnn_attn:
+        if config.framework == 'seq2seq':
+            return GATRNNAttnSeq2Seq(**kwargs)
+        else:
+            return GATRNNAttnSeq2Vec(**kwargs)
+    else:
+        if config.framework == 'seq2seq':
+            return GATRNNSeq2Seq(**kwargs)
+        else:
+            return GATRNNSeq2Vec(**kwargs)

@@ -24,58 +24,25 @@ class RNN(nn.Module):
         return self.rnn(input, hidden)
 
 
-class RNNDecoder(RNN):
-    def __init__(self, rnn_type, model_dim, num_layers, out_dim, dropout):
-        super().__init__(rnn_type, model_dim, num_layers, dropout)
-        self.mlp = MLP(model_dim, out_dim, dropout)
-
-    def forward(self, input, hidden):
-        out, hidden_new = self.rnn(input, hidden)
-        return self.mlp(out), hidden_new
-
-
-class RNNAttnDecoder(RNNDecoder):
-    def __init__(self, rnn_type, model_dim, heads, out_dim, num_layers, dropout):
-        super().__init__(rnn_type, model_dim, num_layers, out_dim, dropout)
-        self.layer_norm_query = nn.LayerNorm(model_dim)
-        self.layer_norm_bank = nn.LayerNorm(model_dim)
-        self.attn = TransformerLayer(model_dim, heads, dropout)
-
-    def forward(self, input, hidden, bank):
-        query, hidden_new = self.rnn(input, hidden)
-        query_norm = self.layer_norm_query(query)
-        bank_norm = self.layer_norm_bank(bank)
-        context = self.attn(query_norm, bank_norm)
-        return self.mlp(query + context), hidden_new
-
-
 class RNNSeq2Seq(nn.Module):
     def __init__(self, embedding, rnn_type, model_dim, num_layers, out_dim,
                  dropout, horizon):
         super().__init__()
         self.embedding = embedding
         self.horizon = horizon
-        self.encoder = RNN(
-            rnn_type=rnn_type,
-            model_dim=model_dim,
-            num_layers=num_layers,
-            dropout=dropout
-        )
-        self.decoder = RNNDecoder(
-            rnn_type=rnn_type,
-            model_dim=model_dim,
-            num_layers=num_layers,
-            out_dim=out_dim,
-            dropout=dropout
-        )
+        self.encoder = RNN(rnn_type, model_dim, num_layers, dropout)
+        self.decoder = RNN(rnn_type, model_dim, num_layers, dropout)
+        self.mlp = MLP(model_dim, 1)
 
     def forward(self, data, time, weekday):
         # encoding
-        input = self.embedding(data[:, :-1], time[:, :-1], weekday)
+        input = self.embedding(data, time, weekday)
         _, hidden = self.encoder(input)
+        # init
+
         # decoding
         data_i = data[:, [-1]]
-        time_i = time[:, [-1]]
+        time_i = time[:, [-1]] + 1
         out = []
         for _ in range(self.horizon):
             input_i = self.embedding(data_i, time_i, weekday)
@@ -89,14 +56,7 @@ class RNNSeq2Seq(nn.Module):
 class RNNAttnSeq2Seq(RNNSeq2Seq):
     def __init__(self, embedding, rnn_type, model_dim, num_layers, out_dim, heads, dropout, horizon):
         super().__init__(embedding, rnn_type, model_dim, num_layers, out_dim, dropout, horizon)
-        self.decoder = RNNAttnDecoder(
-            rnn_type=rnn_type,
-            model_dim=model_dim,
-            heads=heads,
-            out_dim=out_dim,
-            num_layers=num_layers,
-            dropout=dropout
-        )
+        self.attn = MultiHeadedAttention(model_dim, heads, dropout)
 
     def forward(self, data, time, weekday):
         # encoding
