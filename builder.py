@@ -48,21 +48,16 @@ def build_embedding(config):
     if config.paradigm == 't':
         data_mlp = MLP(config.num_nodes, config.model_dim, config.dropout)
         embedding = TEmbedding(
-            model_dim=config.model_dim,
-            dropout=config.dropout,
             num_times=config.num_times,
-            time_dim=config.time_dim,
-            weekday_dim=config.weekday_dim
+            embedding_dim=config.model_dim,
+            dropout=config.dropout
         )
     else:
         embedding = STEmbedding(
-            model_dim=config.model_dim,
-            dropout=config.dropout,
-            num_times=config.num_times,
-            time_dim=config.time_dim,
-            weekday_dim=config.weekday_dim,
             num_nodes=config.num_nodes,
-            node_dim=config.node_dim
+            num_times=config.num_times,
+            embedding_dim=config.model_dim,
+            dropout=config.dropout
         )
         if config.paradigm == 's':
             data_mlp = MLP(config.history, config.model_dim, config.dropout)

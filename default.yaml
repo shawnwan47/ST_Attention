@@ -29,22 +29,14 @@ model:
       batch_size: 64
       epoches: 100
       model_dim: 64
-      node_dim: 32
-      time_dim: 32
-      weekday_dim: 16
     t:
       batch_size: 256
       epoches: 200
       model_dim: 128
-      time_dim: 32
-      weekday_dim: 16
     st:
       batch_size: 16
       epoches: 50
       model_dim: 64
-      node_dim: 32
-      time_dim: 32
-      weekday_dim: 16
   model:
     STTransformer:
       paradigm: st
