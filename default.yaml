@@ -11,7 +11,7 @@ data:
       freq: 5
       history: 12
       horizon: 12
-      horizons: [2, 5, 11]
+      horizons: [0, 2, 5, 11]
       metrics: [mae, rmse, mape]
   dataset:
     LA:
@@ -28,49 +28,56 @@ model:
     s:
       batch_size: 64
       epoches: 200
-      model_dim: 64
+      patience: 20
     t:
       batch_size: 256
       epoches: 200
-      model_dim: 128
+      patience: 20
     st:
       batch_size: 16
       epoches: 50
-      model_dim: 64
+      patience: 5
   model:
     STTransformer:
       paradigm: st
+      model_dim: 64
       encoder_layers: 2
       decoder_layers: 2
       heads: 4
       mask: False
     Transformer:
       paradigm: t
+      model_dim: 128
       encoder_layers: 2
       decoder_layers: 2
       heads: 4
     STransformer:
       paradigm: s
+      model_dim: 32
       num_layers: 3
       heads: 4
       mask: False
     RNN:
       paradigm: t
+      model_dim: 128
       rnn_type: GRU
       num_layers: 2
     RNNAttn:
       paradigm: t
+      model_dim: 128
       rnn_type: GRU
       num_layers: 2
       heads: 4
     DCRNN:
       paradigm: st
       framework: seq2seq
+      model_dim: 32
       rnn_attn: False
       num_layers: 2
       hops: 2
     GATRNN:
       paradigm: st
+      model_dim: 32
       framework: seq2seq
       rnn_attn: False
       num_layers: 2

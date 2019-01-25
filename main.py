@@ -75,7 +75,7 @@ def test(**kwargs):
     model.load_state_dict(torch.load(config.path))
     loss = TimeSeriesLoss(metrics=config.metrics, horizons=config.horizons)
     loss_test = _eval(model, dataloader, loss, config.cuda)
-    print(error)
+    print(loss_test)
 
 
 def _eval(model, dataloader, loss, cuda):

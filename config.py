@@ -24,31 +24,19 @@ class Config:
         self.end = 24
         # model
         self.path = MODEL_PATH
-        self.model = 'STTransformer'
-        self.dropout = 0.1
-        self.mask = False
-
         self.paradigm = None
-        self.time_dim = None
-        self.weekday_dim = None
-        self.node_dim = None
-        self.model_dim = None
-        self.hidden_size = None
-        self.num_layers = None
-        self.encoder_layers = None
-        self.decoder_layers = None
-        self.heads = None
+        self.model = None
         # cuda
         self.cuda = False
-        self.gpuid = 3
+        self.gpuid = 0
         self.seed = 47
         # optim
         self.criterion = 'SmoothL1Loss'
-        self.lr = 0.001
+        self.dropout = 0.1
         self.weight_decay = 1e-5
         self.batch_size = None
         self.epoches = None
-        self.patience = 10
+        self.patience = None
 
     def set_data(self, default):
         self.set_config(default['dataset'][self.dataset])
@@ -61,5 +49,5 @@ class Config:
         self.set_config(default['paradigm'][self.paradigm])
         # model name
         self.path += self.dataset + '/' + self.model
-        for key, val in default['model'][self.model].items():
-            self.path += key + str(val)
+        for key in default['model'][self.model]:
+            self.path += key + str(getattr(self, key))
