@@ -10,10 +10,13 @@ def mask_target(output, target):
     return output.masked_select(mask), target.masked_select(mask)
 
 
-class Loss:
+class TimeSeriesLoss:
     def __init__(self, metrics, horizons):
         self.metrics = metrics
         self.horizons = horizons
+
+    def get_criterion(self, lossdict):
+        return float(lossdict['avg'][self.metrics[-1]])
 
     def __call__(self, output, target):
         ret = MetricDict({horizon: self._eval(output[:, horizon], target[:, horizon])
@@ -52,8 +55,17 @@ class Metric:
         self.value = value
         self.norm = norm
 
+    def __float__(self):
+        return self.value
+
     def __repr__(self):
         return f'{self.value:.2f}'
+
+    def __iadd__(self, other):
+        self.value = (self.value * self.norm + other.value * other.norm)
+        self.norm += other.norm
+        self.value /= self.norm
+        return self
 
     def __add__(self, other):
         norm = self.norm + other.norm
@@ -65,13 +77,17 @@ class MetricDict(dict):
     def __add__(self, other):
         if not (self and other):
             return self or other
-        else:
-            assert(self.keys() == other.keys())
-            return MetricDict({key: self[key] + other[key]
-                               for key in self.keys()})
+        assert(self.keys() == other.keys())
+        return MetricDict({key: self[key] + other[key]
+                           for key in self.keys()})
 
     def __iadd__(self, other):
-        raise NotImplementedError
+        if not (self and other):
+            return self or other
+        assert self.keys() == other.keys()
+        for key in self.keys():
+            self[key] += other[key]
+        return self
 
     def __repr__(self):
         return ' '.join([f'{key}:{val}' for key, val in self.items()])

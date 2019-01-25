@@ -27,7 +27,7 @@ model:
   paradigm:
     s:
       batch_size: 64
-      epoches: 100
+      epoches: 200
       model_dim: 64
     t:
       batch_size: 256

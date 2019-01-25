@@ -48,6 +48,7 @@ class Config:
         self.weight_decay = 1e-5
         self.batch_size = None
         self.epoches = None
+        self.patience = 10
 
     def set_data(self, default):
         self.set_config(default['dataset'][self.dataset])
@@ -60,3 +61,5 @@ class Config:
         self.set_config(default['paradigm'][self.paradigm])
         # model name
         self.path += self.dataset + '/' + self.model
+        for key, val in default['model'][self.model].items():
+            self.path += key + str(val)
