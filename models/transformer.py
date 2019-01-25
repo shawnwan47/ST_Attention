@@ -7,17 +7,18 @@ from modules import STTransformerLayer, STTransformerDecoderLayer
 from lib.io import gen_subsequent_time
 
 
-class STransformer(TransformerEncoder):
-    def __init__(self, embedding, model_dim, out_dim, num_layers, heads, dropout, mask):
-        super().__init__(model_dim, num_layers, heads, dropout)
+class STransformer(nn.Module):
+    def __init__(self, embedding, model_dim, out_dim, num_layers, heads, dropout, mask=None):
+        super().__init__()
         self.embedding = embedding
-        self.mlp_out = MLP(model_dim, out_dim, dropout)
+        self.encoder = TransformerEncoder(model_dim, num_layers, heads, dropout)
+        self.decoder = MLP(model_dim, out_dim, dropout)
         self.register_buffer('mask', mask)
 
     def forward(self, data, time, weekday):
-        emb = self.embedding(data, time, weekday)
-        input = super().forward(emb, self.mask)
-        output = self.mlp_out(input)
+        input = self.embedding(data, time, weekday)
+        hidden = self.encoder(input, self.mask)
+        output = self.decoder(hidden)
         return output
 
 
