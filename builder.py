@@ -3,8 +3,7 @@ import torch
 import torch.nn as nn
 
 from modules import Framework
-from modules import MLP
-from modules import EmbeddingFusion, TEmbedding, STEmbedding
+from modules import VectorEmbedding, EmbeddingFusion, TEmbedding, STEmbedding
 
 from models import Transformer, STransformer, STTransformer
 from models import RNNSeq2Seq, RNNAttnSeq2Seq
@@ -46,23 +45,23 @@ def build_model(config, mean, std):
 
 def build_embedding(config):
     if config.paradigm == 't':
-        data_mlp = MLP(config.num_nodes, config.model_dim, config.dropout)
+        data_mlp = VectorEmbedding(config.num_nodes, config.model_dim, config.dropout)
         embedding = TEmbedding(
             num_times=config.num_times,
-            embedding_dim=config.model_dim,
+            model_dim=config.model_dim,
             dropout=config.dropout
         )
     else:
         embedding = STEmbedding(
             num_nodes=config.num_nodes,
             num_times=config.num_times,
-            embedding_dim=config.model_dim,
+            model_dim=config.model_dim,
             dropout=config.dropout
         )
         if config.paradigm == 's':
-            data_mlp = MLP(config.history, config.model_dim, config.dropout)
+            data_mlp = VectorEmbedding(config.history, config.model_dim, config.dropout)
         else:
-            data_mlp = MLP(1, config.model_dim, config.dropout)
+            data_mlp = VectorEmbedding(1, config.model_dim, config.dropout)
     return EmbeddingFusion(data_mlp, embedding, config.model_dim, config.dropout)
 
 

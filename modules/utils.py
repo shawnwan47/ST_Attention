@@ -39,6 +39,6 @@ class ResMLP(nn.Module):
         self.dropout_2 = nn.Dropout(dropout)
 
     def forward(self, input):
-        inter = self.dropout_1(self.relu(self.w_1(self.layer_norm(input))))
-        output = self.dropout_2(self.w_2(inter))
+        hidden = self.dropout_1(self.relu(self.w_1(self.layer_norm(input))))
+        output = self.dropout_2(self.w_2(hidden))
         return output + input
