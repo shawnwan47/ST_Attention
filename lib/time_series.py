@@ -23,7 +23,7 @@ class TimeSeries(Dataset):
     def gen_samples(df, mean, std, history, horizon):
         # extract data
         data = (df.values - mean) / (std + 1e-8)
-        # data[np.isnan(data)] = 0
+        data[np.isnan(data)] = 0
         _, time = np.unique(df.index.time, return_inverse=True)
         weekday = np.array(df.index.weekday)
         target = df.values
