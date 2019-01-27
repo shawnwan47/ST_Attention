@@ -5,13 +5,13 @@ data:
       freq: 15
       history: 8
       horizon: 8
-      horizons: [0, 1, 7]
+      horizons: [0, 3, 7]
       metrics: [mae, rmse, wape]
     speed:
       freq: 5
       history: 12
       horizon: 12
-      horizons: [0, 2, 11]
+      horizons: [2, 5, 11]
       metrics: [mae, rmse, mape]
   dataset:
     LA:

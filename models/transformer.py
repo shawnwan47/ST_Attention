@@ -73,8 +73,7 @@ class STTransformer(nn.Module):
         bank = self.encoder(input)
         time = gen_subsequent_time(time[:, -1], self.horizon)
         input = self.embedding(None, time, weekday)
-        res = self.decoder(input, bank)
-        return res + data[:, [-1]]
+        return self.decoder(input, bank)
 
 
 class TransformerEncoder(nn.Module):
