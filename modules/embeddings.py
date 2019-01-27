@@ -1,3 +1,4 @@
+import math
 import torch
 import torch.nn as nn
 
@@ -5,32 +6,39 @@ from modules.utils import bias, MLP, ResMLP
 
 
 class ScalarEmbedding(nn.Module):
-    def __init__(self, model_dim):
+    def __init__(self, model_dim, dropout):
         super().__init__()
-        self.linear = nn.Linear(2, model_dim)
+        self.scalar_embedding = MLP(1, model_dim, dropout, bias=False)
+        self.nan_embedding = nn.Embedding(2, model_dim)
+        self.drop = nn.Dropout(dropout)
 
     def forward(self, scalar):
+        nan = torch.zeros_like(scalar).long()
         mask = torch.isnan(scalar)
         scalar.masked_fill_(mask, 0.)
-        nan = torch.zeros_like(scalar)
-        nan.masked_fill_(mask, 1.)
-        out = self.linear(torch.cat((scalar, nan), -1))
-        return out
+        nan.masked_fill_(mask, 1)
+        emb_scalar = self.drop(self.scalar_embedding(scalar))
+        emb_nan = self.drop(self.nan_embedding(nan)).squeeze(-2)
+        return emb_scalar + emb_nan
 
 
 class VectorEmbedding(nn.Module):
     def __init__(self, vec_dim, model_dim, dropout):
         super().__init__()
-        self.scalar_embeddings = nn.ModuleList([
-            ScalarEmbedding(model_dim) for _ in range(vec_dim)
-        ])
+        self.vec_embedding = MLP(vec_dim, model_dim, dropout, bias=False)
+        self.nan_embedding = nn.Embedding(vec_dim * 2, model_dim)
         self.drop = nn.Dropout(dropout)
-        self.linear_out = nn.Linear(model_dim, model_dim)
+        self.register_buffer('nan', torch.arange(vec_dim) * 2)
 
-    def forward(self, vector):
-        output = sum(self.drop(embedding(vector[..., [i]]))
-                     for i, embedding in enumerate(self.scalar_embeddings))
-        return self.linear_out(output)
+    def forward(self, vec):
+        nan = torch.zeros_like(vec).long()
+        mask = torch.isnan(vec)
+        vec.masked_fill_(mask, 0.)
+        nan.masked_fill_(mask, 1)
+        nan = nan + self.nan
+        emb_vec = self.drop(self.vec_embedding(vec))
+        emb_nan = self.drop(self.nan_embedding(nan)).mean(dim=-2)
+        return emb_vec + emb_nan
 
 
 class TEmbedding(nn.Module):

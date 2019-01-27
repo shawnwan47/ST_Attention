@@ -10,10 +10,10 @@ class TransformerLayer(nn.Module):
         self.drop = nn.Dropout(dropout)
         self.mlp = ResMLP(model_dim, dropout)
 
-    def forward(self, input, bank, mask=None):
-        query = self.layer_norm(input)
-        output = self.drop(self.attn(query, bank, mask))
-        return self.mlp(input + output)
+    def forward(self, query, bank, mask=None):
+        query_norm = self.layer_norm(query)
+        context = self.drop(self.attn(query_norm, bank, mask))
+        return self.mlp(query + context)
 
 
 class TransformerDecoderLayer(nn.Module):

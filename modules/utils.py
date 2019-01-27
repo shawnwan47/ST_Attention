@@ -14,14 +14,14 @@ def bias(*sizes):
 
 
 class MLP(nn.Module):
-    def __init__(self, input_size, output_size, dropout):
+    def __init__(self, input_size, output_size, dropout, bias=True):
         super().__init__()
         hidden_size = round(sqrt(input_size * output_size))
         self.sequential = nn.Sequential(
             nn.Linear(input_size, hidden_size),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(hidden_size, output_size)
+            nn.Linear(hidden_size, output_size, bias=bias)
         )
 
     def forward(self, input):

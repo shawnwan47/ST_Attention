@@ -3,7 +3,8 @@ import torch
 import torch.nn as nn
 
 from modules import Framework
-from modules import VectorEmbedding, EmbeddingFusion, TEmbedding, STEmbedding
+from modules import ScalarEmbedding, VectorEmbedding
+from modules import EmbeddingFusion, TEmbedding, STEmbedding
 
 from models import Transformer, STransformer, STTransformer
 from models import RNNSeq2Seq, RNNAttnSeq2Seq
@@ -61,7 +62,7 @@ def build_embedding(config):
         if config.paradigm == 's':
             data_mlp = VectorEmbedding(config.history, config.model_dim, config.dropout)
         else:
-            data_mlp = VectorEmbedding(1, config.model_dim, config.dropout)
+            data_mlp = ScalarEmbedding(config.model_dim, config.dropout)
     return EmbeddingFusion(data_mlp, embedding, config.model_dim, config.dropout)
 
 
@@ -99,8 +100,7 @@ def build_stransformer(config, embedding):
         out_dim=config.horizon,
         num_layers=config.num_layers,
         heads=config.heads,
-        dropout=config.dropout,
-        mask=load_distant_mask(config.dataset) if config.mask else None
+        dropout=config.dropout
     )
 
 

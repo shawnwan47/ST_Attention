@@ -40,11 +40,10 @@ model:
   model:
     STTransformer:
       paradigm: st
-      model_dim: 64
-      encoder_layers: 2
-      decoder_layers: 2
+      model_dim: 32
+      encoder_layers: 1
+      decoder_layers: 1
       heads: 4
-      mask: False
     Transformer:
       paradigm: t
       model_dim: 128
@@ -56,7 +55,6 @@ model:
       model_dim: 32
       num_layers: 3
       heads: 4
-      mask: False
     RNN:
       paradigm: t
       model_dim: 128

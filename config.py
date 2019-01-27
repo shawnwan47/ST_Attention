@@ -26,6 +26,7 @@ class Config:
         self.path = MODEL_PATH
         self.paradigm = None
         self.model = None
+        self.mask = None
         # cuda
         self.cuda = False
         self.gpuid = 0
