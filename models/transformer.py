@@ -12,17 +12,12 @@ class STransformer(nn.Module):
         super().__init__()
         self.embedding = embedding
         self.encoder = TransformerEncoder(model_dim, num_layers, heads, dropout)
-        self.decoder = nn.Sequential(
-            nn.LayerNorm(model_dim),
-            nn.Dropout(dropout),
-            MLP(model_dim, out_dim, dropout)
-        )
+        self.decoder = MLP(model_dim, out_dim, dropout)
 
     def forward(self, data, time, weekday):
         input = self.embedding(data, time, weekday)
         hidden = self.encoder(input)
-        output = self.decoder(hidden)
-        return output
+        return self.decoder(hidden)
 
 
 class Transformer(nn.Module):

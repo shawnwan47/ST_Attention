@@ -10,10 +10,10 @@ class TransformerLayer(nn.Module):
         self.drop = nn.Dropout(dropout)
         self.mlp = ResMLP(model_dim, dropout)
 
-    def forward(self, query, bank=None, mask=None):
+    def forward(self, query, bank=None):
         query_norm = self.layer_norm(query)
         bank = query_norm if bank is None else query_norm
-        context = self.drop(self.attn(query_norm, bank, mask))
+        context = self.drop(self.attn(query_norm, bank))
         return self.mlp(query + context)
 
 
