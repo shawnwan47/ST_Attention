@@ -5,13 +5,13 @@ data:
       freq: 15
       history: 8
       horizon: 8
-      horizons: [0, 1, 3, 7]
+      horizons: [0, 1, 7]
       metrics: [mae, rmse, wape]
     speed:
       freq: 5
       history: 12
       horizon: 12
-      horizons: [0, 2, 5, 11]
+      horizons: [0, 2, 11]
       metrics: [mae, rmse, mape]
   dataset:
     LA:
@@ -27,20 +27,20 @@ model:
   paradigm:
     s:
       batch_size: 64
-      epoches: 200
-      patience: 20
+      epoches: 300
+      patience: 30
     t:
       batch_size: 256
-      epoches: 200
-      patience: 20
+      epoches: 300
+      patience: 30
     st:
       batch_size: 16
-      epoches: 50
-      patience: 5
+      epoches: 100
+      patience: 10
   model:
     STTransformer:
       paradigm: st
-      model_dim: 32
+      model_dim: 64
       encoder_layers: 1
       decoder_layers: 1
       heads: 4
@@ -52,7 +52,7 @@ model:
       heads: 4
     STransformer:
       paradigm: s
-      model_dim: 32
+      model_dim: 64
       num_layers: 3
       heads: 4
     RNN:

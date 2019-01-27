@@ -73,11 +73,10 @@ class EmbeddingFusion(nn.Module):
         self.embedding_cat = embedding_cat
         self.mlp = ResMLP(model_dim, dropout)
         self.drop = nn.Dropout(dropout)
-        self.layer_norm = nn.LayerNorm(model_dim)
         self.register_parameter('nan', bias(model_dim))
 
     def forward(self, data, time, weekday):
         emb_num = self.nan if data is None else self.embedding_num(data)
         emb_cat = self.embedding_cat(time, weekday)
         emb = self.drop(emb_num) + self.drop(emb_cat)
-        return self.layer_norm(self.mlp(emb))
+        return self.mlp(emb)
