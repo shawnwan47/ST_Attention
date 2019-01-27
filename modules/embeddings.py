@@ -67,15 +67,17 @@ class STEmbedding(TEmbedding):
 
 
 class EmbeddingFusion(nn.Module):
-    def __init__(self, vector_embedding, embedding, model_dim, dropout):
+    def __init__(self, embedding_num, embedding_cat, model_dim, dropout):
         super().__init__()
-        self.vector_embedding = vector_embedding
-        self.embedding = embedding
+        self.embedding_num = embedding_num
+        self.embedding_cat = embedding_cat
         self.mlp = ResMLP(model_dim, dropout)
         self.drop = nn.Dropout(dropout)
+        self.layer_norm = nn.LayerNorm(model_dim)
         self.register_parameter('nan', bias(model_dim))
 
     def forward(self, data, time, weekday):
-        data = self.nan if data is None else self.vector_embedding(data)
-        emb = self.embedding(time, weekday)
-        return self.mlp(self.drop(data) + self.drop(emb))
+        emb_num = self.nan if data is None else self.embedding_num(data)
+        emb_cat = self.embedding_cat(time, weekday)
+        emb = self.drop(emb_num) + self.drop(emb_cat)
+        return self.layer_norm(self.mlp(emb))

@@ -71,7 +71,6 @@ def build_embedding(config):
 
 
 def build_sttransformer(config, embedding):
-    mask_s = load_distant_mask(config.dataset) if config.mask else None
     return STTransformer(
         embedding=embedding,
         model_dim=config.model_dim,
@@ -79,8 +78,7 @@ def build_sttransformer(config, embedding):
         encoder_layers=config.encoder_layers,
         decoder_layers=config.decoder_layers,
         heads=config.heads,
-        horizon=config.horizon,
-        mask_s=mask_s
+        horizon=config.horizon
     )
 
 
@@ -158,15 +156,13 @@ def build_dcrnn(config, embedding):
 
 
 def build_gatrnn(config, embedding):
-    mask = load_distant_mask(config.dataset) if config.mask else None
     kwargs = {
         'embedding': embedding,
         'model_dim': config.model_dim,
         'heads': config.heads,
         'num_layers': config.num_layers,
         'horizon': config.horizon,
-        'dropout': config.dropout,
-        'mask': mask
+        'dropout': config.dropout
     }
     if config.rnn_attn:
         if config.framework == 'seq2seq':

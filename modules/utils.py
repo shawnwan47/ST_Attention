@@ -1,7 +1,6 @@
-from math import sqrt
+import math
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 def bias(*sizes):
@@ -13,10 +12,15 @@ def bias(*sizes):
     return bias
 
 
+class GELU(nn.Module):
+    def forward(self, x):
+        return 0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
+
+
 class MLP(nn.Module):
     def __init__(self, input_size, output_size, dropout, bias=True):
         super().__init__()
-        hidden_size = round(sqrt(input_size * output_size))
+        hidden_size = round(math.sqrt(input_size * output_size))
         self.sequential = nn.Sequential(
             nn.Linear(input_size, hidden_size),
             nn.ReLU(),

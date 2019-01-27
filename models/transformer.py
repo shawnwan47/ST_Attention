@@ -8,16 +8,19 @@ from lib.io import gen_subsequent_time
 
 
 class STransformer(nn.Module):
-    def __init__(self, embedding, model_dim, out_dim, num_layers, heads, dropout, mask=None):
+    def __init__(self, embedding, model_dim, out_dim, num_layers, heads, dropout):
         super().__init__()
         self.embedding = embedding
         self.encoder = TransformerEncoder(model_dim, num_layers, heads, dropout)
-        self.decoder = MLP(model_dim, out_dim, dropout)
-        self.register_buffer('mask', mask)
+        self.decoder = nn.Sequential(
+            nn.LayerNorm(model_dim),
+            nn.Dropout(dropout),
+            MLP(model_dim, out_dim, dropout)
+        )
 
     def forward(self, data, time, weekday):
         input = self.embedding(data, time, weekday)
-        hidden = self.encoder(input, self.mask)
+        hidden = self.encoder(input)
         output = self.decoder(hidden)
         return output
 
@@ -53,7 +56,7 @@ class Transformer(nn.Module):
 class STTransformer(nn.Module):
     def __init__(self, embedding, model_dim,
                  encoder_layers, decoder_layers, heads,
-                 horizon, dropout, mask_s):
+                 horizon, dropout):
         super().__init__()
         self.embedding = embedding
         self.encoder = STTransformerEncoder(
@@ -69,14 +72,13 @@ class STTransformer(nn.Module):
             dropout=dropout
         )
         self.horizon = horizon
-        self.register_buffer('mask_s', mask_s)
 
     def forward(self, data, time, weekday):
         input = self.embedding(data, time, weekday)
-        bank = self.encoder(input, self.mask_s)
+        bank = self.encoder(input)
         time = gen_subsequent_time(time[:, -1], self.horizon)
         input = self.embedding(None, time, weekday)
-        res = self.decoder(input, bank, self.mask_s)
+        res = self.decoder(input, bank)
         return res + data[:, [-1]]
 
 
@@ -89,9 +91,9 @@ class TransformerEncoder(nn.Module):
         ])
         self.layer_norm = nn.LayerNorm(model_dim)
 
-    def forward(self, input, mask=None):
+    def forward(self, input):
         for layer in self.layers:
-            input = layer(input, input, mask)
+            input = layer(input)
         return self.layer_norm(input)
 
 
@@ -102,13 +104,16 @@ class TransformerDecoder(nn.Module):
             TransformerDecoderLayer(model_dim, heads, dropout)
             for _ in range(num_layers)
         ])
-        self.layer_norm = nn.LayerNorm(model_dim)
-        self.mlp = MLP(model_dim, out_dim, dropout)
+        self.decoder = nn.Sequential(
+            nn.LayerNorm(model_dim),
+            nn.Dropout(dropout),
+            MLP(model_dim, out_dim, dropout)
+        )
 
-    def forward(self, input, bank):
+    def forward(self, query, bank):
         for layer in self.layers:
-            input = layer(input, bank)
-        return self.mlp(self.layer_norm(input))
+            query = layer(query, bank)
+        return self.decoder(query)
 
 
 class STTransformerEncoder(nn.Module):
@@ -120,9 +125,9 @@ class STTransformerEncoder(nn.Module):
         ])
         self.layer_norm = nn.LayerNorm(model_dim)
 
-    def forward(self, input, mask_s):
+    def forward(self, input):
         for layer in self.layers:
-            input = layer(input, input, mask_s=mask_s)
+            input = layer(input)
         return self.layer_norm(input)
 
 
@@ -133,10 +138,13 @@ class STTransformerDecoder(nn.Module):
             STTransformerDecoderLayer(model_dim, heads, dropout)
             for _ in range(num_layers)
         ])
-        self.layer_norm = nn.LayerNorm(model_dim)
-        self.mlp = MLP(model_dim, 1, dropout)
+        self.decoder = nn.Sequential(
+            nn.LayerNorm(model_dim),
+            nn.Dropout(dropout),
+            MLP(model_dim, 1, dropout)
+        )
 
-    def forward(self, input, bank, mask_s):
+    def forward(self, input, bank):
         for layer in self.layers:
-            input = layer(input, bank, mask_s)
-        return self.mlp(self.layer_norm(input))
+            input = layer(input, bank)
+        return self.decoder(input)
