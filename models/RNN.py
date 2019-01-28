@@ -32,7 +32,8 @@ class RNNSeq2Seq(nn.Module):
         self.horizon = horizon
         self.encoder = RNN(rnn_type, model_dim, num_layers, dropout)
         self.decoder = RNN(rnn_type, model_dim, num_layers, dropout)
-        self.mlp = MLP(model_dim, 1)
+        self.ln = nn.LayerNorm(model_dim)
+        self.mlp = MLP(model_dim, out_dim, dropout)
 
     def forward(self, data, time, weekday):
         # encoding
@@ -45,31 +46,36 @@ class RNNSeq2Seq(nn.Module):
         time_i = time[:, [-1]] + 1
         out = []
         for _ in range(self.horizon):
-            input_i = self.embedding(data_i, time_i, weekday)
-            res, hidden = self.decoder(input_i, hidden)
-            out.append(data_i + res)
-            data_i = data_i + res.detach()
+            input_i = self.embedding(data_i.detach(), time_i, weekday)
+            inter, hidden = self.decoder(input_i, hidden)
+            res = self.mlp(self.ln(inter))
+            data_i = data_i + res
             time_i = time_i + 1
+            out.append(data_i)
         return torch.cat(out, 1)
 
 
 class RNNAttnSeq2Seq(RNNSeq2Seq):
     def __init__(self, embedding, rnn_type, model_dim, num_layers, out_dim, heads, dropout, horizon):
         super().__init__(embedding, rnn_type, model_dim, num_layers, out_dim, dropout, horizon)
-        self.attn = MultiHeadedAttention(model_dim, heads, dropout)
+        self.attn = TransformerLayer(model_dim, heads, dropout)
+        self.ln_bank = nn.LayerNorm(model_dim)
 
     def forward(self, data, time, weekday):
         # encoding
         input = self.embedding(data[:, :-1], time[:, :-1], weekday)
         bank, hidden = self.encoder(input)
+        bank = self.ln_bank(bank)
         # decoding
         data_i = data[:, [-1]]
         time_i = time[:, [-1]]
         out = []
         for _ in range(self.horizon):
-            input_i = self.embedding(data_i, time_i, weekday)
-            res, hidden = self.decoder(input_i, hidden, bank)
-            out.append(data_i + res)
-            data_i = out[-1].detach()
+            input_i = self.embedding(data_i.detach(), time_i, weekday)
+            query, hidden = self.decoder(input_i, hidden)
+            inter = self.attn(query, bank)
+            res = self.mlp(self.ln(inter))
+            data_i = data_i + res
             time_i = time_i + 1
+            out.append(data_i)
         return torch.cat(out, 1)

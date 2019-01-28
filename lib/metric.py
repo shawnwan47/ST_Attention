@@ -15,25 +15,25 @@ class TimeSeriesLoss:
         self.metrics = metrics
         self.horizons = horizons
 
+    def __call__(self, output, target):
+        ret = MetricDict({horizon: self.eval(output[:, horizon], target[:, horizon])
+                          for horizon in self.horizons})
+        ret['avg'] = self.eval(output, target)
+        return ret
+
     def get_criterion(self, lossdict):
         return float(lossdict['avg'][self.metrics[-1]])
 
-    def __call__(self, output, target):
-        ret = MetricDict({horizon: self._eval(output[:, horizon], target[:, horizon])
-                          for horizon in self.horizons})
-        ret['avg'] = self._eval(output, target)
-        return ret
-
-    def _eval(self, output, target):
+    def eval(self, output, target):
         output, target = mask_target(output, target)
         if not target.numel():
             return MetricDict()
         else:
-            return MetricDict({metric: self.get_loss(output, target, metric)
+            return MetricDict({metric: self.calc_metric(output, target, metric)
                                for metric in self.metrics})
 
     @staticmethod
-    def get_loss(output, target, metric):
+    def calc_metric(output, target, metric):
         if metric == 'mae':
             loss = F.l1_loss(output, target)
         elif metric == 'rmse':
@@ -41,13 +41,12 @@ class TimeSeriesLoss:
         elif metric == 'mape':
             loss = ((output - target).abs() / (target + EPS)).mean() * 100
         elif metric == 'wape':
-            loss = F.l1_loss(output, target) / (target.mean() + EPS) * 100
+            loss = (output - target).abs().mean() / (target.mean() + EPS) * 100
 
         if metric == 'wape':
-            loss = Metric(loss.item(), target.mean() + EPS)
+            return Metric(loss.item(), target.mean().item() + EPS)
         else:
-            loss = Metric(loss.item(), target.numel())
-        return loss
+            return Metric(loss.item(), target.numel())
 
 
 class Metric:

@@ -4,8 +4,8 @@ data:
     flow:
       freq: 15
       history: 8
-      horizon: 8
-      horizons: [0, 3, 7]
+      horizon: 4
+      horizons: [0, 1, 3]
       metrics: [mae, rmse, wape]
     speed:
       freq: 5
@@ -25,58 +25,58 @@ data:
       num_nodes: 536
 model:
   paradigm:
+    st:
+      batch_size: 16
+      epoches: 100
+      patience: 10
     s:
       batch_size: 64
       epoches: 300
       patience: 30
     t:
       batch_size: 256
-      epoches: 300
-      patience: 30
-    st:
-      batch_size: 16
-      epoches: 100
-      patience: 10
+      epoches: 500
+      patience: 50
   model:
     STTransformer:
       paradigm: st
-      model_dim: 64
+      model_dim: 16
       encoder_layers: 1
       decoder_layers: 1
       heads: 4
     Transformer:
       paradigm: t
-      model_dim: 128
-      encoder_layers: 2
-      decoder_layers: 2
+      model_dim: 64
+      encoder_layers: 1
+      decoder_layers: 1
       heads: 4
     STransformer:
       paradigm: s
       model_dim: 64
-      num_layers: 3
+      num_layers: 1
       heads: 4
     RNN:
       paradigm: t
-      model_dim: 128
+      model_dim: 64
       rnn_type: GRU
-      num_layers: 2
+      num_layers: 1
     RNNAttn:
       paradigm: t
-      model_dim: 128
+      model_dim: 64
       rnn_type: GRU
-      num_layers: 2
+      num_layers: 1
       heads: 4
     DCRNN:
       paradigm: st
       framework: seq2seq
       model_dim: 32
       rnn_attn: False
-      num_layers: 2
+      num_layers: 1
       hops: 2
     GATRNN:
       paradigm: st
       model_dim: 32
       framework: seq2seq
       rnn_attn: False
-      num_layers: 2
+      num_layers: 1
       heads: 4

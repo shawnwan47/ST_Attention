@@ -22,6 +22,8 @@ class Config:
         self.bday = False
         self.start = 0
         self.end = 24
+        self.horizon = None
+        self.horizons = None
         # model
         self.path = MODEL_PATH
         self.paradigm = None

@@ -20,12 +20,12 @@ class TransformerLayer(nn.Module):
 class TransformerDecoderLayer(nn.Module):
     def __init__(self, model_dim, heads, dropout):
         super().__init__()
-        self.attn_bank = TransformerLayer(model_dim, heads, dropout)
-        self.attn_self = TransformerLayer(model_dim, heads, dropout)
+        self.layer_bank = TransformerLayer(model_dim, heads, dropout)
+        self.layer_self = TransformerLayer(model_dim, heads, dropout)
 
-    def forward(self, input, bank, mask=None):
-        input_self = self.attn_bank(input, bank)
-        return self.attn_self(input_self, input_self, mask)
+    def forward(self, input, bank):
+        input_self = self.layer_bank(input, bank)
+        return self.layer_self(input_self)
 
 
 class STTransformerLayer(nn.Module):
