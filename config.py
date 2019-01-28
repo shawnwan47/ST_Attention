@@ -20,8 +20,9 @@ class Config:
         # data
         self.dataset = 'LA'
         self.bday = False
-        self.start = 0
-        self.end = 24
+        self.start = None
+        self.end = None
+        self.freq = None
         self.horizon = None
         self.horizons = None
         # model

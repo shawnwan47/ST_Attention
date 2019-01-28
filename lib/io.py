@@ -7,20 +7,20 @@ from lib.time_series import TimeSeries
 from lib.loaders import get_loader
 
 
-def load_data(args):
-    df = get_loader(args.dataset).load_ts(args.freq)
-    df = _filter_df(df, args.bday, args.start, args.end)
-    df_train, df_val, df_test = _split_dataset(df)
+def load_data(config):
+    df = get_loader(config.dataset).load_ts(config.freq)
+    df = _filter_df(df, config.bday, config.start, config.end)
+    df_train, df_val, df_test = _split_dataset(df, config.train_ratio, config.test_ratio)
     mean, std = df_train.mean().values, df_train.std().values
 
     dataset_train, dataset_valid, dataset_test = (
-        TimeSeries(df, mean, std, args.history, args.horizon)
+        TimeSeries(df, mean, std, config.history, config.horizon)
         for df in (df_train, df_val, df_test)
     )
 
-    data_train = DataLoader(dataset_train, args.batch_size, True)
-    data_validation = DataLoader(dataset_valid, args.batch_size)
-    data_test = DataLoader(dataset_test, args.batch_size)
+    data_train = DataLoader(dataset_train, config.batch_size, True)
+    data_validation = DataLoader(dataset_valid, config.batch_size)
+    data_test = DataLoader(dataset_test, config.batch_size)
     mean, std = torch.FloatTensor(mean), torch.FloatTensor(std)
 
     return data_train, data_validation, data_test, mean, std

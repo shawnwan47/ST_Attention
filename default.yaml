@@ -2,12 +2,16 @@
 data:
   task:
     flow:
+      start: 6
+      end: 22
       freq: 15
       history: 8
       horizon: 4
       horizons: [0, 1, 3]
       metrics: [mae, rmse, wape]
     speed:
+      start: 0
+      end: 24
       freq: 5
       history: 12
       horizon: 12
@@ -17,12 +21,18 @@ data:
     LA:
       task: speed
       num_nodes: 207
+      train_ratio: 0.7
+      test_ratio: 0.2
     BJ_highway:
       task: flow
       num_nodes: 264
+      train_ratio: 0.66
+      test_ratio: 0.16
     BJ_metro:
       task: flow
       num_nodes: 536
+      train_ratio: 0.66
+      test_ratio: 0.16
 model:
   paradigm:
     st:

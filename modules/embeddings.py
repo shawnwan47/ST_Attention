@@ -5,6 +5,17 @@ import torch.nn as nn
 from modules.utils import bias, MLP, ResMLP
 
 
+class Embedding(nn.Sequential):
+    def __init__(self, num_embeddings, model_dim, dropout):
+        embedding_dim = model_dim // 2
+        super().__init__(
+            nn.Embedding(num_embeddings, embedding_dim),
+            nn.Dropout(dropout),
+            nn.Linear(embedding_dim, model_dim),
+            nn.Dropout(dropout)
+        )
+
+
 class ScalarEmbedding(nn.Module):
     def __init__(self, model_dim, dropout):
         super().__init__()
@@ -44,13 +55,12 @@ class VectorEmbedding(nn.Module):
 class TEmbedding(nn.Module):
     def __init__(self, num_times, model_dim, dropout):
         super().__init__()
-        self.embedding_time = nn.Embedding(num_times, model_dim)
-        self.embedding_weekday = nn.Embedding(7, model_dim)
-        self.drop = nn.Dropout(dropout)
+        self.embedding_time = Embedding(num_times, model_dim, dropout)
+        self.embedding_weekday = Embedding(7, model_dim, dropout)
 
     def forward(self, time, weekday):
-        emb_time = self.drop(self.embedding_time(time))
-        emb_weekday = self.drop(self.embedding_weekday(weekday))
+        emb_time = self.embedding_time(time)
+        emb_weekday = self.embedding_weekday(weekday)
         return emb_time + emb_weekday
 
 
@@ -58,11 +68,11 @@ class STEmbedding(TEmbedding):
     def __init__(self, num_times, num_nodes, model_dim, dropout):
         super().__init__(num_times, model_dim, dropout)
         self.register_buffer('nodes', torch.arange(num_nodes))
-        self.embedding_node = nn.Embedding(num_nodes, model_dim)
+        self.embedding_node = Embedding(num_nodes, model_dim, dropout)
 
     def forward(self, time, weekday):
         t = super().forward(time, weekday)
-        s = self.drop(self.embedding_node(self.nodes))
+        s = self.embedding_node(self.nodes)
         return s + t
 
 
@@ -72,11 +82,9 @@ class EmbeddingFusion(nn.Module):
         self.embedding_num = embedding_num
         self.embedding_cat = embedding_cat
         self.mlp = ResMLP(model_dim, dropout)
-        self.drop = nn.Dropout(dropout)
         self.register_parameter('nan', bias(model_dim))
 
     def forward(self, data, time, weekday):
         emb_num = self.nan if data is None else self.embedding_num(data)
         emb_cat = self.embedding_cat(time, weekday)
-        emb = self.drop(emb_num) + self.drop(emb_cat)
-        return self.mlp(emb)
+        return self.mlp(emb_num + emb_cat)

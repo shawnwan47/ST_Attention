@@ -143,6 +143,7 @@ class GraphGRU(nn.Module):
                 func_kwargs=func_kwargs
             ) for _ in range(num_layers)
         ])
+        self.ln = nn.LayerNorm(model_dim)
 
     def forward(self, input, hidden=None):
         if hidden is None:
@@ -152,7 +153,7 @@ class GraphGRU(nn.Module):
             output_i, hidden = self.forward_i(input[:, idx], hidden)
             output.append(output_i)
         output = torch.stack(output, 1)
-        return output, hidden
+        return self.ln(output), hidden
 
     def forward_i(self, input, hidden):
         hidden_new = []
