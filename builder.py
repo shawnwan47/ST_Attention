@@ -7,6 +7,7 @@ from modules import MLP
 from modules import ScalarEmbedding, VectorEmbedding
 from modules import EmbeddingFusion, TEmbedding, STEmbedding
 
+from models import IsoMLP
 from models import Transformer, STransformer, STTransformer
 from models import RNNSeq2Seq, RNNAttnSeq2Seq
 from models import DCRNNSeq2Seq, DCRNNAttnSeq2Seq
@@ -68,6 +69,15 @@ def build_embedding(config):
             # data_mlp = MLP(1, config.model_dim, config.dropout)
             data_mlp = ScalarEmbedding(config.model_dim, config.dropout)
     return EmbeddingFusion(data_mlp, embedding, config.model_dim, config.dropout)
+
+
+def build_isomlp(config, embedding):
+    return IsoMLP(
+        embedding=embedding,
+        model_dim=config.model_dim,
+        out_dim=config.horizon,
+        dropout=config.dropout
+    )
 
 
 def build_sttransformer(config, embedding):
