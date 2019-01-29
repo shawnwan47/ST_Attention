@@ -1,8 +1,5 @@
 import torch
 import torch.nn as nn
-from torch.nn import functional as F
-
-from constants import EPS
 
 
 def mask_target(output, target):
@@ -34,42 +31,38 @@ class TimeSeriesLoss:
 
     @staticmethod
     def calc_metric(output, target, metric):
-        if metric == 'mae':
-            loss = F.l1_loss(output, target)
-        elif metric == 'rmse':
-            loss = F.mse_loss(output, target).sqrt()
-        elif metric == 'mape':
-            loss = ((output - target).abs() / (target + EPS)).mean() * 100
-        elif metric == 'wape':
-            loss = (output - target).abs().mean() / (target.mean() + EPS) * 100
-
         if metric == 'wape':
-            return Metric(loss.item(), target.mean().item() + EPS)
-        else:
-            return Metric(loss.item(), target.numel())
+            loss = (output - target).abs().sum().item() * 100
+            return Metric(loss, target.sum().item())
+        elif metric == 'mae':
+            loss = (output - target).abs().sum()
+        elif metric == 'rmse':
+            loss = (output - target).pow(2).sqrt().sum()
+        elif metric == 'mape':
+            loss = ((output - target).abs() / (target + 1e-8)).sum() * 100
+        return Metric(loss.item(), target.numel())
 
 
 class Metric:
-    def __init__(self, value, norm):
-        self.value = value
+    def __init__(self, loss, norm):
+        self.loss = loss
         self.norm = norm
 
     def __float__(self):
-        return self.value
+        return self.loss / (self.norm + 1e-8)
 
     def __repr__(self):
-        return f'{self.value:.2f}'
+        return f'{float(self):.2f}'
 
     def __iadd__(self, other):
-        self.value = (self.value * self.norm + other.value * other.norm)
+        self.loss += other.loss
         self.norm += other.norm
-        self.value /= self.norm
         return self
 
     def __add__(self, other):
+        loss = self.loss + other.loss
         norm = self.norm + other.norm
-        value = (self.value * self.norm + other.value * other.norm) / norm
-        return Metric(value, norm)
+        return Metric(loss, norm)
 
 
 class MetricDict(dict):
