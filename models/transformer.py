@@ -83,12 +83,11 @@ class TransformerEncoder(nn.Module):
             TransformerLayer(model_dim, heads, dropout)
             for _ in range(num_layers)
         ])
-        self.layer_norm = nn.LayerNorm(model_dim)
 
     def forward(self, input):
         for layer in self.layers:
             input = layer(input)
-        return self.layer_norm(input)
+        return input
 
 
 class TransformerDecoder(nn.Module):
@@ -98,11 +97,7 @@ class TransformerDecoder(nn.Module):
             TransformerDecoderLayer(model_dim, heads, dropout)
             for _ in range(num_layers)
         ])
-        self.decoder = nn.Sequential(
-            nn.LayerNorm(model_dim),
-            nn.Dropout(dropout),
-            MLP(model_dim, out_dim, dropout)
-        )
+        self.decoder = MLP(model_dim, out_dim, dropout)
 
     def forward(self, query, bank):
         for layer in self.layers:
@@ -117,12 +112,11 @@ class STTransformerEncoder(nn.Module):
             STTransformerLayer(model_dim, heads, dropout)
             for _ in range(num_layers)
         ])
-        self.layer_norm = nn.LayerNorm(model_dim)
 
     def forward(self, input):
         for layer in self.layers:
             input = layer(input)
-        return self.layer_norm(input)
+        return input
 
 
 class STTransformerDecoder(nn.Module):
@@ -132,11 +126,7 @@ class STTransformerDecoder(nn.Module):
             STTransformerDecoderLayer(model_dim, heads, dropout)
             for _ in range(num_layers)
         ])
-        self.decoder = nn.Sequential(
-            nn.LayerNorm(model_dim),
-            nn.Dropout(dropout),
-            MLP(model_dim, 1, dropout)
-        )
+        self.decoder = MLP(model_dim, 1, dropout)
 
     def forward(self, input, bank):
         for layer in self.layers:

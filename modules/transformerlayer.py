@@ -6,15 +6,15 @@ class TransformerLayer(nn.Module):
     def __init__(self, model_dim, heads, dropout):
         super().__init__()
         self.attn = MultiHeadedAttention(model_dim, heads, dropout)
-        self.layer_norm = nn.LayerNorm(model_dim)
         self.drop = nn.Dropout(dropout)
-        self.mlp = ResMLP(model_dim, dropout)
+        self.resmlp = ResMLP(model_dim, dropout)
+        self.ln = nn.LayerNorm(model_dim)
 
     def forward(self, query, bank=None):
-        query_norm = self.layer_norm(query)
-        bank = query_norm if bank is None else query_norm
-        context = self.drop(self.attn(query_norm, bank))
-        return self.mlp(query + context)
+        bank = query if bank is None else bank
+        context = self.attn(query, bank)
+        output = self.resmlp(query + self.drop(context))
+        return self.ln(output)
 
 
 class TransformerDecoderLayer(nn.Module):
