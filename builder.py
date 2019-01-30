@@ -7,20 +7,22 @@ from modules import MLP
 from modules import ScalarEmbedding, VectorEmbedding
 from modules import EmbeddingFusion, TEmbedding, STEmbedding
 
-from models import IsoMLP
+from models import IsoMLP, IsoRNN
 from models import Transformer, STransformer, STTransformer
 from models import RNNSeq2Seq, RNNAttnSeq2Seq
-from models import DCRNNSeq2Seq, DCRNNAttnSeq2Seq
-from models import DCRNNSeq2Vec, DCRNNAttnSeq2Vec
-from models import GATRNNSeq2Seq, GATRNNAttnSeq2Seq
-from models import GATRNNSeq2Vec, GATRNNAttnSeq2Vec
+from models import DCRNN
+from models import GATRNN
 
 from lib.io import load_adj, load_distant_mask,gen_subsequent_mask
 
 
 def build_model(config, mean, std):
     embedding = build_embedding(config)
-    if config.model == 'STTransformer':
+    if config.model == 'IsoMLP':
+        model = build_isomlp(config, embedding)
+    elif config.model == 'IsoRNN':
+        model = build_isornn(config, embedding)
+    elif config.model == 'STTransformer':
         model = build_sttransformer(config, embedding)
     elif config.model =='Transformer':
         model = build_transformer(config, embedding)
@@ -76,6 +78,18 @@ def build_isomlp(config, embedding):
         embedding=embedding,
         model_dim=config.model_dim,
         out_dim=config.horizon,
+        dropout=config.dropout
+    )
+
+
+def build_isornn(config, embedding):
+    return IsoRNN(
+        embedding=embedding,
+        horizon=config.horizon,
+        framework=config.framework,
+        rnn_attn=config.rnn_attn,
+        model_dim=config.model_dim,
+        num_layers=config.num_layers,
         dropout=config.dropout
     )
 
@@ -142,45 +156,27 @@ def build_rnnattn(config, embedding):
 
 
 def build_dcrnn(config, embedding):
-    adj = load_adj(config.dataset)
-    kwargs = {
-        'embedding': embedding,
-        'model_dim': config.model_dim,
-        'num_layers': config.num_layers,
-        'horizon': config.horizon,
-        'dropout': config.dropout,
-        'adj': adj,
-        'hops': config.hops
-    }
-    if config.rnn_attn:
-        kwargs['heads'] = config.heads
-        if config.framework == 'seq2seq':
-            return DCRNNAttnSeq2Seq(**kwargs)
-        else:
-            return DCRNNAttnSeq2Vec(**kwargs)
-    else:
-        if config.framework == 'seq2seq':
-            return DCRNNSeq2Seq(**kwargs)
-        else:
-            return DCRNNSeq2Vec(**kwargs)
+    return DCRNN(
+        embedding=embedding,
+        framework=config.framework,
+        rnn_attn=config.rnn_attn,
+        model_dim=config.model_dim,
+        num_layers=config.num_layers,
+        horizon=config.horizon,
+        dropout=config.dropout,
+        adj=load_adj(config.dataset),
+        hops=config.hops
+    )
 
 
 def build_gatrnn(config, embedding):
-    kwargs = {
-        'embedding': embedding,
-        'model_dim': config.model_dim,
-        'heads': config.heads,
-        'num_layers': config.num_layers,
-        'horizon': config.horizon,
-        'dropout': config.dropout
-    }
-    if config.rnn_attn:
-        if config.framework == 'seq2seq':
-            return GATRNNAttnSeq2Seq(**kwargs)
-        else:
-            return GATRNNAttnSeq2Vec(**kwargs)
-    else:
-        if config.framework == 'seq2seq':
-            return GATRNNSeq2Seq(**kwargs)
-        else:
-            return GATRNNSeq2Vec(**kwargs)
+    return GATRNN(
+        embedding=embedding,
+        framework=config.framework,
+        rnn_attn=config.rnn_attn,
+        model_dim=config.model_dim,
+        num_layers=config.num_layers,
+        horizon=config.horizon,
+        heads=config.heads,
+        dropout=config.dropout
+    )

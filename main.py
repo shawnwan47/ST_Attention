@@ -63,11 +63,9 @@ def train(**kwargs):
         if trial > config.patience:
             break
 
-    loss_test = _eval(model, loader_test, loss, config.cuda)
-    print(f'Overfit: {loss_test}')
     model.load_state_dict(torch.load(config.path))
     loss_test = _eval(model, loader_test, loss, config.cuda)
-    print(f'Earlystop:{loss_test}')
+    print(f'{config.path}:\n{loss_test}')
 
 
 def test(**kwargs):

@@ -5,5 +5,4 @@ from modules.embeddings import ScalarEmbedding, VectorEmbedding, EmbeddingFusion
 from modules.attn import MultiHeadedAttention
 from modules.transformerlayer import TransformerLayer, TransformerDecoderLayer
 from modules.transformerlayer import STTransformerLayer, STTransformerDecoderLayer
-from modules.graph_rnn import GraphGRUSeq2Seq, GraphGRUAttnSeq2Seq
-from modules.graph_rnn import GraphGRUSeq2Vec, GraphGRUAttnSeq2Vec
+from modules.graph_rnn import GraphGRUModel

@@ -1,7 +1,6 @@
 from models.iso_mlp import IsoMLP
-from models.transformer import Transformer, STransformer, STTransformer
+from models.iso_rnn import IsoRNN
 from models.rnn import RNNSeq2Seq, RNNAttnSeq2Seq
-from models.dcrnn import DCRNNSeq2Seq, DCRNNAttnSeq2Seq
-from models.dcrnn import DCRNNSeq2Vec, DCRNNAttnSeq2Vec
-from models.gatrnn import GATRNNSeq2Seq, GATRNNAttnSeq2Seq
-from models.gatrnn import GATRNNSeq2Vec, GATRNNAttnSeq2Vec
+from models.dcrnn import DCRNN
+from models.gatrnn import GATRNN
+from models.transformer import Transformer, STransformer, STTransformer

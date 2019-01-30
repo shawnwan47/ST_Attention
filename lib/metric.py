@@ -32,15 +32,18 @@ class TimeSeriesLoss:
     @staticmethod
     def calc_metric(output, target, metric):
         if metric == 'wape':
-            loss = (output - target).abs().sum().item() * 100
-            return Metric(loss, target.sum().item())
+            loss = (output - target).abs().sum() * 100
+            norm = target.sum().item()
         elif metric == 'mae':
             loss = (output - target).abs().sum()
+            norm = target.numel()
         elif metric == 'rmse':
             loss = (output - target).pow(2).sqrt().sum()
+            norm = target.numel()
         elif metric == 'mape':
             loss = ((output - target).abs() / (target + 1e-8)).sum() * 100
-        return Metric(loss.item(), target.numel())
+            norm = target.numel()
+        return Metric(loss.item(), norm)
 
 
 class Metric:
@@ -69,7 +72,7 @@ class MetricDict(dict):
     def __add__(self, other):
         if not (self and other):
             return self or other
-        assert(self.keys() == other.keys())
+        assert self.keys() == other.keys()
         return MetricDict({key: self[key] + other[key]
                            for key in self.keys()})
 

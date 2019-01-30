@@ -4,8 +4,38 @@ import torch.nn as nn
 from modules import MLP, MultiHeadedAttention
 
 
+class GraphGRUModel(nn.Module):
+    def __init__(self, framework, rnn_attn,
+                 embedding, model_dim, num_layers, dropout, horizon,
+                 func, func_kwargs={}):
+        super().__init__()
+        kwargs = {
+            'embedding': embedding,
+            'model_dim': model_dim,
+            'num_layers': num_layers,
+            'dropout': dropout,
+            'horizon': horizon,
+            'func': func,
+            'func_kwargs': func_kwargs
+        }
+        if rnn_attn:
+            if framework == 'seq2seq':
+                self.model = GraphGRUAttnSeq2Seq(**kwargs)
+            else:
+                self.model = GraphGRUAttnSeq2Vec(**kwargs)
+        else:
+            if framework == 'seq2seq':
+                self.model = GraphGRUSeq2Seq(**kwargs)
+            else:
+                self.model = GraphGRUSeq2Vec(**kwargs)
+
+    def forward(self, data, time, weekday):
+        return self.model(data, time, weekday)
+
+
 class GraphGRUSeq2Vec(nn.Module):
-    def __init__(self, embedding, model_dim, num_layers, dropout, horizon, func, func_kwargs):
+    def __init__(self, embedding, model_dim, num_layers, dropout, horizon,
+                 func, func_kwargs={}):
         super().__init__()
         self.embedding = embedding
         self.rnn = GraphGRU(
@@ -25,7 +55,8 @@ class GraphGRUSeq2Vec(nn.Module):
 
 
 class GraphGRUAttnSeq2Vec(GraphGRUSeq2Vec):
-    def __init__(self, embedding, model_dim, num_layers, heads, dropout, horizon, func, func_kwargs):
+    def __init__(self, embedding, model_dim, num_layers, dropout, horizon,
+                 func, func_kwargs={}):
         super().__init__(
             embedding=embedding,
             model_dim=model_dim,
@@ -35,24 +66,24 @@ class GraphGRUAttnSeq2Vec(GraphGRUSeq2Vec):
             func=func,
             func_kwargs=func_kwargs
         )
-        self.attn = TemporalAttention(
+        self.attn = GraphRNNAttention(
             model_dim=model_dim,
             output_dim=horizon,
-            heads=heads,
             dropout=dropout
         )
 
     def forward(self, data, time, weekday):
         input = self.embedding(data, time, weekday)
-        output, _ = self.rnn(input, hidden)
+        output, _ = self.rnn(input)
         output_mlp = self.mlp(output[:, [-1]])
         output_context = self.attn(output[:, [-1]], output)
-        output = output_mlp + output_context
+        res = output_mlp + output_context
         return data[:, [-1]] + res.transpose(1, -1)
 
 
 class GraphGRUSeq2Seq(nn.Module):
-    def __init__(self, embedding, model_dim, horizon, num_layers, dropout, func, func_kwargs):
+    def __init__(self, embedding, model_dim, horizon, num_layers, dropout,
+                 func, func_kwargs={}):
         super().__init__()
         self.embedding = embedding
         self.horizon = horizon
@@ -91,7 +122,8 @@ class GraphGRUSeq2Seq(nn.Module):
 
 
 class GraphGRUAttnSeq2Seq(GraphGRUSeq2Seq):
-    def __init__(self, embedding, model_dim, horizon, heads, num_layers, dropout, func, func_kwargs):
+    def __init__(self, embedding, model_dim, horizon, num_layers, dropout,
+                 func, func_kwargs={}):
         super().__init__(
             embedding=embedding,
             model_dim=model_dim,
@@ -102,10 +134,8 @@ class GraphGRUAttnSeq2Seq(GraphGRUSeq2Seq):
             func_kwargs=func_kwargs
         )
         self.decoder = GraphGRUAttnDecoder(
-            embedding=embedding,
             model_dim=model_dim,
-            heads=heads,
-            horizon=horizon,
+            output_dim=1,
             num_layers=num_layers,
             dropout=dropout,
             func=func,
@@ -157,8 +187,8 @@ class GraphGRU(nn.Module):
 
     def forward_i(self, input, hidden):
         hidden_new = []
-        for i in range(self.num_layers):
-            input = self.drop(self.layers[i](input, hidden[:, i]))
+        for i, layer in enumerate(self.layers):
+            input = self.drop(layer(input, hidden[:, i]))
             hidden_new.append(input)
         return input, torch.stack(hidden_new, 1)
 
@@ -180,12 +210,13 @@ class GraphGRUDecoder(GraphGRU):
 class GraphGRUAttnDecoder(GraphGRU):
     def __init__(self, model_dim, output_dim, num_layers, dropout, func, func_kwargs):
         super().__init__(model_dim, num_layers, dropout, func, func_kwargs)
-        self.attn = TemporalAttention(model_dim, output_dim, heads, dropout)
-        self.mlp = MLP(model_dim, output_dim)
+        self.attn = GraphRNNAttention(model_dim, output_dim, dropout)
+        self.mlp = MLP(model_dim, output_dim, dropout)
 
     def forward(self, input, hidden, bank):
         output, hidden = super().forward(input, hidden)
-        return self.mlp(output) + self.attn(output, bank), hidden
+        output = self.mlp(output) + self.attn(output, bank)
+        return output, hidden
 
 
 class GraphGRUCell(nn.Module):
@@ -208,11 +239,11 @@ class GraphGRUCell(nn.Module):
         return i_new + gate_i * (hidden - i_new)
 
 
-class TemporalAttention(MultiHeadedAttention):
-    def __init__(self, model_dim, output_dim, heads, dropout):
-        super().__init__(model_dim, heads, dropout=dropout, out_dim=output_dim)
+class GraphRNNAttention(nn.Module):
+    def __init__(self, model_dim, output_dim, dropout):
+        super().__init__()
+        self.attn = MultiHeadedAttention(model_dim, heads=1, dropout=dropout, out_dim=output_dim)
 
     def forward(self, query, bank):
-        query = qeury.transpose(1, 2)
-        bank = bank.transpose(1, 2)
-        return super().forward(query, bank).transpose(1, 2)
+        context = self.attn(query.transpose(1, 2), bank.transpose(1, 2))
+        return context.transpose(1, 2)

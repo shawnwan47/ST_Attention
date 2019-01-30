@@ -3,7 +3,7 @@ data:
   task:
     flow:
       start: 6
-      end: 22
+      end: 24
       freq: 15
       history: 8
       horizon: 4
@@ -48,6 +48,15 @@ model:
       epoches: 500
       patience: 50
   model:
+    IsoMLP:
+      paradigm: s
+      model_dim: 32
+    IsoRNN:
+      paradigm: st
+      framework: seq2seq
+      rnn_attn: False
+      model_dim: 32
+      num_layers: 1
     STTransformer:
       paradigm: st
       model_dim: 16
@@ -67,26 +76,26 @@ model:
       heads: 4
     RNN:
       paradigm: t
-      model_dim: 64
       rnn_type: GRU
+      model_dim: 64
       num_layers: 1
     RNNAttn:
       paradigm: t
-      model_dim: 64
       rnn_type: GRU
+      model_dim: 64
       num_layers: 1
       heads: 4
     DCRNN:
       paradigm: st
       framework: seq2seq
-      model_dim: 32
       rnn_attn: False
+      model_dim: 32
       num_layers: 1
       hops: 2
     GATRNN:
       paradigm: st
-      model_dim: 32
       framework: seq2seq
       rnn_attn: False
+      model_dim: 32
       num_layers: 1
       heads: 4
