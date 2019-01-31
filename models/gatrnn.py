@@ -9,7 +9,7 @@ from modules import GraphGRUModel
 
 class GATRNN(GraphGRUModel):
     def __init__(self, embedding, framework, rnn_attn, horizon,
-                 model_dim, num_layers, dropout, adj, hops):
+                 model_dim, num_layers, heads, dropout):
         super().__init__(
             embedding=embedding,
             framework=framework,
@@ -32,8 +32,7 @@ class GAT(nn.Module):
             heads=heads,
             dropout=dropout
         )
-        self.register_buffer('mask', mask)
         self.linear = nn.Linear(input_dim, output_dim)
 
     def forward(self, input):
-        return self.attn(input, input, self.mask) + self.linear(input)
+        return self.attn(input, input) + self.linear(input)
