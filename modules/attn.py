@@ -33,7 +33,8 @@ class MultiHeadedAttention(nn.Module):
         key = shape(self.linear_key(bank)).transpose(-1, -2).contiguous()
         value = shape(self.linear_value(bank))
 
-        scores = torch.matmul(query, key) / self.score_scale
+        query = query / self.score_scale
+        scores = torch.matmul(query, key)
         if mask is not None:
             scores.masked_fill_(mask, -float('inf'))
         attn = self.softmax(scores)

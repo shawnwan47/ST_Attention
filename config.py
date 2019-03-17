@@ -35,7 +35,7 @@ class Config:
         self.gpuid = 0
         self.seed = 47
         # optim
-        self.criterion = 'SmoothL1Loss'
+        self.criterion = 'L1Loss'
         self.dropout = 0.1
         self.weight_decay = 1e-5
         self.batch_size = None
