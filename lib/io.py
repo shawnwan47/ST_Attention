@@ -6,6 +6,8 @@ from torch.utils.data import DataLoader
 from lib.time_series import TimeSeries
 from lib.loaders import get_loader
 
+from constants import PEMS_BAY, METR_LA, BJ_SUBWAY, BJ_HIGHWAY
+
 
 def load_data(config):
     df = get_loader(config.dataset).load_ts(config.freq)
@@ -52,7 +54,7 @@ def _split_dataset(df, train_ratio=0.7, test_ratio=0.2):
 
 def load_adj(dataset):
     loader = get_loader(dataset)
-    if dataset == 'LA':
+    if dataset in [METR_LA, PEMS_BAY]:
         adj = loader.load_adj()
     else:
         dist = loader.load_dist().values
@@ -69,7 +71,7 @@ def load_adj_long(dataset):
     loader = get_loader(dataset)
     dist = loader.load_dist().values
     dist = graph.digitize_dist(dist)
-    if dataset.startswith('BJ'):
+    if dataset in [BJ_SUBWAY, BJ_HIGHWAY]:
         od = loader.load_od().values
         od, do = graph.digitize_od(od)
         od += dist.max() + 1

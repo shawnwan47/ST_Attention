@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.optim import Adam
@@ -42,6 +43,7 @@ def train(**kwargs):
                 data = (d.cuda() for d in data)
             data, time, weekday, target = data
             output = model(data, time, weekday)
+            output = output[0] if isinstance(output, tuple) else output
             loss_train += loss(output, target)
             output, target = mask_target(output, target)
             crit = criterion(output, target)
@@ -57,15 +59,16 @@ def train(**kwargs):
         if crit_avg < crit_best:
             crit_best = crit_avg
             trial = 0
-            torch.save(model.state_dict(), config.path)
+            torch.save(model.state_dict(), config.path_model)
         else:
             trial += 1
         if trial > config.patience:
+            # early stopping
             break
 
-    model.load_state_dict(torch.load(config.path))
+    model.load_state_dict(torch.load(config.path_model))
     loss_test = _eval(model, loader_test, loss, config.cuda)
-    print(f'{config.path}:\n{loss_test}')
+    print(f'{config.path_model}:\n{loss_test}')
 
 
 def test(**kwargs):
@@ -73,22 +76,36 @@ def test(**kwargs):
     _cuda(config)
     _, _, dataloader, mean, std = load_data(config)
     model = build_model(config, mean, std)
-    model.load_state_dict(torch.load(config.path))
+    model.load_state_dict(torch.load(config.path_model))
     loss = TimeSeriesLoss(metrics=config.metrics, horizons=config.horizons)
-    loss_test = _eval(model, dataloader, loss, config.cuda)
+    loss_test, output, attn = _eval(model, dataloader, loss, config.cuda, verbose=True)
+    np.save(open(config.path_result.with_suffix('.output'), 'wb'), output)
+    np.save(open(config.path_result.with_suffix('.attn'), 'wb'), attn)
     print(loss_test)
 
 
-def _eval(model, dataloader, loss, cuda):
+def _eval(model, dataloader, loss, cuda, verbose=False):
     model.eval()
     loss_total = MetricDict()
-    error = 0
+    outputs = []
+    attns = []
     for data in dataloader:
         if cuda:
             data = (d.cuda() for d in data)
         data, time, weekday, target = data
         output = model(data, time, weekday)
+        if isinstance(output, tuple):
+            output, attn = output
+            if verbose:
+                outputs.append(output.detach().cpu().numpy())
+                attns.append(attn.detach().cpu().numpy())
+            else:
+                del attn
         loss_total += loss(output, target)
+    if verbose:
+        output = np.concatenate(outputs, 0)
+        attn = np.concatenate(attns, 0)
+        return loss_total, output, attn
     return loss_total
 
 

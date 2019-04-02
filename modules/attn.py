@@ -40,4 +40,4 @@ class MultiHeadedAttention(nn.Module):
         attn = self.softmax(scores)
 
         out = torch.matmul(self.drop(attn), value)
-        return self.linear_out(unshape(out))
+        return self.linear_out(unshape(out)), attn

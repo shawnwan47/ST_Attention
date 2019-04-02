@@ -39,7 +39,7 @@ def build_model(config, mean, std):
     else:
         raise KeyError('Model not implemented!')
     num_params = sum(p.numel() for p in model.parameters())
-    print(f'{config.path} parameters: {num_params}')
+    print(f'{config.path_model} parameters: {num_params}')
 
     model = Framework(model, config.paradigm, mean, std)
     if config.cuda:

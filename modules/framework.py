@@ -10,7 +10,17 @@ class Framework(nn.Module):
         self.register_buffer('mean', mean)
         self.register_buffer('std', std)
 
-    def pre_forward(self, data, time, weekday):
+    def forward(self, data, time, weekday):
+        data, time, weekday = self._pre_forward(data, time, weekday)
+        output = self.model(data, time, weekday)
+        if isinstance(output, tuple):
+            assert len(output) == 2
+            output, attn = output
+            output = self._post_forward(output)
+            return output, attn
+        return self._post_forward(output)
+
+    def _pre_forward(self, data, time, weekday):
         if self.paradigm == 's':
             data = data.transpose(1, 2)
             time = time[:, [-1]]
@@ -23,16 +33,11 @@ class Framework(nn.Module):
             weekday = weekday.unsqueeze(-1).unsqueeze(-1)
         return data, time, weekday
 
-    def post_forward(self, output):
+    def _post_forward(self, output):
         if self.paradigm == 'st':
-            return output.squeeze(-1)
+            output = output.squeeze(-1)
         elif self.paradigm == 's':
-            return output.transpose(1, 2)
+            output = output.transpose(1, 2)
         else:
-            return output
-
-    def forward(self, data, time, weekday):
-        data, time, weekday = self.pre_forward(data, time, weekday)
-        output = self.model(data, time, weekday)
-        output = self.post_forward(output)
+            output = output
         return output * (self.std + 1e-8) + self.mean

@@ -1,9 +1,15 @@
 EPS = 1e-8
-DATA_PATH = 'data/datasets/'
+
+CONFIG = 'default.yaml'
+
+DATASET_PATH = 'data/datasets/'
 MODEL_PATH = 'data/models/'
 RESULT_PATH = 'data/results/'
-FIG_PATH = 'fig/'
+ATTN_PATH = 'data/attns/'
+FIG_PATH = 'data/figs/'
 
-BJ_HIGHWAY_PATH = 'BJ_highway'
-BJ_METRO_PATH = 'BJ_metro'
-LA_PATH = 'LA'
+METR_LA = 'METR-LA'
+PEMS_BAY = 'PEMS-BAY'
+BJ_HIGHWAY = 'BJ-HIGHWAY'
+BJ_SUBWAY = 'BJ-SUBWAY'
+DATASETS = [METR_LA, PEMS_BAY, BJ_HIGHWAY, BJ_SUBWAY]

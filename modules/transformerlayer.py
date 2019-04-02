@@ -12,9 +12,9 @@ class TransformerLayer(nn.Module):
 
     def forward(self, query, bank=None):
         bank = query if bank is None else bank
-        context = self.attn(query, bank)
+        context, attn = self.attn(query, bank)
         output = self.resmlp(query + self.drop(context))
-        return self.ln(output)
+        return self.ln(output), attn
 
 
 class TransformerDecoderLayer(nn.Module):
@@ -24,8 +24,9 @@ class TransformerDecoderLayer(nn.Module):
         self.layer_self = TransformerLayer(model_dim, heads, dropout)
 
     def forward(self, input, bank):
-        input_self = self.layer_bank(input, bank)
-        return self.layer_self(input_self)
+        input_self, attn_bank = self.layer_bank(input, bank)
+        output, attn_self = self.layer_self(input_self)
+        return output
 
 
 class STTransformerLayer(nn.Module):

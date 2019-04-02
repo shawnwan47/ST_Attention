@@ -1,15 +1,17 @@
 import yaml
-from constants import MODEL_PATH
+from constants import CONFIG, DATASETS
+from constants import DATASET_PATH, MODEL_PATH, RESULT_PATH, FIG_PATH
+from pathlib import Path
 
 
 class Config:
     def __init__(self, **kwargs):
         self.init_config()
+        default_config = yaml.load(open(CONFIG))
         for k, v in kwargs.items():
             setattr(self, k, v)
-        default = yaml.load(open('default.yaml'))
-        self.set_data(default['data'])
-        self.set_model(default['model'])
+        self.set_dataset(default_config['data'])
+        self.set_model(default_config['model'])
 
     def set_config(self, kwargs):
         for k, v in kwargs.items():
@@ -18,7 +20,7 @@ class Config:
 
     def init_config(self):
         # data
-        self.dataset = 'LA'
+        self.dataset = None
         self.bday = False
         self.start = None
         self.end = None
@@ -26,7 +28,6 @@ class Config:
         self.horizon = None
         self.horizons = None
         # model
-        self.path = MODEL_PATH
         self.paradigm = None
         self.model = None
         self.mask = None
@@ -41,17 +42,36 @@ class Config:
         self.batch_size = None
         self.epoches = None
         self.patience = None
+        # path
+        self.path_dataset = Path(DATASET_PATH)
+        self.path_model = Path(MODEL_PATH)
+        self.path_result = Path(RESULT_PATH)
+        self.path_fig = Path(FIG_PATH)
 
-    def set_data(self, default):
+    def set_dataset(self, default):
+        assert self.dataset in DATASETS
+        self.path_dataset /= self.dataset
+        self.path_model /= self.dataset
+        self.path_result /= self.dataset
+        self.path_fig /= self.dataset
+        self.path_dataset.mkdir(parents=True, exist_ok=True)
+        self.path_model.mkdir(parents=True, exist_ok=True)
+        self.path_result.mkdir(parents=True, exist_ok=True)
+        self.path_fig.mkdir(parents=True, exist_ok=True)
         self.set_config(default['dataset'][self.dataset])
         self.set_config(default['task'][self.task])
         self.num_times = (self.end - self.start) * 60 // self.freq
         self.freq = str(self.freq) + 'min'
 
     def set_model(self, default):
+        assert self.model is not None
         self.set_config(default['model'][self.model])
         self.set_config(default['paradigm'][self.paradigm])
         # model name
-        self.path += self.dataset + '/' + self.model
+        model_name = self.model
         for key in default['model'][self.model]:
-            self.path += key + str(getattr(self, key))
+            model_name += key + str(getattr(self, key))
+        self.path_dataset /= model_name
+        self.path_model /= model_name
+        self.path_result /= model_name
+        self.path_fig /= model_name

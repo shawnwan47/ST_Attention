@@ -16,8 +16,9 @@ class STransformer(nn.Module):
 
     def forward(self, data, time, weekday):
         input = self.embedding(data, time, weekday)
-        hidden = self.encoder(input)
-        return self.decoder(hidden)
+        hidden, attn = self.encoder(input)
+        output = self.decoder(hidden)
+        return output, attn
 
 
 class Transformer(nn.Module):
@@ -84,10 +85,13 @@ class TransformerEncoder(nn.Module):
             for _ in range(num_layers)
         ])
 
-    def forward(self, input):
+    def forward(self, x):
+        attns = []
         for layer in self.layers:
-            input = layer(input)
-        return input
+            x, attn = layer(x)
+            attns.append(attn)
+        attn = torch.stack(attns, 1)
+        return x, attn
 
 
 class TransformerDecoder(nn.Module):

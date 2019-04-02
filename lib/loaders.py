@@ -6,63 +6,56 @@ import numpy as np
 import networkx as nx
 from geopy.distance import geodesic
 
-from constants import DATA_PATH, BJ_HIGHWAY_PATH, BJ_METRO_PATH, LA_PATH
-# from lib import graph
+from constants import DATASET_PATH, METR_LA, PEMS_BAY, BJ_HIGHWAY, BJ_SUBWAY
 
 
 def get_loader(dataset):
-    if dataset == 'BJ_highway':
-        loader = BJLoader('highway')
-    elif dataset == 'BJ_metro':
-        loader = BJLoader('metro')
-    elif dataset == 'LA':
-        loader = LALoader()
-    return loader
+    if dataset in [METR_LA, PEMS_BAY]:
+        return RoadTraffic(dataset)
+    elif dataset in [BJ_HIGHWAY, BJ_SUBWAY]:
+        return StationTraffic(dataset)
+    else:
+        raise(KeyError('no such dataset!'))
 
 
-class LoaderBase:
-    def __init__(self):
-        raise NotImplementedError
 
-    def load_ts(self, freq):
-        raise NotImplementedError
+class RoadTraffic:
+    def __init__(self, dataset):
+        self._path = Path(DATASET_PATH) / dataset
+        self._adj = self._path / 'adj_mx.pkl'
+        self.ids, self.id_to_idx, self.adj = pickle.load(
+            open(self._path / 'adj_mx.pkl', 'rb'))
+        self.adj[self.adj < 0.1] = 0
+        self._prep_ids()
+        self._node = self._path / 'sensors.csv'
+        self._ts = self._path / 'ts.h5'
+        self._link = self._path / 'distances.csv'
+        self._dist = self._path / 'dist.csv'
 
-    def load_adj(self):
-        raise NotImplementedError
+    def _prep_ids(self):
+        self.ids = sorted(self.ids, key=lambda x: self.id_to_idx[x])
+        self.ids = [int(x) for x in self.ids]
 
     def load_node(self):
-        raise NotImplementedError
+        return pd.read_csv(self._node, index_col=0)
 
     def load_link(self):
-        raise NotImplementedError
+        return pd.read_csv(self._link)
 
-    def load_dist(self):
-        if self._dist.exists():
-            dist = pd.read_csv(self._dist, index_col=0)
-            dist.columns = [int(col) for col in dist.columns]
-        else:
-            G = graph.build_link_graph(self.load_node(), self.load_link())
-            dist = graph.graph_dist(G)
-            dist = dist.loc[self.ids, self.ids]
-            dist.to_csv(self._dist, index=True)
-        return dist
+    def load_ts(self, freq='5min'):
+        ts = pd.read_hdf(self._ts)
+        ts.columns = [int(col) for col in ts.columns]
+        ts = ts.loc[:, self.ids]
+        ts[ts==0.] = np.nan
+        return ts.resample(freq).mean()
 
-    def load_hop(self):
-        if self._hop.exists():
-            hop = pd.read_csv(self._hop, index_col=0, dtype=int)
-            hop.columns = [int(col) for col in hop.columns]
-        else:
-            G = graph.build_link_graph(self.load_node(), self.load_link())
-            hop = graph.graph_hop(G)
-            hop = hop.loc[self.ids, self.ids]
-            hop.to_csv(self._hop, index=True)
-        return hop
+    def load_adj(self):
+        return self.adj
 
 
-class BJLoader(LoaderBase):
-    def __init__(self, dataset='highway'):
-        self._path = Path(DATA_PATH)
-        self._path /= BJ_HIGHWAY_PATH if dataset == 'highway' else BJ_METRO_PATH
+class StationTraffic:
+    def __init__(self, dataset):
+        self._path = Path(DATASET_PATH) / dataset
         self._node = self._path / 'node.csv'
         self._link_raw = self._path / 'link_raw.csv'
         self._link = self._path / 'link.csv'
@@ -74,7 +67,7 @@ class BJLoader(LoaderBase):
         self._ts_d = self._path / 'D.csv'
         self._ts_od = self._path / 'OD.csv'
         self._ts_do = self._path / 'DO.csv'
-        self._od_sum = self._path / 'ODSUM.csv'
+        self._od = self._path / 'ODSUM.csv'
         self.ids = self._load_ids()
         self.id_to_idx = {id: i for i, id in enumerate(self.ids)}
 
@@ -118,10 +111,10 @@ class BJLoader(LoaderBase):
     def load_link(self):
         link = pd.read_csv(self._link)
 
-    def load_ts_o(self, freq='15min'):
+    def load_ts_o(self, freq):
         return self._load_ts('O').loc[:, self.ids].resample(freq).sum()
 
-    def load_ts_d(self, freq='15min'):
+    def load_ts_d(self, freq):
         return self._load_ts('D').loc[:, self.ids].resample(freq).sum()
 
     def load_ts(self, freq='15min'):
@@ -159,45 +152,3 @@ class BJLoader(LoaderBase):
             ret.loc[od.index, od.columns] = od
             ret.to_csv(self._od_sum, index=True)
         return ret
-
-    def load_adj(self):
-        dist = graph.calculate_dist_adj(self.load_dist())
-        od = self.load_od()
-        od = od / od.sum() * dist.sum()
-        adj0, adj1 = np.hstack((dist, od)), np.hstack((od, dist))
-        adj = np.vstack((adj0, adj1))
-        return adj
-
-
-class LALoader(LoaderBase):
-    def __init__(self):
-        self._path = Path(DATA_PATH) / LA_PATH
-        self.ids, self.id_to_idx, self.adj = pickle.load(
-            open(self._path / 'adj_mx.pkl', 'rb'))
-        self.adj[self.adj < 0.1] = 0
-        self._prep_ids()
-        self._node = self._path / 'graph_sensor_locations.csv'
-        self._ts = self._path / 'df_highway_2012_4mon_sample.h5'
-        self._link = self._path / 'distances_la_2012.csv'
-        self._dist = self._path / 'dist.csv'
-        self._hop = self._path / 'hop.csv'
-
-    def _prep_ids(self):
-        self.ids = sorted(self.ids, key=lambda x: self.id_to_idx[x])
-        self.ids = [int(x) for x in self.ids]
-
-    def load_node(self):
-        return pd.read_csv(self._node, index_col=0)
-
-    def load_link(self):
-        return pd.read_csv(self._link)
-
-    def load_ts(self, freq='5min'):
-        ts = pd.read_hdf(self._ts)
-        ts.columns = [int(col) for col in ts.columns]
-        ts = ts.loc[:, self.ids]
-        ts[ts==0.] = np.nan
-        return ts.resample(freq).mean()
-
-    def load_adj(self):
-        return self.adj
