@@ -13,7 +13,7 @@ from models import RNNSeq2Seq, RNNAttnSeq2Seq
 from models import DCRNN
 from models import GATRNN
 
-from lib.io import load_adj, load_distant_mask,gen_subsequent_mask
+from lib.io import load_adj, load_adj_mask
 
 
 def build_model(config, mean, std):
@@ -78,6 +78,7 @@ def build_isomlp(config, embedding):
         embedding=embedding,
         model_dim=config.model_dim,
         out_dim=config.horizon,
+        num_layers=config.num_layers,
         dropout=config.dropout
     )
 
@@ -126,7 +127,8 @@ def build_stransformer(config, embedding):
         out_dim=config.horizon,
         num_layers=config.num_layers,
         heads=config.heads,
-        dropout=config.dropout
+        dropout=config.dropout,
+        mask=load_adj_mask(config.dataset) if config.mask else None
     )
 
 

@@ -19,8 +19,8 @@ class Embedding(nn.Sequential):
 class ScalarEmbedding(nn.Module):
     def __init__(self, model_dim, dropout):
         super().__init__()
-        self.scalar_embedding = MLP(1, model_dim, dropout, bias=False)
-        self.nan_embedding = nn.Embedding(2, model_dim)
+        self.embedding_numerical = MLP(1, model_dim, dropout, bias=False)
+        self.embedding_nan = nn.Embedding(2, model_dim)
         self.drop = nn.Dropout(dropout)
 
     def forward(self, scalar):
@@ -28,16 +28,16 @@ class ScalarEmbedding(nn.Module):
         mask = torch.isnan(scalar)
         scalar.masked_fill_(mask, 0.)
         nan.masked_fill_(mask, 1)
-        emb_scalar = self.drop(self.scalar_embedding(scalar))
-        emb_nan = self.drop(self.nan_embedding(nan)).squeeze(-2)
+        emb_scalar = self.drop(self.embedding_numerical(scalar))
+        emb_nan = self.drop(self.embedding_nan(nan)).squeeze(-2)
         return emb_scalar + emb_nan
 
 
 class VectorEmbedding(nn.Module):
     def __init__(self, vec_dim, model_dim, dropout):
         super().__init__()
-        self.vec_embedding = MLP(vec_dim, model_dim, dropout, bias=False)
-        self.nan_embedding = nn.Embedding(vec_dim * 2, model_dim)
+        self.embedding_vector = MLP(vec_dim, model_dim, dropout, bias=False)
+        self.embedding_nan = nn.Embedding(vec_dim * 2, model_dim)
         self.drop = nn.Dropout(dropout)
         self.register_buffer('nan', torch.arange(vec_dim) * 2)
 
@@ -47,8 +47,8 @@ class VectorEmbedding(nn.Module):
         vec.masked_fill_(mask, 0.)
         nan.masked_fill_(mask, 1)
         nan = nan + self.nan
-        emb_vec = self.drop(self.vec_embedding(vec))
-        emb_nan = self.drop(self.nan_embedding(nan)).mean(dim=-2)
+        emb_vec = self.drop(self.embedding_vector(vec))
+        emb_nan = self.drop(self.embedding_nan(nan)).mean(dim=-2)
         return emb_vec + emb_nan
 
 
@@ -77,15 +77,16 @@ class STEmbedding(TEmbedding):
 
 
 class EmbeddingFusion(nn.Module):
-    def __init__(self, embedding_num, embedding_cat, model_dim, dropout):
+    def __init__(self, embedding_numerical, embedding_categorical,
+                 model_dim, dropout):
         super().__init__()
-        self.embedding_num = embedding_num
-        self.embedding_cat = embedding_cat
+        self.embedding_numerical = embedding_numerical
+        self.embedding_categorical = embedding_categorical
         self.resmlp = ResMLP(model_dim, dropout)
         self.ln = nn.LayerNorm(model_dim)
         self.register_parameter('nan', bias(model_dim))
 
     def forward(self, data, time, weekday):
-        emb_num = self.nan if data is None else self.embedding_num(data)
-        emb_cat = self.embedding_cat(time, weekday)
+        emb_num = self.nan if data is None else self.embedding_numerical(data)
+        emb_cat = self.embedding_categorical(time, weekday)
         return self.ln(self.resmlp(emb_num + emb_cat))

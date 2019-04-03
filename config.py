@@ -30,7 +30,7 @@ class Config:
         # model
         self.paradigm = None
         self.model = None
-        self.mask = None
+        self.mask = False
         # cuda
         self.cuda = False
         self.gpuid = 0

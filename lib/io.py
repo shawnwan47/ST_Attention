@@ -67,6 +67,11 @@ def load_adj(dataset):
     return torch.FloatTensor(adj)
 
 
+def load_adj_mask(dataset):
+    adj = load_adj(dataset)
+    return torch.ByteTensor(adj <= 0.1)
+
+
 def load_adj_long(dataset):
     loader = get_loader(dataset)
     dist = loader.load_dist().values
@@ -95,9 +100,3 @@ def gen_subsequent_time(time, length):
 def gen_subsequent_mask(length=24):
     mask = np.triu(np.ones((length, length)), k=1).astype('uint8')
     return torch.from_numpy(mask)
-
-
-def load_distant_mask(dataset):
-    adj = load_adj(dataset)
-    mask = adj == 0
-    return mask
