@@ -111,20 +111,20 @@ class StationTraffic:
     def load_link(self):
         link = pd.read_csv(self._link)
 
-    def load_ts_o(self, freq):
+    def _load_ts_o(self, freq):
         return self._load_ts('O').loc[:, self.ids].resample(freq).sum()
 
-    def load_ts_d(self, freq):
+    def _load_ts_d(self, freq):
         return self._load_ts('D').loc[:, self.ids].resample(freq).sum()
 
     def load_ts(self, freq='15min'):
-        o = self.load_ts_o(freq)
-        d = self.load_ts_d(freq)
+        o = self._load_ts_o(freq)
+        d = self._load_ts_d(freq)
         ts = pd.concat((o, d), axis=1).fillna(0)
         ts = ts.resample(freq).sum()
         return ts
 
-    def load_ts_od(self, od='OD', freq='5min'):
+    def load_ts_od(self, od='OD', freq='15min'):
         assert od in ['OD', 'DO']
         filepath = self._ts_od if od == 'OD' else self._ts_do
         ret = pd.read_csv(filepath,

@@ -37,7 +37,7 @@ class Config:
         self.seed = 47
         # optim
         self.criterion = 'L1Loss'
-        self.dropout = 0.1
+        self.dropout = 0.2
         self.weight_decay = 1e-5
         self.batch_size = None
         self.epoches = None

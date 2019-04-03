@@ -11,13 +11,15 @@ from constants import PEMS_BAY, METR_LA, BJ_SUBWAY, BJ_HIGHWAY
 
 def load_data(config):
     df = get_loader(config.dataset).load_ts(config.freq)
-    df = _filter_df(df, config.bday, config.start, config.end)
-    df_train, df_val, df_test = _split_dataset(df, config.train_ratio, config.test_ratio)
+    filter = _datetime_filter(df.index, config.bday, config.start, config.end)
+    df = df[filter]
+    idx_train, idx_valid, idx_test = _split_dataset(df.index, config.train_ratio, config.test_ratio)
+    df_train, df_valid, df_test = df[idx_train], df[idx_valid], df[idx_test]
     mean, std = df_train.mean().values, df_train.std().values
 
     dataset_train, dataset_valid, dataset_test = (
         TimeSeries(df, mean, std, config.history, config.horizon)
-        for df in (df_train, df_val, df_test)
+        for df in (df_train, df_valid, df_test)
     )
 
     data_train = DataLoader(dataset_train, config.batch_size, True)
@@ -28,28 +30,39 @@ def load_data(config):
     return data_train, data_validation, data_test, mean, std
 
 
-def _filter_df(df, bday, start, end):
-    time_filter = (df.index.hour >= start) & (df.index.hour < end)
+def load_data_od(config):
+    df = get_loader(config.dataset).load_ts_od(config.freq)
+    filter = _datetime_filter(df.index.get_level_values(0),
+                              config.bday, config.start, config.end)
+    df = df[filter]
+    idx_train, idx_valid, idx_test = _split_dataset(df.index.get_level_values(0),
+                                                  config.train_ratio,
+                                                  config.test_ratio)
+    df_train, df_valid, df_test = df[idx_train], df[idx_valid], df[idx_test]
+
+
+
+
+def _datetime_filter(idx, bday, start, end):
+    filter = (idx.hour >= start) & (idx.hour < end)
     if bday:
-        bday_filter = df.index.weekday < 5
-        return df[time_filter & bday_filter]
-    else:
-        return df[time_filter]
+        bday_filter = idx.weekday < 5
+        filter &= bday_filter
+    return filter
 
 
-def _split_dataset(df, train_ratio=0.7, test_ratio=0.2):
+def _split_dataset(idx, train_ratio=0.7, test_ratio=0.2):
     # calculate dates
-    days = len(np.unique(df.index.date))
+    days = len(np.unique(idx.date))
     days_train = pd.Timedelta(days=round(days * train_ratio))
     days_test = pd.Timedelta(days=round(days * test_ratio))
-    date_train = df.index[0].date() + days_train
-    date_test = df.index[-1].date() - days_test
+    date_train = idx[0].date() + days_train
+    date_test = idx[-1].date() - days_test
     # select df
-    dateindex = df.index.date
-    df_train = df[dateindex < date_train]
-    df_val = df[(dateindex >= date_train) & (dateindex < date_test)]
-    df_test = df[dateindex >= date_test]
-    return df_train, df_val, df_test
+    idx_train = idx.date < date_train
+    idx_valid = (idx.date >= date_train) & (idx.date < date_test)
+    idx_test = idx.date >= date_test
+    return idx_train, idx_valid, idx_test
 
 
 def load_adj(dataset):
