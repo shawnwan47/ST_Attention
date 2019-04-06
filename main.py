@@ -3,10 +3,11 @@ import torch
 import torch.nn as nn
 from torch.optim import Adam
 from torch.nn.utils import clip_grad_norm_
+from torch.utils.data import DataLoader
 
 from config import Config
 from lib import TimeSeriesLoss, MetricDict, mask_target
-from lib.io import load_data
+from lib.io import load_dataset
 from builder import build_model
 
 
@@ -27,7 +28,10 @@ def _cuda(config):
 def train(**kwargs):
     config = Config(**kwargs)
     _cuda(config)
-    loader_train, loader_valid, loader_test, mean, std = load_data(config)
+    dataset_train, dataset_valid, dataset_test, mean, std = load_dataset(config)
+    loader_train = DataLoader(dataset_train, config.batch_size, True)
+    loader_valid = DataLoader(dataset_valid, config.batch_size)
+    loader_test = DataLoader(dataset_test, config.batch_size)
     model = build_model(config, mean, std)
     criterion = getattr(nn, config.criterion)()
     loss = TimeSeriesLoss(metrics=config.metrics, horizons=config.horizons)
@@ -74,14 +78,16 @@ def train(**kwargs):
 def test(**kwargs):
     config = Config(**kwargs)
     _cuda(config)
-    _, _, dataloader, mean, std = load_data(config)
+    _, _, dataset_test, mean, std = load_dataset(config)
+    dataloader = DataLoader(dataset_test, config.batch_size)
     model = build_model(config, mean, std)
     model.load_state_dict(torch.load(config.path_model))
     loss = TimeSeriesLoss(metrics=config.metrics, horizons=config.horizons)
     loss_test, output, attn = _eval(model, dataloader, loss, config.cuda, verbose=True)
+    print(loss_test)
+    output, attn = output[:config.num_times], attn[:config.num_times]
     np.save(open(config.path_result.with_suffix('.output'), 'wb'), output)
     np.save(open(config.path_result.with_suffix('.attn'), 'wb'), attn)
-    print(loss_test)
 
 
 def _eval(model, dataloader, loss, cuda, verbose=False):

@@ -12,6 +12,7 @@ from models import Transformer, STransformer, STTransformer
 from models import RNNSeq2Seq, RNNAttnSeq2Seq
 from models import DCRNN
 from models import GATRNN
+from models import GAAT
 
 from lib.io import load_adj, load_adj_mask
 
@@ -36,6 +37,8 @@ def build_model(config, mean, std):
         model = build_dcrnn(config, embedding)
     elif config.model == 'GATRNN':
         model = build_gatrnn(config, embedding)
+    elif config.model == 'GAAT':
+        model = build_gaat(config, embedding)
     else:
         raise KeyError('Model not implemented!')
     num_params = sum(p.numel() for p in model.parameters())
@@ -181,4 +184,16 @@ def build_gatrnn(config, embedding):
         horizon=config.horizon,
         heads=config.heads,
         dropout=config.dropout
+    )
+
+
+def build_gaat(config, embedding):
+    return GAAT(
+        embedding=embedding,
+        model_dim=config.model_dim,
+        out_dim=config.horizon,
+        num_layers=config.num_layers,
+        heads=config.heads,
+        dropout=config.dropout,
+        mask=load_adj_mask(config.dataset) if config.mask else None
     )

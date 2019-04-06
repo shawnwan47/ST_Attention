@@ -4,3 +4,4 @@ from models.rnn import RNNSeq2Seq, RNNAttnSeq2Seq
 from models.dcrnn import DCRNN
 from models.gatrnn import GATRNN
 from models.transformer import Transformer, STransformer, STTransformer
+from models.gaat import GAAT

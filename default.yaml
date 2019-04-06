@@ -80,6 +80,12 @@ model:
       num_layers: 1
       heads: 4
       mask: False
+    GAAT:
+      paradigm: s
+      model_dim: 64
+      num_layers: 1
+      heads: 4
+      mask: False
     RNN:
       paradigm: t
       rnn_type: GRU

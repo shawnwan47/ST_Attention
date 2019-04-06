@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 import torch
-from torch.utils.data import DataLoader
 
 from lib.time_series import TimeSeries
 from lib.loaders import get_loader
@@ -9,7 +8,7 @@ from lib.loaders import get_loader
 from constants import PEMS_BAY, METR_LA, BJ_SUBWAY, BJ_HIGHWAY
 
 
-def load_data(config):
+def load_dataset(config):
     df = get_loader(config.dataset).load_ts(config.freq)
     filter = _datetime_filter(df.index, config.bday, config.start, config.end)
     df = df[filter]
@@ -22,12 +21,9 @@ def load_data(config):
         for df in (df_train, df_valid, df_test)
     )
 
-    data_train = DataLoader(dataset_train, config.batch_size, True)
-    data_validation = DataLoader(dataset_valid, config.batch_size)
-    data_test = DataLoader(dataset_test, config.batch_size)
     mean, std = torch.FloatTensor(mean), torch.FloatTensor(std)
 
-    return data_train, data_validation, data_test, mean, std
+    return dataset_train, dataset_valid, dataset_test, mean, std
 
 
 def load_data_od(config):
@@ -82,7 +78,7 @@ def load_adj(dataset):
 
 def load_adj_mask(dataset):
     adj = load_adj(dataset)
-    return torch.ByteTensor(adj <= 0.1)
+    return torch.ByteTensor(adj <= 0.01)
 
 
 def load_adj_long(dataset):

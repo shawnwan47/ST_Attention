@@ -104,7 +104,7 @@ class TransformerDecoder(nn.Module):
             TransformerDecoderLayer(model_dim, heads, dropout)
             for _ in range(num_layers)
         ])
-        self.decoder = MLP(model_dim, out_dim, dropout)
+        self.decoder = nn.Linear(model_dim, out_dim, dropout)
 
     def forward(self, query, bank):
         for layer in self.layers:
@@ -133,7 +133,7 @@ class STTransformerDecoder(nn.Module):
             STTransformerDecoderLayer(model_dim, heads, dropout)
             for _ in range(num_layers)
         ])
-        self.decoder = MLP(model_dim, 1, dropout)
+        self.decoder = nn.Linear(model_dim, 1, dropout)
 
     def forward(self, input, bank):
         for layer in self.layers:
