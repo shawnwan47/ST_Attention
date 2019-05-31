@@ -27,6 +27,8 @@ def _cuda(config):
 
 def train(**kwargs):
     config = Config(**kwargs)
+    config.set_dataset()
+    config.set_model()
     _cuda(config)
     dataset_train, dataset_valid, dataset_test, mean, std = load_dataset(config)
     loader_train = DataLoader(dataset_train, config.batch_size, True)
@@ -77,6 +79,8 @@ def train(**kwargs):
 
 def test(**kwargs):
     config = Config(**kwargs)
+    config.set_dataset()
+    config.set_model()
     _cuda(config)
     _, _, dataset_test, mean, std = load_dataset(config)
     dataloader = DataLoader(dataset_test, config.batch_size)

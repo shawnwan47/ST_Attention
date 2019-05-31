@@ -33,16 +33,16 @@ class MLP(nn.Module):
 
 
 class ResMLP(nn.Module):
-    def __init__(self, model_dim, dropout):
+    def __init__(self, model_dim, hidden_size=None, dropout=0.1):
         super().__init__()
-        self.w_1 = nn.Linear(model_dim, model_dim)
-        self.w_2 = nn.Linear(model_dim, model_dim)
-        self.layer_norm = nn.LayerNorm(model_dim, eps=1e-6)
-        self.dropout_1 = nn.Dropout(dropout)
+        hidden_size = model_dim if not hidden_size else hidden_size
+        self.fc_1 = nn.Linear(model_dim, hidden_size)
+        self.fc_2 = nn.Linear(hidden_size, model_dim)
+        self.ln = nn.LayerNorm(model_dim, eps=1e-6)
+        self.drop = nn.Dropout(dropout)
         self.relu = nn.ReLU()
-        self.dropout_2 = nn.Dropout(dropout)
 
     def forward(self, input):
-        hidden = self.dropout_1(self.relu(self.w_1(self.layer_norm(input))))
-        output = self.dropout_2(self.w_2(hidden))
+        hidden = self.drop(self.relu(self.fc_1(self.ln(input))))
+        output = self.drop(self.fc_2(hidden))
         return output + input

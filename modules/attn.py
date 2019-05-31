@@ -41,7 +41,8 @@ class MultiHeadedAttention(nn.Module):
         attn = self.attend(query, bank, mask)
         value = self.shape(self.fc_v(bank))
         context = self.unshape(torch.matmul(self.drop(attn), value))
-        return self.fc_out(context), attn
+        output = self.fc_out(context), attn
+        return output, attn
 
 
 class HeadAttendedAttention(MultiHeadedAttention):

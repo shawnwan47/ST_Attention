@@ -2,17 +2,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 
-import Loader
 
 
 def savefig(path):
     plt.tight_layout()
-    plt.savefig(path + '.png')
+    plt.savefig(path + '.png', dpi=300)
 
 
 class MapPainter:
     def __init__(self, dataset):
-        loader = Loader(dataset)
+        loader = get_loader(dataset)
         self.link = loader.load_link()
         self.station = loader.load_station()
         self.station_raw = loader.load_station_raw()
@@ -36,20 +35,9 @@ class MapPainter:
                     s=val*scale, alpha=0.5, edgecolors='none')
 
 
-class RelationPainter(MapPainter):
-    def __init__(self, dataset, relation, idx=None):
-        '''
-        relation: day x time x loc x loc
-        '''
-        assert len(relation.shape) == 4
-        super().__init__(dataset)
-
-
-
 class ODPlotter:
     def __init__(self, dataset):
-        assert dataset in ['BJ_higway', 'BJ_metro']
-        loader = Loader(dataset)
+        loader = get_loader(dataset)
         self.station = loader.load_station()
         self.routes = self._get_routes(self.station)
 

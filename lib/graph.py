@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 import scipy.sparse as sp
 from scipy.sparse import linalg
 import networkx as nx
-from lib.utils import aeq
 
 ################################################################################
 # Build
@@ -119,18 +118,6 @@ def digitize_dist(dist, num=16):
     dist[dist > dist_median] = dist_median
     dist = np.ceil(dist / dist_median * (num - 1)).astype(int)
     return dist
-
-
-def digitize_od(od, num=8):
-    def model(data):
-        bins = np.linspace(data.min(), data.max(), num + 1)
-        digit = np.digitize(data, bins)
-        return digit
-    do_ = od / (od.sum(0) + 1e-8)
-    od_ = od.T / (od.sum(1) + 1e-8)
-    od_ = model(od_.T)
-    do_ = model(do_.T)
-    return od_, do_
 
 
 def graph_dist(G):

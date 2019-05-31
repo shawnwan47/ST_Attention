@@ -42,12 +42,12 @@ class RoadTraffic:
     def load_link(self):
         return pd.read_csv(self._link)
 
-    def load_ts(self, freq='5min'):
+    def load_ts(self):
         ts = pd.read_hdf(self._ts)
         ts.columns = [int(col) for col in ts.columns]
         ts = ts.loc[:, self.ids]
         ts[ts==0.] = np.nan
-        return ts.resample(freq).mean()
+        return ts.resample('5min').mean()
 
     def load_adj(self):
         return self.adj
@@ -111,20 +111,19 @@ class StationTraffic:
     def load_link(self):
         link = pd.read_csv(self._link)
 
-    def _load_ts_o(self, freq):
-        return self._load_ts('O').loc[:, self.ids].resample(freq).sum()
+    def _load_ts_o(self):
+        return self._load_ts('O').loc[:, self.ids].resample('15min').sum()
 
-    def _load_ts_d(self, freq):
-        return self._load_ts('D').loc[:, self.ids].resample(freq).sum()
+    def _load_ts_d(self):
+        return self._load_ts('D').loc[:, self.ids].resample('15min').sum()
 
-    def load_ts(self, freq='15min'):
-        o = self._load_ts_o(freq)
-        d = self._load_ts_d(freq)
+    def load_ts(self):
+        o = self._load_ts_o()
+        d = self._load_ts_d()
         ts = pd.concat((o, d), axis=1).fillna(0)
-        ts = ts.resample(freq).sum()
         return ts
 
-    def load_ts_od(self, od='OD', freq='15min'):
+    def load_ts_od(self, od='OD'):
         assert od in ['OD', 'DO']
         filepath = self._ts_od if od == 'OD' else self._ts_do
         ret = pd.read_csv(filepath,
@@ -146,7 +145,7 @@ class StationTraffic:
             ret = pd.read_csv(self._od_sum, index_col=0)
             ret.columns = [int(col) for col in ret.columns]
         else:
-            od = self.load_ts_od(freq='1d').groupby(['Entry', 'Exit']).sum()
+            od = self.load_ts_od().groupby(['Entry', 'Exit']).sum()
             od = od.unstack().fillna(0)
             ret = pd.DataFrame(0, index=self.ids, columns=self.ids)
             ret.loc[od.index, od.columns] = od

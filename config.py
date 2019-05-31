@@ -7,11 +7,9 @@ from pathlib import Path
 class Config:
     def __init__(self, **kwargs):
         self.init_config()
-        default_config = yaml.load(open(CONFIG))
+        self.default = yaml.load(open(CONFIG))
         for k, v in kwargs.items():
             setattr(self, k, v)
-        self.set_dataset(default_config['data'])
-        self.set_model(default_config['model'])
 
     def set_config(self, kwargs):
         for k, v in kwargs.items():
@@ -48,8 +46,9 @@ class Config:
         self.path_result = Path(RESULT_PATH)
         self.path_fig = Path(FIG_PATH)
 
-    def set_dataset(self, default):
+    def set_dataset(self):
         assert self.dataset in DATASETS
+        default = self.default['data']
         self.path_dataset /= self.dataset
         self.path_model /= self.dataset
         self.path_result /= self.dataset
@@ -63,8 +62,9 @@ class Config:
         self.num_times = (self.end - self.start) * 60 // self.freq
         self.freq = str(self.freq) + 'min'
 
-    def set_model(self, default):
+    def set_model(self):
         assert self.model is not None
+        default = self.default['model']
         self.set_config(default['model'][self.model])
         self.set_config(default['paradigm'][self.paradigm])
         # model name
