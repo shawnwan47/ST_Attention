@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 
 
-class MultiHeadedAttention(nn.Module):
+class MultiheadAttention(nn.Module):
     def __init__(self, model_dim, heads, dropout=0.2, out_dim=None):
         assert model_dim % heads == 0
         if out_dim is None:
@@ -41,11 +41,11 @@ class MultiHeadedAttention(nn.Module):
         attn = self.attend(query, bank, mask)
         value = self.shape(self.fc_v(bank))
         context = self.unshape(torch.matmul(self.drop(attn), value))
-        output = self.fc_out(context), attn
+        output = self.fc_out(context)
         return output, attn
 
 
-class HeadAttendedAttention(MultiHeadedAttention):
+class HeadAttendedAttention(MultiheadAttention):
     def __init__(self, model_dim, heads, dropout=0.1, out_dim=None):
         super().__init__(model_dim, heads, dropout, out_dim)
         self.fc_q_head = nn.Linear(model_dim, heads)

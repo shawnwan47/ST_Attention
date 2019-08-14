@@ -33,11 +33,10 @@ class MLP(nn.Module):
 
 
 class ResMLP(nn.Module):
-    def __init__(self, model_dim, hidden_size=None, dropout=0.1):
+    def __init__(self, model_dim, dropout=0.1):
         super().__init__()
-        hidden_size = model_dim if not hidden_size else hidden_size
-        self.fc_1 = nn.Linear(model_dim, hidden_size)
-        self.fc_2 = nn.Linear(hidden_size, model_dim)
+        self.fc_1 = nn.Linear(model_dim, model_dim)
+        self.fc_2 = nn.Linear(model_dim, model_dim)
         self.ln = nn.LayerNorm(model_dim, eps=1e-6)
         self.drop = nn.Dropout(dropout)
         self.relu = nn.ReLU()

@@ -9,7 +9,7 @@ from constants import PEMS_BAY, METR_LA, BJ_SUBWAY, BJ_HIGHWAY
 
 
 def load_dataset(config):
-    df = get_loader(config.dataset).load_ts(config.freq)
+    df = get_loader(config.dataset).load_ts()
     filter = _datetime_filter(df.index, config.bday, config.start, config.end)
     df = df[filter]
     idx_train, idx_valid, idx_test = _split_dataset(df.index, config.train_ratio, config.test_ratio)

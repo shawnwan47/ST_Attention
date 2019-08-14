@@ -82,7 +82,7 @@ class EmbeddingFusion(nn.Module):
         super().__init__()
         self.embedding_numerical = embedding_numerical
         self.embedding_categorical = embedding_categorical
-        self.resmlp = ResMLP(model_dim, dropout)
+        self.resmlp = ResMLP(model_dim, dropout=dropout)
         self.ln = nn.LayerNorm(model_dim)
         self.register_parameter('nan', bias(model_dim))
 

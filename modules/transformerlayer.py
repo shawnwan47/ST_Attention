@@ -1,11 +1,11 @@
 import torch.nn as nn
-from modules import MultiHeadedAttention, ResMLP
+from modules import ResMLP, MultiheadAttention
 
 
 class TransformerLayer(nn.Module):
-    def __init__(self, model_dim, heads, dropout):
+    def __init__(self, model_dim, num_heads, dropout):
         super().__init__()
-        self.attn = MultiHeadedAttention(model_dim, heads, dropout)
+        self.attn = MultiheadAttention(model_dim, num_heads, dropout)
         self.drop = nn.Dropout(dropout)
         self.resmlp = ResMLP(model_dim, dropout)
         self.ln = nn.LayerNorm(model_dim)
@@ -18,10 +18,10 @@ class TransformerLayer(nn.Module):
 
 
 class TransformerDecoderLayer(nn.Module):
-    def __init__(self, model_dim, heads, dropout):
+    def __init__(self, model_dim, num_heads, dropout):
         super().__init__()
-        self.layer_bank = TransformerLayer(model_dim, heads, dropout)
-        self.layer_self = TransformerLayer(model_dim, heads, dropout)
+        self.layer_bank = TransformerLayer(model_dim, num_heads, dropout)
+        self.layer_self = TransformerLayer(model_dim, num_heads, dropout)
 
     def forward(self, input, bank):
         input_self, attn_bank = self.layer_bank(input, bank)
@@ -30,10 +30,10 @@ class TransformerDecoderLayer(nn.Module):
 
 
 class STTransformerLayer(nn.Module):
-    def __init__(self, model_dim, heads, dropout):
+    def __init__(self, model_dim, num_heads, dropout):
         super().__init__()
-        self.layer_t = TransformerLayer(model_dim, heads, dropout)
-        self.layer_s = TransformerLayer(model_dim, heads, dropout)
+        self.layer_t = TransformerLayer(model_dim, num_heads, dropout)
+        self.layer_s = TransformerLayer(model_dim, num_heads, dropout)
 
     def forward(self, query, bank=None):
         query_t = query.transpose(1, 2)
@@ -43,10 +43,10 @@ class STTransformerLayer(nn.Module):
 
 
 class STTransformerDecoderLayer(nn.Module):
-    def __init__(self, model_dim, heads, dropout):
+    def __init__(self, model_dim, num_heads, dropout):
         super().__init__()
-        self.layer_bank = STTransformerLayer(model_dim, heads, dropout)
-        self.layer_self = STTransformerLayer(model_dim, heads, dropout)
+        self.layer_bank = STTransformerLayer(model_dim, num_heads, dropout)
+        self.layer_self = STTransformerLayer(model_dim, num_heads, dropout)
 
     def forward(self, input, bank):
         input_self = self.layer_bank(input, bank)

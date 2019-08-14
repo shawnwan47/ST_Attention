@@ -8,11 +8,11 @@ from lib.io import gen_subsequent_time
 
 
 class STransformer(nn.Module):
-    def __init__(self, embedding, model_dim, out_dim, num_layers, heads,
+    def __init__(self, embedding, model_dim, out_dim, num_layers, num_heads,
                  dropout, mask=None):
         super().__init__()
         self.embedding = embedding
-        self.encoder = TransformerEncoder(model_dim, num_layers, heads,
+        self.encoder = TransformerEncoder(model_dim, num_layers, num_heads,
                                           dropout, mask)
         self.decoder = MLP(model_dim, out_dim, dropout)
 
@@ -25,21 +25,21 @@ class STransformer(nn.Module):
 
 class Transformer(nn.Module):
     def __init__(self, embedding, model_dim, out_dim,
-                 encoder_layers, decoder_layers, heads,
+                 encoder_layers, decoder_layers, num_heads,
                  horizon, dropout):
         super().__init__()
         self.embedding = embedding
         self.encoder = TransformerEncoder(
             model_dim=model_dim,
             num_layers=encoder_layers,
-            heads=heads,
+            num_heads=num_heads,
             dropout=dropout
         )
         self.decoder = TransformerDecoder(
             model_dim=model_dim,
             out_dim=out_dim,
             num_layers=decoder_layers,
-            heads=heads,
+            num_heads=num_heads,
             dropout=dropout
         )
         self.horizon = horizon
@@ -53,20 +53,20 @@ class Transformer(nn.Module):
 
 class STTransformer(nn.Module):
     def __init__(self, embedding, model_dim,
-                 encoder_layers, decoder_layers, heads,
+                 encoder_layers, decoder_layers, num_heads,
                  horizon, dropout):
         super().__init__()
         self.embedding = embedding
         self.encoder = STTransformerEncoder(
             model_dim=model_dim,
             num_layers=encoder_layers,
-            heads=heads,
+            num_heads=num_heads,
             dropout=dropout
         )
         self.decoder = STTransformerDecoder(
             model_dim=model_dim,
             num_layers=decoder_layers,
-            heads=heads,
+            num_heads=num_heads,
             dropout=dropout
         )
         self.horizon = horizon
@@ -80,10 +80,10 @@ class STTransformer(nn.Module):
 
 
 class TransformerEncoder(nn.Module):
-    def __init__(self, model_dim, num_layers, heads, dropout, mask=None):
+    def __init__(self, model_dim, num_layers, num_heads, dropout, mask=None):
         super().__init__()
         self.layers = nn.ModuleList([
-            TransformerLayer(model_dim, heads, dropout)
+            TransformerLayer(model_dim, num_heads, dropout)
             for _ in range(num_layers)
         ])
         self.register_buffer('mask', mask)
@@ -98,10 +98,10 @@ class TransformerEncoder(nn.Module):
 
 
 class TransformerDecoder(nn.Module):
-    def __init__(self, model_dim, out_dim, num_layers, heads, dropout):
+    def __init__(self, model_dim, out_dim, num_layers, num_heads, dropout):
         super().__init__()
         self.layers = nn.ModuleList([
-            TransformerDecoderLayer(model_dim, heads, dropout)
+            TransformerDecoderLayer(model_dim, num_heads, dropout)
             for _ in range(num_layers)
         ])
         self.decoder = nn.Linear(model_dim, out_dim, dropout)
@@ -113,10 +113,10 @@ class TransformerDecoder(nn.Module):
 
 
 class STTransformerEncoder(nn.Module):
-    def __init__(self, model_dim, num_layers, heads, dropout):
+    def __init__(self, model_dim, num_layers, num_heads, dropout):
         super().__init__()
         self.layers = nn.ModuleList([
-            STTransformerLayer(model_dim, heads, dropout)
+            STTransformerLayer(model_dim, num_heads, dropout)
             for _ in range(num_layers)
         ])
 
@@ -127,10 +127,10 @@ class STTransformerEncoder(nn.Module):
 
 
 class STTransformerDecoder(nn.Module):
-    def __init__(self, model_dim, num_layers, heads, dropout):
+    def __init__(self, model_dim, num_layers, num_heads, dropout):
         super().__init__()
         self.layers = nn.ModuleList([
-            STTransformerDecoderLayer(model_dim, heads, dropout)
+            STTransformerDecoderLayer(model_dim, num_heads, dropout)
             for _ in range(num_layers)
         ])
         self.decoder = nn.Linear(model_dim, 1, dropout)

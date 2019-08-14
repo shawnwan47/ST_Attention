@@ -67,24 +67,24 @@ model:
       model_dim: 16
       encoder_layers: 1
       decoder_layers: 1
-      heads: 4
+      num_heads: 4
     Transformer:
       paradigm: t
       model_dim: 64
       encoder_layers: 1
       decoder_layers: 1
-      heads: 4
+      num_heads: 4
     STransformer:
       paradigm: s
       model_dim: 64
       num_layers: 1
-      heads: 4
+      num_heads: 4
       mask: False
     GAAT:
       paradigm: s
       model_dim: 64
       num_layers: 1
-      heads: 4
+      num_heads: 4
       mask: False
     RNN:
       paradigm: t
@@ -96,7 +96,7 @@ model:
       rnn_type: GRU
       model_dim: 64
       num_layers: 1
-      heads: 4
+      num_heads: 4
     DCRNN:
       paradigm: st
       framework: seq2seq
@@ -110,4 +110,4 @@ model:
       rnn_attn: False
       model_dim: 32
       num_layers: 1
-      heads: 4
+      num_heads: 4

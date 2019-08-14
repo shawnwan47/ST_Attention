@@ -7,7 +7,7 @@
   "deleteLocal": false,
   "hostname": "222.29.2.55",
   "port": "22",
-  "target": "/home/wdxu/wansheng/ST_Attention",
+  "target": "/home/wdxu/ws/ST_Attention",
   "ignore": [
     ".remote-sync.json",
     ".git/**",

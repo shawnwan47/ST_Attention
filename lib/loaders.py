@@ -89,6 +89,12 @@ class StationTraffic:
         ts.columns = [int(col) for col in ts.columns]
         return ts
 
+    def _load_ts_o(self):
+        return self._load_ts('O').loc[:, self.ids].resample('15min').sum()
+
+    def _load_ts_d(self):
+        return self._load_ts('D').loc[:, self.ids].resample('15min').sum()
+
     def _load_link_raw(self):
         return pd.read_csv(self._link_raw, dtype=int)
 
@@ -110,12 +116,6 @@ class StationTraffic:
 
     def load_link(self):
         link = pd.read_csv(self._link)
-
-    def _load_ts_o(self):
-        return self._load_ts('O').loc[:, self.ids].resample('15min').sum()
-
-    def _load_ts_d(self):
-        return self._load_ts('D').loc[:, self.ids].resample('15min').sum()
 
     def load_ts(self):
         o = self._load_ts_o()

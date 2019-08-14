@@ -105,7 +105,7 @@ def build_sttransformer(config, embedding):
         dropout=config.dropout,
         encoder_layers=config.encoder_layers,
         decoder_layers=config.decoder_layers,
-        heads=config.heads,
+        num_heads=config.num_heads,
         horizon=config.horizon
     )
 
@@ -117,7 +117,7 @@ def build_transformer(config, embedding):
         out_dim=config.num_nodes,
         encoder_layers=config.encoder_layers,
         decoder_layers=config.decoder_layers,
-        heads=config.heads,
+        num_heads=config.num_heads,
         dropout=config.dropout,
         horizon=config.horizon
     )
@@ -129,7 +129,7 @@ def build_stransformer(config, embedding):
         model_dim=config.model_dim,
         out_dim=config.horizon,
         num_layers=config.num_layers,
-        heads=config.heads,
+        num_heads=config.num_heads,
         dropout=config.dropout,
         mask=load_adj_mask(config.dataset) if config.mask else None
     )
@@ -153,7 +153,7 @@ def build_rnnattn(config, embedding):
         rnn_type=config.rnn_type,
         model_dim=config.model_dim,
         num_layers=config.num_layers,
-        heads=config.heads,
+        num_heads=config.num_heads,
         out_dim=config.num_nodes,
         dropout=config.dropout,
         horizon=config.horizon
@@ -182,7 +182,7 @@ def build_gatrnn(config, embedding):
         model_dim=config.model_dim,
         num_layers=config.num_layers,
         horizon=config.horizon,
-        heads=config.heads,
+        num_heads=config.num_heads,
         dropout=config.dropout
     )
 
@@ -193,7 +193,7 @@ def build_gaat(config, embedding):
         model_dim=config.model_dim,
         out_dim=config.horizon,
         num_layers=config.num_layers,
-        heads=config.heads,
+        num_heads=config.num_heads,
         dropout=config.dropout,
         mask=load_adj_mask(config.dataset) if config.mask else None
     )

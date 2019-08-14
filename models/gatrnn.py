@@ -3,7 +3,7 @@ from random import random
 import torch
 import torch.nn as nn
 
-from modules import MultiHeadedAttention
+from modules import MultiheadAttention
 from modules import GraphGRUModel
 
 
@@ -26,7 +26,7 @@ class GATRNN(GraphGRUModel):
 class GAT(nn.Module):
     def __init__(self, input_dim, output_dim, heads, dropout):
         super().__init__()
-        self.attn = MultiHeadedAttention(
+        self.attn = MultiheadAttention(
             model_dim=input_dim,
             out_dim=output_dim,
             heads=heads,

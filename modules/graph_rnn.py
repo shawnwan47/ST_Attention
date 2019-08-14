@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from modules import MLP, MultiHeadedAttention
+from modules import MLP, MultiheadAttention
 
 
 class GraphGRUModel(nn.Module):
@@ -242,7 +242,7 @@ class GraphGRUCell(nn.Module):
 class GraphRNNAttention(nn.Module):
     def __init__(self, model_dim, output_dim, dropout):
         super().__init__()
-        self.attn = MultiHeadedAttention(model_dim, heads=1, dropout=dropout, out_dim=output_dim)
+        self.attn = MultiheadAttention(model_dim, heads=1, dropout=dropout, out_dim=output_dim)
 
     def forward(self, query, bank):
         context = self.attn(query.transpose(1, 2), bank.transpose(1, 2))
