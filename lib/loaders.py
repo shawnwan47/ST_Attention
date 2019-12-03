@@ -18,7 +18,6 @@ def get_loader(dataset):
         raise(KeyError('no such dataset!'))
 
 
-
 class RoadTraffic:
     def __init__(self, dataset):
         self._path = Path(DATASET_PATH) / dataset

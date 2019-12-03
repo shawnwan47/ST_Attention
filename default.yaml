@@ -56,33 +56,42 @@ model:
     IsoMLP:
       paradigm: s
       model_dim: 32
+      time_dim: 8
+      weekday_dim: 8
+      node_dim: 16
     IsoRNN:
       paradigm: st
       framework: seq2seq
       rnn_attn: False
       model_dim: 32
+      time_dim: 8
+      weekday_dim: 8
+      node_dim: 16
       num_layers: 1
     STTransformer:
       paradigm: st
       model_dim: 16
+      time_dim: 8
+      weekday_dim: 8
+      node_dim: 8
       encoder_layers: 1
       decoder_layers: 1
       num_heads: 4
     Transformer:
       paradigm: t
       model_dim: 64
+      time_dim: 16
+      weekday_dim: 16
+      node_dim: 32
       encoder_layers: 1
       decoder_layers: 1
       num_heads: 4
     STransformer:
       paradigm: s
       model_dim: 64
-      num_layers: 1
-      num_heads: 4
-      mask: False
-    GAAT:
-      paradigm: s
-      model_dim: 64
+      time_dim: 16
+      weekday_dim: 16
+      node_dim: 32
       num_layers: 1
       num_heads: 4
       mask: False
@@ -90,11 +99,15 @@ model:
       paradigm: t
       rnn_type: GRU
       model_dim: 64
+      time_dim: 32
+      weekday_dim: 32
       num_layers: 1
     RNNAttn:
       paradigm: t
       rnn_type: GRU
       model_dim: 64
+      time_dim: 32
+      weekday_dim: 32
       num_layers: 1
       num_heads: 4
     DCRNN:
@@ -102,6 +115,9 @@ model:
       framework: seq2seq
       rnn_attn: False
       model_dim: 32
+      time_dim: 16
+      weekday_dim: 16
+      node_dim: 16
       num_layers: 1
       hops: 2
     GATRNN:
@@ -109,5 +125,8 @@ model:
       framework: seq2seq
       rnn_attn: False
       model_dim: 32
+      time_dim: 16
+      weekday_dim: 16
+      node_dim: 16
       num_layers: 1
       num_heads: 4

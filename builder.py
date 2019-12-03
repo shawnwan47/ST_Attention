@@ -17,8 +17,8 @@ from models import GAAT
 from lib.io import load_adj, load_adj_mask
 
 
-def build_model(config, mean, std):
-    embedding = build_embedding(config)
+def build_model(config, mean, std, latitude, longitude):
+    embedding = build_embedding(config, latitude, longitude)
     if config.model == 'IsoMLP':
         model = build_isomlp(config, embedding)
     elif config.model == 'IsoRNN':
@@ -51,12 +51,13 @@ def build_model(config, mean, std):
     return model
 
 
-def build_embedding(config):
+def build_embedding(config, latitude, longitude):
     if config.paradigm == 't':
         data_mlp = VectorEmbedding(config.num_nodes, config.model_dim, config.dropout)
-        # data_mlp = MLP(config.num_nodes, config.model_dim, config.dropout)
         embedding = TEmbedding(
             num_times=config.num_times,
+            time_dim=config.time_dim,
+            weekday_dim=config.weekday_dim,
             model_dim=config.model_dim,
             dropout=config.dropout
         )
@@ -64,14 +65,15 @@ def build_embedding(config):
         embedding = STEmbedding(
             num_nodes=config.num_nodes,
             num_times=config.num_times,
+            time_dim=config.time_dim,
+            weekday_dim=config.weekday_dim,
+            node_dim=config.node_dim,
             model_dim=config.model_dim,
             dropout=config.dropout
         )
         if config.paradigm == 's':
-            # data_mlp = MLP(config.history, config.model_dim, config.dropout)
             data_mlp = VectorEmbedding(config.history, config.model_dim, config.dropout)
         else:
-            # data_mlp = MLP(1, config.model_dim, config.dropout)
             data_mlp = ScalarEmbedding(config.model_dim, config.dropout)
     return EmbeddingFusion(data_mlp, embedding, config.model_dim, config.dropout)
 

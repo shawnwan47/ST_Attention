@@ -9,34 +9,39 @@ from constants import PEMS_BAY, METR_LA, BJ_SUBWAY, BJ_HIGHWAY
 
 
 def load_dataset(config):
-    df = get_loader(config.dataset).load_ts()
-    filter = _datetime_filter(df.index, config.bday, config.start, config.end)
-    df = df[filter]
-    idx_train, idx_valid, idx_test = _split_dataset(df.index, config.train_ratio, config.test_ratio)
-    df_train, df_valid, df_test = df[idx_train], df[idx_valid], df[idx_test]
-    mean, std = df_train.mean().values, df_train.std().values
+    loader = get_loader(config.dataset)
+    ts = loader.load_ts()
+    node = loader.load_node()
+
+    filter = _datetime_filter(ts.index, config.bday, config.start, config.end)
+    ts = ts[filter]
+    idx_train, idx_valid, idx_test = _split_dataset(ts.index, config.train_ratio, config.test_ratio)
+    ts_train, ts_valid, ts_test = ts[idx_train], ts[idx_valid], ts[idx_test]
+    mean, std = ts_train.mean().values, ts_train.std().values
 
     dataset_train, dataset_valid, dataset_test = (
-        TimeSeries(df, mean, std, config.history, config.horizon)
-        for df in (df_train, df_valid, df_test)
+        TimeSeries(ts, mean, std, config.history, config.horizon)
+        for ts in (ts_train, ts_valid, ts_test)
     )
 
     mean, std = torch.FloatTensor(mean), torch.FloatTensor(std)
+    latitude, longitude = node['latitude'].values, node['longitude'].values
+    if config.dataset in [BJ_SUBWAY, BJ_HIGHWAY]:
+        latitude, longitude = latitude * 2, longitude * 2
+    latitude, longitude = torch.FloatTensor(latitude), torch.FloatTensor(longitude)
 
-    return dataset_train, dataset_valid, dataset_test, mean, std
+    return dataset_train, dataset_valid, dataset_test, mean, std, latitude, longitude
 
 
 def load_data_od(config):
-    df = get_loader(config.dataset).load_ts_od(config.freq)
-    filter = _datetime_filter(df.index.get_level_values(0),
+    ts = get_loader(config.dataset).load_ts_od(config.freq)
+    filter = _datetime_filter(ts.index.get_level_values(0),
                               config.bday, config.start, config.end)
-    df = df[filter]
-    idx_train, idx_valid, idx_test = _split_dataset(df.index.get_level_values(0),
+    ts = ts[filter]
+    idx_train, idx_valid, idx_test = _split_dataset(ts.index.get_level_values(0),
                                                   config.train_ratio,
                                                   config.test_ratio)
-    df_train, df_valid, df_test = df[idx_train], df[idx_valid], df[idx_test]
-
-
+    ts_train, ts_valid, ts_test = ts[idx_train], ts[idx_valid], ts[idx_test]
 
 
 def _datetime_filter(idx, bday, start, end):
@@ -54,7 +59,7 @@ def _split_dataset(idx, train_ratio=0.7, test_ratio=0.2):
     days_test = pd.Timedelta(days=round(days * test_ratio))
     date_train = idx[0].date() + days_train
     date_test = idx[-1].date() - days_test
-    # select df
+    # select ts
     idx_train = idx.date < date_train
     idx_valid = (idx.date >= date_train) & (idx.date < date_test)
     idx_test = idx.date >= date_test

@@ -5,21 +5,19 @@ import torch.nn as nn
 from modules.utils import bias, MLP, ResMLP
 
 
-class Embedding(nn.Sequential):
-    def __init__(self, num_embeddings, model_dim, dropout):
-        embedding_dim = model_dim // 2
+class EmbeddingLinear(nn.Sequential):
+    def __init__(self, num_embeddings, embedding_dim, model_dim, dropout):
         super().__init__(
             nn.Embedding(num_embeddings, embedding_dim),
             nn.Dropout(dropout),
-            nn.Linear(embedding_dim, model_dim),
-            nn.Dropout(dropout)
+            nn.Linear(embedding_dim, model_dim, bias=False)
         )
 
 
 class ScalarEmbedding(nn.Module):
     def __init__(self, model_dim, dropout):
         super().__init__()
-        self.embedding_numerical = MLP(1, model_dim, dropout, bias=False)
+        self.fc = nn.Linear(1, model_dim, bias=False)
         self.embedding_nan = nn.Embedding(2, model_dim)
         self.drop = nn.Dropout(dropout)
 
@@ -28,7 +26,7 @@ class ScalarEmbedding(nn.Module):
         mask = torch.isnan(scalar)
         scalar.masked_fill_(mask, 0.)
         nan.masked_fill_(mask, 1)
-        emb_scalar = self.drop(self.embedding_numerical(scalar))
+        emb_scalar = self.fc(scalar)
         emb_nan = self.drop(self.embedding_nan(nan)).squeeze(-2)
         return emb_scalar + emb_nan
 
@@ -36,7 +34,7 @@ class ScalarEmbedding(nn.Module):
 class VectorEmbedding(nn.Module):
     def __init__(self, vec_dim, model_dim, dropout):
         super().__init__()
-        self.embedding_vector = MLP(vec_dim, model_dim, dropout, bias=False)
+        self.fc = nn.Linear(vec_dim, model_dim, bias=False)
         self.embedding_nan = nn.Embedding(vec_dim * 2, model_dim)
         self.drop = nn.Dropout(dropout)
         self.register_buffer('nan', torch.arange(vec_dim) * 2)
@@ -47,16 +45,16 @@ class VectorEmbedding(nn.Module):
         vec.masked_fill_(mask, 0.)
         nan.masked_fill_(mask, 1)
         nan = nan + self.nan
-        emb_vec = self.drop(self.embedding_vector(vec))
+        f_vec = self.fc(vec)
         emb_nan = self.drop(self.embedding_nan(nan)).mean(dim=-2)
-        return emb_vec + emb_nan
+        return f_vec + emb_nan
 
 
 class TEmbedding(nn.Module):
-    def __init__(self, num_times, model_dim, dropout):
+    def __init__(self, num_times, time_dim, weekday_dim, model_dim, dropout):
         super().__init__()
-        self.embedding_time = Embedding(num_times, model_dim, dropout)
-        self.embedding_weekday = Embedding(7, model_dim, dropout)
+        self.embedding_time = EmbeddingLinear(num_times, time_dim, model_dim, dropout)
+        self.embedding_weekday = EmbeddingLinear(7, weekday_dim, model_dim, dropout)
 
     def forward(self, time, weekday):
         emb_time = self.embedding_time(time)
@@ -65,10 +63,16 @@ class TEmbedding(nn.Module):
 
 
 class STEmbedding(TEmbedding):
-    def __init__(self, num_times, num_nodes, model_dim, dropout):
-        super().__init__(num_times, model_dim, dropout)
+    def __init__(self, num_times, time_dim, weekday_dim,
+                 num_nodes, node_dim, latitude, longitude,
+                 model_dim, dropout):
+        super().__init__(num_times, time_dim, weekday_dim, model_dim, dropout)
         self.register_buffer('nodes', torch.arange(num_nodes))
-        self.embedding_node = Embedding(num_nodes, model_dim, dropout)
+        self.register_buffer('latitude', latitude)
+        self.register_buffer('longitude', longitude)
+        self.embedding_node = EmbeddingLinear(num_nodes, node_dim, model_dim, dropout)
+        self.fc_latitude = nn.Linear(1, model_dim, bias=False)
+        self.fc_longitude = nn.Linear(1, model_dim, bias=False)
 
     def forward(self, time, weekday):
         t = super().forward(time, weekday)
@@ -87,6 +91,6 @@ class EmbeddingFusion(nn.Module):
         self.register_parameter('nan', bias(model_dim))
 
     def forward(self, data, time, weekday):
-        emb_num = self.nan if data is None else self.embedding_numerical(data)
-        emb_cat = self.embedding_categorical(time, weekday)
-        return self.ln(self.resmlp(emb_num + emb_cat))
+        numerical = self.nan if data is None else self.embedding_numerical(data)
+        categorical = self.embedding_categorical(time, weekday)
+        return self.ln(self.resmlp(numerical + categorical))
