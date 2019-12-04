@@ -9,11 +9,11 @@ from lib.io import gen_subsequent_time
 
 class STransformer(nn.Module):
     def __init__(self, embedding, model_dim, out_dim, num_layers, num_heads,
-                 dropout, mask=None):
+                 dropout):
         super().__init__()
         self.embedding = embedding
         self.encoder = TransformerEncoder(model_dim, num_layers, num_heads,
-                                          dropout, mask)
+                                          dropout)
         self.decoder = MLP(model_dim, out_dim, dropout)
 
     def forward(self, data, time, weekday):
@@ -80,18 +80,17 @@ class STTransformer(nn.Module):
 
 
 class TransformerEncoder(nn.Module):
-    def __init__(self, model_dim, num_layers, num_heads, dropout, mask=None):
+    def __init__(self, model_dim, num_layers, num_heads, dropout):
         super().__init__()
         self.layers = nn.ModuleList([
             TransformerLayer(model_dim, num_heads, dropout)
             for _ in range(num_layers)
         ])
-        self.register_buffer('mask', mask)
 
     def forward(self, x):
         attns = []
         for layer in self.layers:
-            x, attn = layer(x, mask=self.mask)
+            x, attn = layer(x)
             attns.append(attn)
         attn = torch.stack(attns, 1)
         return x, attn

@@ -14,7 +14,7 @@ from models import DCRNN
 from models import GATRNN
 from models import GAAT
 
-from lib.io import load_adj, load_adj_mask
+from lib.io import load_adj
 
 
 def build_model(config, mean, std, coordinates):
@@ -133,8 +133,7 @@ def build_stransformer(config, embedding):
         out_dim=config.horizon,
         num_layers=config.num_layers,
         num_heads=config.num_heads,
-        dropout=config.dropout,
-        mask=load_adj_mask(config.dataset) if config.mask else None
+        dropout=config.dropout
     )
 
 
@@ -197,6 +196,5 @@ def build_gaat(config, embedding):
         out_dim=config.horizon,
         num_layers=config.num_layers,
         num_heads=config.num_heads,
-        dropout=config.dropout,
-        mask=load_adj_mask(config.dataset) if config.mask else None
+        dropout=config.dropout
     )

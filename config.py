@@ -18,7 +18,7 @@ class Config:
 
     def init_config(self):
         # data
-        self.dataset = None
+        self.dataset = 'METR-LA'
         self.bday = False
         self.start = None
         self.end = None
@@ -27,7 +27,7 @@ class Config:
         self.horizons = None
         # model
         self.paradigm = None
-        self.model = None
+        self.model = 'STransformer'
         self.mask = False
         # cuda
         self.cuda = False

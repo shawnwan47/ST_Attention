@@ -91,10 +91,9 @@ model:
       model_dim: 64
       time_dim: 16
       weekday_dim: 16
-      node_dim: 32
-      num_layers: 1
+      node_dim: 16
+      num_layers: 2
       num_heads: 4
-      mask: False
     RNN:
       paradigm: t
       rnn_type: GRU
