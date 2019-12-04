@@ -26,7 +26,7 @@ class RoadTraffic:
             open(self._path / 'adj_mx.pkl', 'rb'))
         self.adj[self.adj < 0.1] = 0
         self._prep_ids()
-        self._node = self._path / 'sensors.csv'
+        self._node = self._path / 'graph_sensor_locations.csv'
         self._ts = self._path / 'ts.h5'
         self._link = self._path / 'distances.csv'
         self._dist = self._path / 'dist.csv'

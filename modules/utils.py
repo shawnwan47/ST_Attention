@@ -3,18 +3,12 @@ import torch
 import torch.nn as nn
 
 
-def bias(*sizes):
-    assert len(sizes) > 0
-    if len(sizes) == 1:
-        sizes = (1, sizes[0])
-    bias = nn.Parameter(torch.empty(*sizes))
-    nn.init.xavier_normal_(bias.data)
+def bias(model_dim):
+    assert model_dim > 0
+    bias = nn.Parameter(torch.Tensor(model_dim))
+    bound = 1 / math.sqrt(model_dim)
+    nn.init.uniform_(bias, -bound, bound)
     return bias
-
-
-class GELU(nn.Module):
-    def forward(self, x):
-        return 0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
 
 
 class MLP(nn.Module):

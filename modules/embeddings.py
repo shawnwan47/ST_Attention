@@ -2,7 +2,7 @@ import math
 import torch
 import torch.nn as nn
 
-from modules.utils import bias, MLP, ResMLP
+from modules.utils import bias, ResMLP
 
 
 class EmbeddingLinear(nn.Sequential):
@@ -64,19 +64,18 @@ class TEmbedding(nn.Module):
 
 class STEmbedding(TEmbedding):
     def __init__(self, num_times, time_dim, weekday_dim,
-                 num_nodes, node_dim, latitude, longitude,
+                 num_nodes, node_dim, coordinates,
                  model_dim, dropout):
         super().__init__(num_times, time_dim, weekday_dim, model_dim, dropout)
+        assert(num_nodes == len(coordinates))
         self.register_buffer('nodes', torch.arange(num_nodes))
-        self.register_buffer('latitude', latitude)
-        self.register_buffer('longitude', longitude)
+        self.register_buffer('coordinates', coordinates)
         self.embedding_node = EmbeddingLinear(num_nodes, node_dim, model_dim, dropout)
-        self.fc_latitude = nn.Linear(1, model_dim, bias=False)
-        self.fc_longitude = nn.Linear(1, model_dim, bias=False)
+        self.fc_pos = nn.Linear(2, model_dim, bias=False)
 
     def forward(self, time, weekday):
         t = super().forward(time, weekday)
-        s = self.embedding_node(self.nodes)
+        s = self.embedding_node(self.nodes) + self.fc_pos(self.coordinates)
         return s + t
 
 
@@ -88,9 +87,10 @@ class EmbeddingFusion(nn.Module):
         self.embedding_categorical = embedding_categorical
         self.resmlp = ResMLP(model_dim, dropout=dropout)
         self.ln = nn.LayerNorm(model_dim)
-        self.register_parameter('nan', bias(model_dim))
+        self.register_parameter('b', bias(model_dim))
 
     def forward(self, data, time, weekday):
-        numerical = self.nan if data is None else self.embedding_numerical(data)
-        categorical = self.embedding_categorical(time, weekday)
-        return self.ln(self.resmlp(numerical + categorical))
+        embedding = self.embedding_categorical(time, weekday) + self.b
+        if data is not None:
+            embedding = embedding + self.embedding_numerical(data)
+        return self.ln(self.resmlp(embedding))

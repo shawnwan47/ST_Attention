@@ -25,23 +25,11 @@ def load_dataset(config):
     )
 
     mean, std = torch.FloatTensor(mean), torch.FloatTensor(std)
-    latitude, longitude = node['latitude'].values, node['longitude'].values
+    coordinates = torch.Tensor(node[['latitude', 'longitude']].values)
     if config.dataset in [BJ_SUBWAY, BJ_HIGHWAY]:
-        latitude, longitude = latitude * 2, longitude * 2
-    latitude, longitude = torch.FloatTensor(latitude), torch.FloatTensor(longitude)
+        coordinates = torch.cat([coordinates, coordinates], dim=0)
 
-    return dataset_train, dataset_valid, dataset_test, mean, std, latitude, longitude
-
-
-def load_data_od(config):
-    ts = get_loader(config.dataset).load_ts_od(config.freq)
-    filter = _datetime_filter(ts.index.get_level_values(0),
-                              config.bday, config.start, config.end)
-    ts = ts[filter]
-    idx_train, idx_valid, idx_test = _split_dataset(ts.index.get_level_values(0),
-                                                  config.train_ratio,
-                                                  config.test_ratio)
-    ts_train, ts_valid, ts_test = ts[idx_train], ts[idx_valid], ts[idx_test]
+    return dataset_train, dataset_valid, dataset_test, mean, std, coordinates
 
 
 def _datetime_filter(idx, bday, start, end):
