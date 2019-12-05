@@ -55,9 +55,15 @@ class TEmbedding(nn.Module):
         super().__init__()
         self.embedding_time = EmbeddingLinear(num_times, time_dim, model_dim, dropout)
         self.embedding_weekday = EmbeddingLinear(7, weekday_dim, model_dim, dropout)
+        clock_pos = torch.arange(-math.pi, math.pi, math.pi * 2 / num_times)
+        assert(len(clock_pos) == num_times)
+        pos_emb = torch.stack((torch.sin(clock_pos), torch.cos(clock_pos)), 1)
+        self.pos_emb_time = nn.Embedding.from_pretrained(pos_emb)
+        self.fc_pos = nn.Linear(2, model_dim)
 
     def forward(self, time, weekday):
         emb_time = self.embedding_time(time)
+        emb_time = emb_time + self.fc_pos(self.pos_emb_time(time))
         emb_weekday = self.embedding_weekday(weekday)
         return emb_time + emb_weekday
 

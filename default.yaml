@@ -89,9 +89,9 @@ model:
     STransformer:
       paradigm: s
       model_dim: 64
-      time_dim: 16
-      weekday_dim: 16
-      node_dim: 16
+      time_dim: 32
+      weekday_dim: 32
+      node_dim: 32
       num_layers: 2
       num_heads: 4
     RNN:
