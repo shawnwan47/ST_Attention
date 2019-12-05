@@ -58,12 +58,12 @@ class TEmbedding(nn.Module):
         clock_pos = torch.arange(-math.pi, math.pi, math.pi * 2 / num_times)
         assert(len(clock_pos) == num_times)
         pos_emb = torch.stack((torch.sin(clock_pos), torch.cos(clock_pos)), 1)
-        self.pos_emb_time = nn.Embedding.from_pretrained(pos_emb)
-        self.fc_pos = nn.Linear(2, model_dim)
+        self.emb_pos_time = nn.Embedding.from_pretrained(pos_emb)
+        self.fc_pos_time = nn.Linear(2, model_dim, bias=False)
 
     def forward(self, time, weekday):
         emb_time = self.embedding_time(time)
-        emb_time = emb_time + self.fc_pos(self.pos_emb_time(time))
+        emb_time = emb_time + self.fc_pos_time(self.emb_pos_time(time))
         emb_weekday = self.embedding_weekday(weekday)
         return emb_time + emb_weekday
 
@@ -77,11 +77,11 @@ class STEmbedding(TEmbedding):
         self.register_buffer('nodes', torch.arange(num_nodes))
         self.register_buffer('coordinates', coordinates)
         self.embedding_node = EmbeddingLinear(num_nodes, node_dim, model_dim, dropout)
-        self.fc_pos = nn.Linear(2, model_dim, bias=False)
+        self.fc_pos_node = nn.Linear(2, model_dim, bias=False)
 
     def forward(self, time, weekday):
         t = super().forward(time, weekday)
-        s = self.embedding_node(self.nodes) + self.fc_pos(self.coordinates)
+        s = self.embedding_node(self.nodes) + self.fc_pos_node(self.coordinates)
         return s + t
 
 
