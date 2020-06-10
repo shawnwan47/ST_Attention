@@ -34,20 +34,22 @@ class ScalarEmbedding(nn.Module):
 class VectorEmbedding(nn.Module):
     def __init__(self, vec_dim, model_dim, dropout):
         super().__init__()
-        self.fc = nn.Linear(vec_dim, model_dim, bias=False)
-        self.embedding_nan = nn.Embedding(vec_dim * 2, model_dim)
+        hidden_size = math.ceil(math.sqrt(model_dim * vec_dim))
+        self.fc_0 = nn.Linear(vec_dim, hidden_size, bias=False)
+        self.fc_1 = nn.Linear(hidden_size, model_dim, bias=False)
+        self.embedding_nan = nn.Embedding(vec_dim + 1, hidden_size)
         self.drop = nn.Dropout(dropout)
-        self.register_buffer('nan', torch.arange(vec_dim) * 2)
+        self.register_buffer('nan', torch.arange(vec_dim) + 1)
 
     def forward(self, vec):
-        nan = torch.zeros_like(vec).long()
         mask = torch.isnan(vec)
+        nan = torch.zeros_like(vec).long() + self.nan
+        nan.masked_fill_(~mask, 0)
         vec.masked_fill_(mask, 0.)
-        nan.masked_fill_(mask, 1)
-        nan = nan + self.nan
-        f_vec = self.fc(vec)
-        emb_nan = self.drop(self.embedding_nan(nan)).mean(dim=-2)
-        return f_vec + emb_nan
+        emb_nan = self.embedding_nan(nan).sum(dim=-2)
+        f_vec = self.fc_0(vec)
+        hidden = f_vec + emb_nan
+        return self.fc_1(self.drop(hidden))
 
 
 class TEmbedding(nn.Module):
@@ -55,7 +57,7 @@ class TEmbedding(nn.Module):
         super().__init__()
         self.embedding_time = EmbeddingLinear(num_times, time_dim, model_dim, dropout)
         self.embedding_weekday = EmbeddingLinear(7, weekday_dim, model_dim, dropout)
-        clock_pos = torch.arange(-math.pi, math.pi, math.pi * 2 / num_times)
+        clock_pos = torch.arange(0, math.pi * 2, math.pi * 2 / num_times)
         assert(len(clock_pos) == num_times)
         pos_emb = torch.stack((torch.sin(clock_pos), torch.cos(clock_pos)), 1)
         self.emb_pos_time = nn.Embedding.from_pretrained(pos_emb)
@@ -86,10 +88,10 @@ class STEmbedding(TEmbedding):
 
 
 class EmbeddingFusion(nn.Module):
-    def __init__(self, embedding_numerical, embedding_categorical,
+    def __init__(self, mlp_numerical, embedding_categorical,
                  model_dim, dropout):
         super().__init__()
-        self.embedding_numerical = embedding_numerical
+        self.mlp_numerical = mlp_numerical
         self.embedding_categorical = embedding_categorical
         self.resmlp = ResMLP(model_dim, dropout=dropout)
         self.ln = nn.LayerNorm(model_dim)
@@ -98,5 +100,5 @@ class EmbeddingFusion(nn.Module):
     def forward(self, data, time, weekday):
         embedding = self.embedding_categorical(time, weekday) + self.b
         if data is not None:
-            embedding = embedding + self.embedding_numerical(data)
+            embedding = embedding + self.mlp_numerical(data)
         return self.ln(self.resmlp(embedding))

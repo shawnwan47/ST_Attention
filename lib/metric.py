@@ -38,8 +38,9 @@ class TimeSeriesLoss:
             loss = (output - target).abs().sum()
             norm = target.numel()
         elif metric == 'rmse':
-            loss = (output - target).pow(2).sqrt().sum()
             norm = target.numel()
+            loss = ((output - target).pow(2).sum() / norm).sqrt()
+            loss = loss * norm
         elif metric == 'mape':
             loss = ((output - target).abs() / (target + 1e-8)).sum() * 100
             norm = target.numel()

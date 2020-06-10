@@ -82,7 +82,7 @@ def test(**kwargs):
     config.set_dataset()
     config.set_model()
     _cuda(config)
-    _, _, dataset_test, mean, std, latitude, longitude = load_dataset(config)
+    _, _, dataset_test, mean, std, coordinates = load_dataset(config)
     dataloader = DataLoader(dataset_test, config.batch_size)
     model = build_model(config, mean, std, coordinates)
     model.load_state_dict(torch.load(config.path_model))

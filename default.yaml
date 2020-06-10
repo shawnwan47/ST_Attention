@@ -59,6 +59,7 @@ model:
       time_dim: 8
       weekday_dim: 8
       node_dim: 16
+      num_layers: 1
     IsoRNN:
       paradigm: st
       framework: seq2seq
