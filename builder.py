@@ -45,7 +45,7 @@ def build_model(config, mean, std, coordinates):
     print(f'{config.path_model} parameters: {num_params}')
 
     model = Framework(model, config.paradigm, mean, std)
-    if config.cuda:
+    if torch.cuda.is_available() and config.cuda:
         model.cuda()
 
     return model

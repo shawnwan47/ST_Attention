@@ -13,10 +13,10 @@ class TimeSeriesLoss:
         self.horizons = horizons
 
     def __call__(self, output, target):
-        ret = MetricDict({horizon: self.eval(output[:, horizon], target[:, horizon])
+        loss = MetricDict({horizon: self.eval(output[:, horizon], target[:, horizon])
                           for horizon in self.horizons})
-        ret['avg'] = self.eval(output, target)
-        return ret
+        loss['avg'] = self.eval(output, target)
+        return loss
 
     def get_criterion(self, lossdict):
         return float(lossdict['avg'][self.metrics[-1]])

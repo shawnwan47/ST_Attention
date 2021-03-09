@@ -42,7 +42,7 @@ class MultiheadAttention(nn.Module):
         value = self.shape(self.fc_v(bank))
         context = self.unshape(torch.matmul(self.drop(attn), value))
         output = self.fc_out(context)
-        return output, attn
+        return output
 
 
 class HeadAttendedAttention(MultiheadAttention):
@@ -63,5 +63,4 @@ class HeadAttendedAttention(MultiheadAttention):
         context = self.shape(context).transpose(1, -1).mul(attn_head)
         context = self.unshape(context.transpose(1, -1))
         context = self.fc_out(self.heads * context)
-        attn = attn.detach().transpose(1, -1).mul(attn_head).transpose(1, -1)
-        return context, attn
+        return context

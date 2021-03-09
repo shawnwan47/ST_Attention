@@ -100,4 +100,8 @@ venv.bak/
 /site
 
 # output files
-data/**
+datasets/**
+state_dicts/**
+tensorboards/**
+results/**
+figs/**

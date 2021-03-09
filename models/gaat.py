@@ -15,7 +15,7 @@ class GAAT(nn.Module):
         input = self.embedding(data, time, weekday)
         hidden, attn = self.encoder(input)
         output = self.decoder(hidden)
-        return output, attn
+        return output
 
 
 class GAATEncoder(nn.Module):
@@ -30,10 +30,10 @@ class GAATEncoder(nn.Module):
     def forward(self, x):
         attns = []
         for layer in self.layers:
-            x, attn = layer(x, mask=self.mask)
+            y, attn = layer(x, mask=self.mask)
             attns.append(attn)
         attn = torch.stack(attns, 1)
-        return x, attn
+        return y
 
 
 class GAATLayer(nn.Module):
@@ -53,4 +53,4 @@ class GAATLayer(nn.Module):
         fusion = query * gate + self.drop(context) * (1 - gate)
         output = self.ln(self.resmlp(fusion))
         attn.mul_(gate.unsqueeze(1))
-        return output, attn
+        return output

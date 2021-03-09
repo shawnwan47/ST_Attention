@@ -2,11 +2,11 @@ EPS = 1e-8
 
 CONFIG = 'default.yaml'
 
-DATASET_PATH = 'data/datasets/'
-MODEL_PATH = 'data/models/'
-RESULT_PATH = 'data/results/'
-ATTN_PATH = 'data/attns/'
-FIG_PATH = 'data/figs/'
+PATH_DATASET = 'datasets/'
+PATH_STATE_DICT = 'state_dicts/'
+PATH_RESULT = 'results/'
+PATH_FIG = 'figs/'
+PATH_TENSORBOARD = 'tensorboards/'
 
 METR_LA = 'METR-LA'
 PEMS_BAY = 'PEMS-BAY'

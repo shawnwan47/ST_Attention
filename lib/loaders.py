@@ -6,7 +6,7 @@ import numpy as np
 import networkx as nx
 from geopy.distance import geodesic
 
-from constants import DATASET_PATH, METR_LA, PEMS_BAY, BJ_HIGHWAY, BJ_SUBWAY
+from constants import PATH_DATASET, METR_LA, PEMS_BAY, BJ_HIGHWAY, BJ_SUBWAY
 
 
 def get_loader(dataset):
@@ -20,7 +20,7 @@ def get_loader(dataset):
 
 class RoadTraffic:
     def __init__(self, dataset):
-        self._path = Path(DATASET_PATH) / dataset
+        self._path = Path(PATH_DATASET) / dataset
         self._adj = self._path / 'adj_mx.pkl'
         self.ids, self.id_to_idx, self.adj = pickle.load(
             open(self._path / 'adj_mx.pkl', 'rb'))
@@ -46,6 +46,7 @@ class RoadTraffic:
         ts.columns = [int(col) for col in ts.columns]
         ts = ts.loc[:, self.ids]
         ts[ts==0.] = np.nan
+        ts.index.freq='5min'
         return ts.resample('5min').mean()
 
     def load_adj(self):
@@ -54,7 +55,7 @@ class RoadTraffic:
 
 class StationTraffic:
     def __init__(self, dataset):
-        self._path = Path(DATASET_PATH) / dataset
+        self._path = Path(PATH_DATASET) / dataset
         self._node = self._path / 'node.csv'
         self._link_raw = self._path / 'link_raw.csv'
         self._link = self._path / 'link.csv'
@@ -130,7 +131,7 @@ class StationTraffic:
                           parse_dates=[0],
                           squeeze=True)
         names = ret.index.names
-        ret = ret.groupby([pd.Grouper(level=names[0], freq=freq),
+        ret = ret.groupby([pd.Grouper(level=names[0], freq='15min'),
                            names[1], names[2]]).sum()
         _, entry, exit = ret.index.levels
         entry = [self.id_to_idx[ent] for ent in entry]

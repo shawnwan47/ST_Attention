@@ -4,6 +4,7 @@ import torch
 
 from lib.time_series import TimeSeries
 from lib.loaders import get_loader
+from lib import graph
 
 from constants import PEMS_BAY, METR_LA, BJ_SUBWAY, BJ_HIGHWAY
 
